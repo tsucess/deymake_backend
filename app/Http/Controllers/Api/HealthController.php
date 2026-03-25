@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+
+class HealthController extends Controller
+{
+    public function __invoke(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'DeyMake API is healthy.',
+            'data' => [
+                'status' => 'ok',
+                'app' => config('app.name'),
+                'timestamp' => now()->toISOString(),
+            ],
+        ]);
+    }
+}
