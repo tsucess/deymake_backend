@@ -7,13 +7,14 @@ use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_root_returns_api_metadata_response(): void
     {
-        $response = $this->get('/');
+        $response = $this->getJson('/');
 
-        $response->assertStatus(200);
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'DeyMake API')
+            ->assertJsonPath('data.status', 'ok')
+            ->assertJsonPath('data.health', url('/api/v1/health'));
     }
 }
