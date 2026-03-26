@@ -146,6 +146,34 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.video.isDraft', false);
 
+        $liveUploadResponse = $this->postJson('/api/v1/uploads', [
+            'file' => UploadedFile::fake()->create('live.mp4', 1024, 'video/mp4'),
+        ]);
+
+        $liveUploadResponse->assertCreated();
+        $liveUploadId = $liveUploadResponse->json('data.upload.id');
+        Storage::disk('public')->assertExists(Upload::query()->findOrFail($liveUploadId)->path);
+
+        $liveVideoResponse = $this->postJson('/api/v1/videos', [
+            'uploadId' => $liveUploadId,
+            'categoryId' => $category->id,
+            'type' => 'video',
+            'title' => 'Viewer Live',
+            'isLive' => true,
+            'isDraft' => false,
+        ]);
+
+        $liveVideoResponse
+            ->assertCreated()
+            ->assertJsonPath('data.video.isLive', true)
+            ->assertJsonPath('data.video.isDraft', false);
+
+        $liveVideoId = $liveVideoResponse->json('data.video.id');
+
+        $this->getJson('/api/v1/videos/live')
+            ->assertOk()
+            ->assertJsonPath('data.videos.0.id', $liveVideoId);
+
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
         $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')->assertOk();
@@ -175,7 +203,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated');
 
-        $this->getJson('/api/v1/me/posts')->assertOk()->assertJsonCount(1, 'data.videos');
+        $this->getJson('/api/v1/me/posts')->assertOk()->assertJsonCount(2, 'data.videos');
         $this->getJson('/api/v1/me/liked')->assertOk()->assertJsonCount(1, 'data.videos');
         $this->getJson('/api/v1/me/saved')->assertOk()->assertJsonCount(1, 'data.videos');
         $this->getJson('/api/v1/me/drafts')->assertOk()->assertJsonCount(0, 'data.videos');
