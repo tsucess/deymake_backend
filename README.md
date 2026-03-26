@@ -57,4 +57,49 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## DeyMake OAuth setup
+
+This backend handles Google and Facebook OAuth for the React frontend.
+
+### Required backend env values
+
+- `APP_URL=https://api.deymake.com`
+- `FRONTEND_URL=https://deymake.com`
+- `GOOGLE_CLIENT_ID=...`
+- `GOOGLE_CLIENT_SECRET=...`
+- `GOOGLE_REDIRECT_URI=https://api.deymake.com/api/v1/auth/oauth/google/callback`
+- `FACEBOOK_CLIENT_ID=...`
+- `FACEBOOK_CLIENT_SECRET=...`
+- `FACEBOOK_REDIRECT_URI=https://api.deymake.com/api/v1/auth/oauth/facebook/callback`
+
+### Google console settings
+
+- OAuth client type: `Web application`
+- Authorized redirect URI:
+  - `https://api.deymake.com/api/v1/auth/oauth/google/callback`
+- Authorized JavaScript origins are not required for this server-side flow unless you later add a browser SDK.
+
+### Facebook console settings
+
+- Valid OAuth Redirect URI:
+  - `https://api.deymake.com/api/v1/auth/oauth/facebook/callback`
+- App domain:
+  - `deymake.com`
+- If Facebook requires a site URL, use:
+  - `https://deymake.com`
+
+### Runtime flow
+
+1. Frontend sends users to `/api/v1/auth/oauth/{provider}/redirect`
+2. Backend redirects to Google or Facebook
+3. Provider returns to the backend callback URL
+4. Backend creates a Sanctum token and redirects to `https://deymake.com/auth/callback`
+5. Frontend stores the token and loads `/auth/me`
+
+### After changing env values
+
+- Run `php artisan migrate`
+- Run `php artisan config:clear`
+
 "# deymake_backend" 
