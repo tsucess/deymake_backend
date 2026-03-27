@@ -34,6 +34,10 @@ class Upload extends Model
 
     public function getUrlAttribute(): string
     {
+        if ($this->disk === 'cloudinary') {
+            return $this->path;
+        }
+
         return Storage::disk($this->disk)->url($this->path);
     }
 }

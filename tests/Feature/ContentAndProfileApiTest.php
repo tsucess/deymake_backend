@@ -4,12 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Comment;
-use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
+use App\Services\CloudinaryUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -104,7 +103,20 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
     {
-        Storage::fake('public');
+        $this->mock(CloudinaryUploadService::class, function ($mock): void {
+            $mock->shouldReceive('upload')->twice()->andReturn(
+                [
+                    'disk' => 'cloudinary',
+                    'path' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
+                    'url' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
+                ],
+                [
+                    'disk' => 'cloudinary',
+                    'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
+                    'url' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
+                ],
+            );
+        });
 
         $category = Category::create(['name' => 'Comedy', 'slug' => 'comedy']);
         $creator = User::factory()->create(['name' => 'Creator', 'email' => 'creator@example.com']);
@@ -126,7 +138,11 @@ class ContentAndProfileApiTest extends TestCase
 
         $uploadResponse->assertCreated();
         $uploadId = $uploadResponse->json('data.upload.id');
-        Storage::disk('public')->assertExists(Upload::query()->findOrFail($uploadId)->path);
+        $this->assertDatabaseHas('uploads', [
+            'id' => $uploadId,
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
+        ]);
 
         $videoResponse = $this->postJson('/api/v1/videos', [
             'uploadId' => $uploadId,
@@ -152,7 +168,11 @@ class ContentAndProfileApiTest extends TestCase
 
         $liveUploadResponse->assertCreated();
         $liveUploadId = $liveUploadResponse->json('data.upload.id');
-        Storage::disk('public')->assertExists(Upload::query()->findOrFail($liveUploadId)->path);
+        $this->assertDatabaseHas('uploads', [
+            'id' => $liveUploadId,
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
+        ]);
 
         $liveVideoResponse = $this->postJson('/api/v1/videos', [
             'uploadId' => $liveUploadId,
@@ -166,7 +186,8 @@ class ContentAndProfileApiTest extends TestCase
         $liveVideoResponse
             ->assertCreated()
             ->assertJsonPath('data.video.isLive', true)
-            ->assertJsonPath('data.video.isDraft', false);
+            ->assertJsonPath('data.video.isDraft', false)
+            ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4');
 
         $liveVideoId = $liveVideoResponse->json('data.video.id');
 

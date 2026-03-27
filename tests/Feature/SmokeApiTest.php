@@ -92,11 +92,12 @@ class SmokeApiTest extends TestCase
             'type' => 'video',
             'originalName' => 'clip.mp4',
         ])->assertOk()
-            ->assertJsonPath('data.strategy', 'local-multipart-upload')
+            ->assertJsonPath('data.strategy', 'server-upload')
+            ->assertJsonPath('data.provider', 'cloudinary')
             ->assertJsonPath('data.method', 'POST')
             ->assertJsonPath('data.endpoint', url('/api/v1/uploads'))
             ->assertJsonPath('data.path', fn ($value) => is_string($value)
-                && str_starts_with($value, 'uploads/')
+                && str_starts_with($value, 'deymake/uploads/')
                 && str_ends_with($value, '.mp4'));
 
         $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')
