@@ -16,6 +16,9 @@ class ProfileResource extends JsonResource
             'avatarUrl' => $this->avatar_url,
             'isOnline' => (bool) ($this->is_online ?? false),
             'subscriberCount' => (int) ($this->subscribers_count ?? 0),
+            'currentUserState' => [
+                'subscribed' => (bool) ($this->subscribed_by_current_user ?? false),
+            ],
             'createdAt' => $this->created_at?->toISOString(),
             'email' => $request->user()?->is($this->resource) ? $this->email : null,
         ];

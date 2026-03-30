@@ -25,6 +25,7 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
         'live_started' => 'La transmisión en vivo se inició correctamente.',
         'live_stopped' => 'La transmisión en vivo se detuvo correctamente.',
         'only_video_can_go_live' => 'Solo los videos pueden transmitirse en vivo.',
+        'upload_must_finish_processing_for_live' => 'Espera a que termine el procesamiento del video antes de iniciar la transmisión en vivo.',
     ],
     'validation' => ['language_supported' => 'Elige un idioma de la aplicación compatible.'],
 ]);

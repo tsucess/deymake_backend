@@ -22,7 +22,7 @@ class ProfileController extends Controller
     {
         SupportedLocales::apply($request);
 
-        $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
+        $profile = User::query()->withProfileAggregates($request->user())->findOrFail($request->user()->id);
 
         return response()->json([
             'message' => __('messages.profile.retrieved'),
@@ -48,7 +48,7 @@ class ProfileController extends Controller
             'avatar_url' => array_key_exists('avatarUrl', $validated) ? $validated['avatarUrl'] : $request->user()->avatar_url,
         ])->save();
 
-        $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
+        $profile = User::query()->withProfileAggregates($request->user())->findOrFail($request->user()->id);
 
         return response()->json([
             'message' => __('messages.profile.updated'),

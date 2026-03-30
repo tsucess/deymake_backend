@@ -92,13 +92,7 @@ class Video extends Model
         return $query
             ->with([
                 'user' => function ($userQuery) use ($viewer): void {
-                    $userQuery->withProfileAggregates();
-
-                    if ($viewer) {
-                        $userQuery->withExists([
-                            'subscribers as subscribed_by_current_user' => fn (Builder $subscribersQuery) => $subscribersQuery->whereKey($viewer->id),
-                        ]);
-                    }
+                    $userQuery->withProfileAggregates($viewer);
                 },
                 'category',
                 'upload',

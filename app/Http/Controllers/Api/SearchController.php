@@ -25,7 +25,7 @@ class SearchController extends Controller
             : PaginatedJson::paginate($this->videosQuery($query, $viewer), $request, 10, 25), VideoResource::class);
         $creators = $this->paginatedResource($request, $query === ''
             ? PaginatedJson::empty($request, 10, 25)
-            : PaginatedJson::paginate($this->usersQuery($query), $request, 10, 25), ProfileResource::class);
+            : PaginatedJson::paginate($this->usersQuery($query, $viewer), $request, 10, 25), ProfileResource::class);
         $categories = $this->paginatedResource($request, $query === ''
             ? PaginatedJson::empty($request, 10, 25)
             : PaginatedJson::paginate($this->categoriesQuery($query), $request, 10, 25), CategoryResource::class);
@@ -54,7 +54,7 @@ class SearchController extends Controller
             : PaginatedJson::paginate($this->videosQuery($query, $viewer), $request, 5, 10), VideoResource::class);
         $creators = $this->paginatedResource($request, $query === ''
             ? PaginatedJson::empty($request, 5, 10)
-            : PaginatedJson::paginate($this->usersQuery($query), $request, 5, 10), ProfileResource::class);
+            : PaginatedJson::paginate($this->usersQuery($query, $viewer), $request, 5, 10), ProfileResource::class);
         $categories = $this->paginatedResource($request, $query === ''
             ? PaginatedJson::empty($request, 5, 10)
             : PaginatedJson::paginate($this->categoriesQuery($query), $request, 5, 10), CategoryResource::class);
@@ -97,6 +97,7 @@ class SearchController extends Controller
     public function creators(Request $request): JsonResponse
     {
         $query = $this->normalizedQuery($request);
+        $viewer = auth('sanctum')->user() ?? $request->user();
 
         return $this->singleCollectionResponse(
             $request,
@@ -104,7 +105,7 @@ class SearchController extends Controller
             'creators',
             $query === ''
                 ? PaginatedJson::empty($request, 12, 25)
-                : PaginatedJson::paginate($this->usersQuery($query), $request, 12, 25),
+                : PaginatedJson::paginate($this->usersQuery($query, $viewer), $request, 12, 25),
             ProfileResource::class,
         );
     }
@@ -160,10 +161,10 @@ class SearchController extends Controller
             ->latest();
     }
 
-    private function usersQuery(string $query)
+    private function usersQuery(string $query, ?User $viewer = null)
     {
         return User::query()
-            ->withProfileAggregates()
+            ->withProfileAggregates($viewer)
             ->when($query !== '', function ($builder) use ($query): void {
                 $builder->where('name', 'like', '%'.$query.'%')
                     ->orWhere('email', 'like', '%'.$query.'%');

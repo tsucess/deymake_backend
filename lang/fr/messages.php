@@ -40,6 +40,7 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
         'live_started' => 'Le direct a démarré avec succès.',
         'live_stopped' => 'Le direct a été arrêté avec succès.',
         'only_video_can_go_live' => 'Seules les vidéos peuvent être diffusées en direct.',
+        'upload_must_finish_processing_for_live' => 'Attendez la fin du traitement de la vidéo avant de lancer le direct.',
     ],
     'validation' => ['language_supported' => 'Veuillez choisir une langue d’application prise en charge.'],
 ]);

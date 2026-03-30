@@ -123,6 +123,7 @@ return [
         'share_recorded' => 'Video share recorded successfully.',
         'upload_forbidden' => 'You are not allowed to use this upload.',
         'only_video_can_go_live' => 'Only video uploads can go live.',
+        'upload_must_finish_processing_for_live' => 'Wait until video processing finishes before going live.',
         'liked' => 'Video liked successfully.',
         'like_removed' => 'Video like removed successfully.',
         'disliked' => 'Video disliked successfully.',

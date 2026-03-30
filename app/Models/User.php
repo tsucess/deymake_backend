@@ -94,8 +94,14 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
-    public function scopeWithProfileAggregates(Builder $query): Builder
+    public function scopeWithProfileAggregates(Builder $query, ?self $viewer = null): Builder
     {
-        return $query->withCount('subscribers');
+        return $query
+            ->withCount('subscribers')
+            ->when($viewer, function (Builder $builder) use ($viewer): void {
+                $builder->withExists([
+                    'subscribers as subscribed_by_current_user' => fn (Builder $subscribersQuery) => $subscribersQuery->whereKey($viewer->id),
+                ]);
+            });
     }
 }

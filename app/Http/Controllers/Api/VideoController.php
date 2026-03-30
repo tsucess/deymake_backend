@@ -99,6 +99,10 @@ class VideoController extends Controller
             abort(403, __('messages.videos.upload_forbidden'));
         }
 
+        if ($isLiveRequested) {
+            $this->ensureUploadReadyForLive($upload);
+        }
+
         $video = Video::create([
             'user_id' => $request->user()->id,
             'category_id' => $validated['categoryId'] ?? null,
@@ -238,6 +242,10 @@ class VideoController extends Controller
             abort(403, __('messages.videos.upload_forbidden'));
         }
 
+        if ($requestedLive === true) {
+            $this->ensureUploadReadyForLive($upload);
+        }
+
         $video->fill([
             'type' => $validated['type'] ?? $video->type,
             'category_id' => $validated['categoryId'] ?? $video->category_id,
@@ -289,6 +297,8 @@ class VideoController extends Controller
     {
         abort_if($video->user_id !== $request->user()->id, 403);
         abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
+        $this->ensureUploadReadyForLive($video->upload);
 
         $this->startLiveSession($video);
         $video = $this->loadVideoForResource($video->id, $request->user());
@@ -372,6 +382,19 @@ class VideoController extends Controller
         $video->forceFill([
             'live_notified_at' => now(),
         ])->save();
+    }
+
+    private function ensureUploadReadyForLive(?Upload $upload): void
+    {
+        if (! $upload) {
+            return;
+        }
+
+        abort_if(
+            $upload->processing_status !== 'completed',
+            422,
+            __('messages.videos.upload_must_finish_processing_for_live')
+        );
     }
 
     private function stopLiveSession(Video $video): void

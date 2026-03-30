@@ -16,7 +16,8 @@ class UserController extends Controller
 {
     public function show(Request $request, User $user): JsonResponse
     {
-        $user = User::query()->withProfileAggregates()->findOrFail($user->id);
+        $viewer = auth('sanctum')->user() ?? $request->user();
+        $user = User::query()->withProfileAggregates($viewer)->findOrFail($user->id);
 
         return response()->json([
             'message' => __('messages.users.profile_retrieved'),
@@ -42,11 +43,12 @@ class UserController extends Controller
     public function search(Request $request): JsonResponse
     {
         $query = $this->normalizedQuery($request);
+        $viewer = auth('sanctum')->user() ?? $request->user();
 
         $users = $query === ''
             ? PaginatedJson::empty($request, 10, 25)
             : PaginatedJson::paginate(User::query()
-                ->withProfileAggregates()
+                ->withProfileAggregates($viewer)
                 ->when($query !== '', function ($builder) use ($query): void {
                     $builder->where('name', 'like', '%'.$query.'%')
                         ->orWhere('email', 'like', '%'.$query.'%');

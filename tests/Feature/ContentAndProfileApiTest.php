@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Comment;
+use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
 use App\Services\CloudinaryUploadService;
@@ -313,12 +314,30 @@ class ContentAndProfileApiTest extends TestCase
         $this->getJson('/api/v1/me/profile')
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer')
-            ->assertJsonPath('data.profile.subscriberCount', 0);
+            ->assertJsonPath('data.profile.subscriberCount', 0)
+            ->assertJsonPath('data.profile.currentUserState.subscribed', false);
+
+        $this->getJson('/api/v1/users/'.$creator->id)
+            ->assertOk()
+            ->assertJsonPath('data.user.fullName', 'Creator')
+            ->assertJsonPath('data.user.subscriberCount', 1)
+            ->assertJsonPath('data.user.currentUserState.subscribed', true);
+
+        $this->getJson('/api/v1/users/search?q=Creator')
+            ->assertOk()
+            ->assertJsonPath('data.users.0.fullName', 'Creator')
+            ->assertJsonPath('data.users.0.currentUserState.subscribed', true);
+
+        $this->getJson('/api/v1/search/creators?q=Creator')
+            ->assertOk()
+            ->assertJsonPath('data.creators.0.fullName', 'Creator')
+            ->assertJsonPath('data.creators.0.currentUserState.subscribed', true);
 
         $this->patchJson('/api/v1/me/profile', ['fullName' => 'Viewer Updated', 'bio' => 'Updated bio'])
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated')
-            ->assertJsonPath('data.profile.subscriberCount', 0);
+            ->assertJsonPath('data.profile.subscriberCount', 0)
+            ->assertJsonPath('data.profile.currentUserState.subscribed', false);
 
         $this->getJson('/api/v1/me/posts?per_page=1&page=2')
             ->assertOk()
@@ -344,7 +363,8 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/users/'.$creator->id)
             ->assertOk()
-            ->assertJsonPath('data.user.subscriberCount', 1);
+            ->assertJsonPath('data.user.subscriberCount', 1)
+            ->assertJsonPath('data.user.currentUserState.subscribed', true);
 
         $this->getJson('/api/v1/me/preferences')
             ->assertOk()
@@ -482,6 +502,75 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonCount(0, 'data.users')
             ->assertJsonPath('meta.users.total', 0)
             ->assertJsonPath('meta.users.perPage', 3);
+    }
+
+    public function test_video_uploads_must_finish_processing_before_they_can_go_live(): void
+    {
+        $category = Category::create(['name' => 'Live', 'slug' => 'live']);
+        $creator = User::factory()->create(['name' => 'Live Creator', 'email' => 'live-creator@example.com']);
+
+        Sanctum::actingAs($creator);
+
+        $upload = Upload::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/live-processing.mp4',
+            'original_name' => 'live-processing.mp4',
+            'mime_type' => 'video/mp4',
+            'size' => 1024,
+            'processing_status' => 'processing',
+            'processed_url' => null,
+        ]);
+
+        $this->postJson('/api/v1/videos', [
+            'uploadId' => $upload->id,
+            'categoryId' => $category->id,
+            'type' => 'video',
+            'title' => 'Blocked Live Create',
+            'isLive' => true,
+            'isDraft' => false,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', trans('messages.videos.upload_must_finish_processing_for_live'));
+
+        $this->assertDatabaseMissing('videos', [
+            'user_id' => $creator->id,
+            'upload_id' => $upload->id,
+            'title' => 'Blocked Live Create',
+        ]);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'upload_id' => $upload->id,
+            'type' => 'video',
+            'title' => 'Blocked Live Start',
+            'is_draft' => false,
+        ]);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/start')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', trans('messages.videos.upload_must_finish_processing_for_live'));
+
+        $video->refresh();
+
+        $this->assertFalse($video->is_live);
+        $this->assertNull($video->live_started_at);
+
+        $upload->forceFill([
+            'processing_status' => 'completed',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto/v1/deymake/uploads/videos/live-processing.mp4',
+        ])->save();
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/start')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_started'))
+            ->assertJsonPath('data.video.isLive', true)
+            ->assertJsonPath(
+                'data.video.mediaUrl',
+                'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto/v1/deymake/uploads/videos/live-processing.mp4'
+            );
     }
 
     public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void
