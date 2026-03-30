@@ -52,25 +52,50 @@ class ContentAndProfileApiTest extends TestCase
             'views_count' => 300,
         ]);
 
+        $creator->subscribers()->attach($otherCreator->id);
+        $mainVideo->likes()->attach($otherCreator->id, ['type' => 'like']);
+
+        Comment::create([
+            'video_id' => $mainVideo->id,
+            'user_id' => $otherCreator->id,
+            'body' => 'Love this track!',
+        ]);
+
         $this->getJson('/api/v1/home')
             ->assertOk()
             ->assertJsonPath('data.categories.0.slug', 'music');
 
         $this->getJson('/api/v1/videos/trending')
             ->assertOk()
-            ->assertJsonCount(3, 'data.videos');
+            ->assertJsonCount(3, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 3)
+            ->assertJsonPath('meta.videos.currentPage', 1);
+
+        $this->getJson('/api/v1/videos/trending?per_page=2&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.videos')
+            ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
+            ->assertJsonPath('meta.videos.lastPage', 2)
+            ->assertJsonPath('meta.videos.currentPage', 2);
 
         $this->getJson('/api/v1/videos/live')
             ->assertOk()
-            ->assertJsonPath('data.videos.0.id', $liveVideo->id);
+            ->assertJsonPath('data.videos.0.id', $liveVideo->id)
+            ->assertJsonPath('meta.videos.total', 1);
 
         $this->getJson('/api/v1/videos/'.$mainVideo->id)
             ->assertOk()
-            ->assertJsonPath('data.video.author.fullName', 'Creator One');
+            ->assertJsonPath('data.video.author.fullName', 'Creator One')
+            ->assertJsonPath('data.video.author.subscriberCount', 1)
+            ->assertJsonPath('data.video.likes', 1)
+            ->assertJsonPath('data.video.commentsCount', 1)
+            ->assertJsonPath('data.video.currentUserState.liked', false)
+            ->assertJsonPath('data.video.currentUserState.subscribed', false);
 
         $this->getJson('/api/v1/videos/'.$mainVideo->id.'/related')
             ->assertOk()
-            ->assertJsonPath('data.videos.0.id', $relatedVideo->id);
+            ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
+            ->assertJsonPath('meta.videos.total', 2);
 
         $this->postJson('/api/v1/videos/'.$mainVideo->id.'/view')
             ->assertOk()
@@ -82,23 +107,33 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/search?q=Alpha')
             ->assertOk()
-            ->assertJsonPath('data.videos.0.id', $mainVideo->id);
+            ->assertJsonPath('data.videos.0.id', $mainVideo->id)
+            ->assertJsonPath('data.videos.0.author.subscriberCount', 1)
+            ->assertJsonPath('data.videos.0.likes', 1)
+            ->assertJsonPath('meta.videos.total', 1)
+            ->assertJsonPath('meta.creators.total', 0)
+            ->assertJsonPath('meta.categories.total', 0);
 
         $this->getJson('/api/v1/leaderboard?period=monthly')
             ->assertOk()
             ->assertJsonPath('data.standings.0.user.fullName', 'Creator One');
 
-        $this->getJson('/api/v1/users/search?q=Creator')
+        $this->getJson('/api/v1/users/search?q=Creator&per_page=1&page=2')
             ->assertOk()
-            ->assertJsonCount(2, 'data.users');
+            ->assertJsonCount(1, 'data.users')
+            ->assertJsonPath('data.users.0.fullName', 'Creator Two')
+            ->assertJsonPath('meta.users.total', 2)
+            ->assertJsonPath('meta.users.currentPage', 2);
 
         $this->getJson('/api/v1/users/'.$creator->id)
             ->assertOk()
-            ->assertJsonPath('data.user.fullName', 'Creator One');
+            ->assertJsonPath('data.user.fullName', 'Creator One')
+            ->assertJsonPath('data.user.subscriberCount', 1);
 
         $this->getJson('/api/v1/users/'.$creator->id.'/posts')
             ->assertOk()
-            ->assertJsonCount(2, 'data.videos');
+            ->assertJsonCount(2, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 2);
     }
 
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
@@ -193,7 +228,8 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/live')
             ->assertOk()
-            ->assertJsonPath('data.videos.0.id', $liveVideoId);
+            ->assertJsonPath('data.videos.0.id', $liveVideoId)
+            ->assertJsonPath('meta.videos.total', 1);
 
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
         $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
@@ -210,24 +246,65 @@ class ContentAndProfileApiTest extends TestCase
             'body' => 'Great post!',
         ]);
 
+        $commentResponse
+            ->assertCreated()
+            ->assertJsonPath('data.comment.user.fullName', 'Viewer')
+            ->assertJsonPath('data.comment.user.subscriberCount', 0)
+            ->assertJsonPath('data.comment.currentUserState.liked', false);
+
         $commentId = $commentResponse->json('data.comment.id');
+
+        $this->getJson('/api/v1/videos/'.$creatorVideo->id)
+            ->assertOk()
+            ->assertJsonPath('data.video.likes', 1)
+            ->assertJsonPath('data.video.saves', 1)
+            ->assertJsonPath('data.video.commentsCount', 1)
+            ->assertJsonPath('data.video.author.subscriberCount', 1)
+            ->assertJsonPath('data.video.currentUserState.liked', true)
+            ->assertJsonPath('data.video.currentUserState.saved', true)
+            ->assertJsonPath('data.video.currentUserState.subscribed', true);
 
         $this->getJson('/api/v1/videos/'.$creatorVideo->id.'/comments')
             ->assertOk()
-            ->assertJsonCount(1, 'data.comments');
+            ->assertJsonCount(1, 'data.comments')
+            ->assertJsonPath('data.comments.0.repliesCount', 0)
+            ->assertJsonPath('data.comments.0.currentUserState.liked', false);
 
         $this->getJson('/api/v1/me/profile')
             ->assertOk()
-            ->assertJsonPath('data.profile.fullName', 'Viewer');
+            ->assertJsonPath('data.profile.fullName', 'Viewer')
+            ->assertJsonPath('data.profile.subscriberCount', 0);
 
         $this->patchJson('/api/v1/me/profile', ['fullName' => 'Viewer Updated', 'bio' => 'Updated bio'])
             ->assertOk()
-            ->assertJsonPath('data.profile.fullName', 'Viewer Updated');
+            ->assertJsonPath('data.profile.fullName', 'Viewer Updated')
+            ->assertJsonPath('data.profile.subscriberCount', 0);
 
-        $this->getJson('/api/v1/me/posts')->assertOk()->assertJsonCount(2, 'data.videos');
-        $this->getJson('/api/v1/me/liked')->assertOk()->assertJsonCount(1, 'data.videos');
-        $this->getJson('/api/v1/me/saved')->assertOk()->assertJsonCount(1, 'data.videos');
-        $this->getJson('/api/v1/me/drafts')->assertOk()->assertJsonCount(0, 'data.videos');
+        $this->getJson('/api/v1/me/posts?per_page=1&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.videos')
+            ->assertJsonPath('data.videos.0.title', 'Viewer Live')
+            ->assertJsonPath('meta.videos.total', 2)
+            ->assertJsonPath('meta.videos.currentPage', 2);
+
+        $this->getJson('/api/v1/me/liked')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 1);
+
+        $this->getJson('/api/v1/me/saved')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 1);
+
+        $this->getJson('/api/v1/me/drafts')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 0);
+
+        $this->getJson('/api/v1/users/'.$creator->id)
+            ->assertOk()
+            ->assertJsonPath('data.user.subscriberCount', 1);
 
         $this->getJson('/api/v1/me/preferences')
             ->assertOk()
@@ -249,7 +326,10 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/comments/'.$commentId.'/replies')
             ->assertOk()
-            ->assertJsonCount(1, 'data.replies');
+            ->assertJsonCount(1, 'data.replies')
+            ->assertJsonPath('data.replies.0.user.fullName', 'Creator')
+            ->assertJsonPath('data.replies.0.user.subscriberCount', 1)
+            ->assertJsonPath('data.replies.0.currentUserState.liked', false);
 
         $notifications = $this->getJson('/api/v1/notifications')
             ->assertOk();
@@ -278,5 +358,118 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->deleteJson('/api/v1/comments/'.$commentId)->assertOk();
         $this->assertDatabaseMissing('comments', ['id' => $commentId]);
+    }
+
+    public function test_blank_search_queries_return_empty_paginated_results_instead_of_listing_everything(): void
+    {
+        $category = Category::create(['name' => 'Music', 'slug' => 'music']);
+        $creator = User::factory()->create(['name' => 'Creator One', 'email' => 'creator@example.com']);
+
+        Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Alpha Hit',
+            'caption' => 'Top track',
+            'description' => 'Alpha release',
+            'is_draft' => false,
+        ]);
+
+        $this->getJson('/api/v1/search?per_page=7')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.videos')
+            ->assertJsonCount(0, 'data.creators')
+            ->assertJsonCount(0, 'data.categories')
+            ->assertJsonPath('meta.videos.total', 0)
+            ->assertJsonPath('meta.videos.perPage', 7)
+            ->assertJsonPath('meta.creators.total', 0)
+            ->assertJsonPath('meta.categories.total', 0);
+
+        $this->getJson('/api/v1/search/suggestions?q=%20%20%20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.videos')
+            ->assertJsonCount(0, 'data.creators')
+            ->assertJsonCount(0, 'data.categories')
+            ->assertJsonPath('meta.videos.total', 0)
+            ->assertJsonPath('meta.videos.perPage', 5);
+
+        $this->getJson('/api/v1/search/videos?q=%20%20%20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.videos')
+            ->assertJsonPath('meta.videos.total', 0);
+
+        $this->getJson('/api/v1/search/creators?q=%20%20%20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.creators')
+            ->assertJsonPath('meta.creators.total', 0);
+
+        $this->getJson('/api/v1/search/categories?q=%20%20%20')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.categories')
+            ->assertJsonPath('meta.categories.total', 0);
+
+        $this->getJson('/api/v1/users/search?q=%20%20%20&per_page=3')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.users')
+            ->assertJsonPath('meta.users.total', 0)
+            ->assertJsonPath('meta.users.perPage', 3);
+    }
+
+    public function test_public_view_and_share_metrics_are_deduplicated_per_client_fingerprint(): void
+    {
+        $category = Category::create(['name' => 'Music', 'slug' => 'music']);
+        $creator = User::factory()->create(['name' => 'Creator One', 'email' => 'creator@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Alpha Hit',
+            'is_draft' => false,
+            'views_count' => 10,
+            'shares_count' => 0,
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->assertOk()
+            ->assertJsonPath('data.views', 11);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->assertOk()
+            ->assertJsonPath('data.views', 11);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
+            ->withHeaders(['User-Agent' => 'Second Engagement Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->assertOk()
+            ->assertJsonPath('data.views', 12);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->assertOk()
+            ->assertJsonPath('data.shares', 1);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->assertOk()
+            ->assertJsonPath('data.shares', 1);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
+            ->withHeaders(['User-Agent' => 'Second Engagement Agent'])
+            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->assertOk()
+            ->assertJsonPath('data.shares', 2);
+
+        $this->assertDatabaseHas('videos', [
+            'id' => $video->id,
+            'views_count' => 12,
+            'shares_count' => 2,
+        ]);
     }
 }

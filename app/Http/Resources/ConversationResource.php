@@ -10,16 +10,22 @@ class ConversationResource extends JsonResource
     public function toArray(Request $request): array
     {
         $participant = $this->participants->firstWhere('id', '!=', $request->user()?->id) ?? $this->participants->first();
-        $lastMessage = $this->messages->sortByDesc('created_at')->first();
+        $lastMessage = $this->relationLoaded('latestMessage')
+            ? $this->latestMessage
+            : ($this->relationLoaded('messages') ? $this->messages->sortByDesc('created_at')->first() : null);
         $pivot = $request->user()
             ? $this->participants->firstWhere('id', $request->user()->id)?->pivot
             : null;
-        $unreadCount = $request->user()
-            ? $this->messages
-                ->where('user_id', '!=', $request->user()->id)
-                ->filter(fn ($message) => ! $pivot?->last_read_at || $message->created_at->gt($pivot->last_read_at))
-                ->count()
-            : 0;
+        $unreadCount = $this->resource->getAttribute('unread_count');
+
+        if ($unreadCount === null) {
+            $unreadCount = $request->user() && $this->relationLoaded('messages')
+                ? $this->messages
+                    ->where('user_id', '!=', $request->user()->id)
+                    ->filter(fn ($message) => ! $pivot?->last_read_at || $message->created_at->gt($pivot->last_read_at))
+                    ->count()
+                : 0;
+        }
 
         return [
             'id' => $this->id,

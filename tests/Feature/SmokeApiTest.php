@@ -42,31 +42,39 @@ class SmokeApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data.categories');
 
-        $this->getJson('/api/v1/videos?category=alpha-music')
+        $this->getJson('/api/v1/videos?category=alpha-music&per_page=1')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
-            ->assertJsonPath('data.videos.0.id', $video->id);
+            ->assertJsonPath('data.videos.0.id', $video->id)
+            ->assertJsonPath('meta.videos.total', 1)
+            ->assertJsonPath('meta.videos.perPage', 1);
 
         $this->getJson('/api/v1/search/suggestions?q=Alpha')
             ->assertOk()
             ->assertJsonPath('data.videos.0.id', $video->id)
             ->assertJsonPath('data.creators.0.fullName', $creator->name)
-            ->assertJsonPath('data.categories.0.slug', $category->slug);
+            ->assertJsonPath('data.categories.0.slug', $category->slug)
+            ->assertJsonPath('meta.videos.perPage', 5)
+            ->assertJsonPath('meta.creators.total', 1)
+            ->assertJsonPath('meta.categories.total', 1);
 
         $this->getJson('/api/v1/search/videos?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
-            ->assertJsonPath('data.videos.0.id', $video->id);
+            ->assertJsonPath('data.videos.0.id', $video->id)
+            ->assertJsonPath('meta.videos.total', 1);
 
         $this->getJson('/api/v1/search/creators?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.creators')
-            ->assertJsonPath('data.creators.0.fullName', $creator->name);
+            ->assertJsonPath('data.creators.0.fullName', $creator->name)
+            ->assertJsonPath('meta.creators.total', 1);
 
         $this->getJson('/api/v1/search/categories?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.categories')
-            ->assertJsonPath('data.categories.0.slug', $category->slug);
+            ->assertJsonPath('data.categories.0.slug', $category->slug)
+            ->assertJsonPath('meta.categories.total', 1);
 
         $this->getJson('/api/v1/help')
             ->assertOk()

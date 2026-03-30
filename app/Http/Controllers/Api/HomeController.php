@@ -8,13 +8,16 @@ use App\Http\Resources\VideoResource;
 use App\Models\Category;
 use App\Models\Video;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
         $trending = Video::query()
-            ->with(['user', 'category', 'upload'])
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->orderByDesc('views_count')
             ->latest()
@@ -22,7 +25,7 @@ class HomeController extends Controller
             ->get();
 
         $liveStreams = Video::query()
-            ->with(['user', 'category', 'upload'])
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->where('is_live', true)
             ->latest()

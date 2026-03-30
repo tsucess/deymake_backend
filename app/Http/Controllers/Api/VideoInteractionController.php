@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\User;
-use App\Models\UserNotification;
 use App\Models\Video;
+use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -58,16 +58,18 @@ class VideoInteractionController extends Controller
             ]
         );
 
-        $this->notify($creator->id, $request->user()->id, 'subscription', 'New subscriber', $request->user()->name.' subscribed to your profile.', [
+        UserNotifier::send($creator->id, $request->user()->id, 'subscription', 'New subscriber', $request->user()->name.' subscribed to your profile.', [
             'creatorId' => $creator->id,
         ]);
+
+        $creator->loadCount('subscribers');
 
         return response()->json([
             'message' => 'Creator subscribed successfully.',
             'data' => [
                 'creator' => [
                     'id' => $creator->id,
-                    'subscriberCount' => DB::table('subscriptions')->where('creator_id', $creator->id)->count(),
+                    'subscriberCount' => (int) $creator->subscribers_count,
                     'subscribed' => true,
                 ],
             ],
@@ -81,12 +83,14 @@ class VideoInteractionController extends Controller
             ->where('creator_id', $creator->id)
             ->delete();
 
+        $creator->loadCount('subscribers');
+
         return response()->json([
             'message' => 'Creator unsubscribed successfully.',
             'data' => [
                 'creator' => [
                     'id' => $creator->id,
-                    'subscriberCount' => DB::table('subscriptions')->where('creator_id', $creator->id)->count(),
+                    'subscriberCount' => (int) $creator->subscribers_count,
                     'subscribed' => false,
                 ],
             ],
@@ -130,7 +134,7 @@ class VideoInteractionController extends Controller
             }
 
             if (in_array($type, ['like', 'dislike'], true)) {
-                $this->notify(
+                UserNotifier::send(
                     $video->user_id,
                     $request->user()->id,
                     'video_'.$type,
@@ -143,7 +147,9 @@ class VideoInteractionController extends Controller
             $query->delete();
         }
 
-        $video->load(['user', 'category', 'upload']);
+        $video = Video::query()
+            ->withApiResourceData($request->user())
+            ->findOrFail($video->id);
 
         return response()->json([
             'message' => 'Video '.($active ? $type.'d' : $type.' removed').' successfully.',
@@ -153,18 +159,4 @@ class VideoInteractionController extends Controller
         ]);
     }
 
-    private function notify(int $recipientId, int $actorId, string $type, string $title, string $body, array $data = []): void
-    {
-        if ($recipientId === $actorId) {
-            return;
-        }
-
-        UserNotification::create([
-            'user_id' => $recipientId,
-            'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-        ]);
-    }
 }

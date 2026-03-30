@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CommentResource;
 use App\Models\Comment;
-use App\Models\UserNotification;
+use App\Models\User;
 use App\Models\Video;
+use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +17,10 @@ class CommentController extends Controller
     public function index(Request $request, Video $video): JsonResponse
     {
         $this->ensureVideoVisible($request, $video);
+        $viewer = auth('sanctum')->user() ?? $request->user();
 
         $comments = Comment::query()
-            ->with('user')
+            ->withApiResourceData($viewer)
             ->where('video_id', $video->id)
             ->whereNull('parent_id')
             ->latest()
@@ -46,7 +48,7 @@ class CommentController extends Controller
             'body' => $validated['body'],
         ]);
 
-        $this->notify(
+        UserNotifier::send(
             $video->user_id,
             $request->user()->id,
             'comment',
@@ -55,7 +57,7 @@ class CommentController extends Controller
             ['videoId' => $video->id, 'commentId' => $comment->id]
         );
 
-        $comment->load('user');
+        $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
             'message' => 'Comment created successfully.',
@@ -69,8 +71,9 @@ class CommentController extends Controller
     {
         $comment->loadMissing('video');
         $this->ensureVideoVisible($request, $comment->video);
+        $viewer = auth('sanctum')->user() ?? $request->user();
 
-        $replies = $comment->replies()->with('user')->latest()->get();
+        $replies = $comment->replies()->withApiResourceData($viewer)->latest()->get();
 
         return response()->json([
             'message' => 'Replies retrieved successfully.',
@@ -96,7 +99,7 @@ class CommentController extends Controller
             'body' => $validated['body'],
         ]);
 
-        $this->notify(
+        UserNotifier::send(
             $comment->user_id,
             $request->user()->id,
             'reply',
@@ -105,7 +108,7 @@ class CommentController extends Controller
             ['videoId' => $comment->video_id, 'commentId' => $comment->id, 'replyId' => $reply->id]
         );
 
-        $reply->load('user');
+        $reply = $this->loadCommentForResource($reply->id, $request->user());
 
         return response()->json([
             'message' => 'Reply created successfully.',
@@ -124,7 +127,7 @@ class CommentController extends Controller
         ]);
 
         $comment->forceFill(['body' => $validated['body']])->save();
-        $comment->load('user');
+        $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
             'message' => 'Comment updated successfully.',
@@ -201,7 +204,7 @@ class CommentController extends Controller
                     ->delete();
             }
 
-            $this->notify(
+            UserNotifier::send(
                 $comment->user_id,
                 $request->user()->id,
                 'comment_'.$type,
@@ -213,7 +216,7 @@ class CommentController extends Controller
             $query->delete();
         }
 
-        $comment->load('user');
+        $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
             'message' => 'Comment '.($active ? $type.'d' : $type.' removed').' successfully.',
@@ -232,18 +235,10 @@ class CommentController extends Controller
         }
     }
 
-    private function notify(int $recipientId, int $actorId, string $type, string $title, string $body, array $data = []): void
+    private function loadCommentForResource(int $commentId, ?User $viewer): Comment
     {
-        if ($recipientId === $actorId) {
-            return;
-        }
-
-        UserNotification::create([
-            'user_id' => $recipientId,
-            'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-        ]);
+        return Comment::query()
+            ->withApiResourceData($viewer)
+            ->findOrFail($commentId);
     }
 }

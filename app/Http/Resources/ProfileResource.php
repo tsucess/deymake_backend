@@ -4,7 +4,6 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\DB;
 
 class ProfileResource extends JsonResource
 {
@@ -16,7 +15,7 @@ class ProfileResource extends JsonResource
             'bio' => $this->bio,
             'avatarUrl' => $this->avatar_url,
             'isOnline' => (bool) ($this->is_online ?? false),
-            'subscriberCount' => (int) DB::table('subscriptions')->where('creator_id', $this->id)->count(),
+            'subscriberCount' => (int) ($this->subscribers_count ?? 0),
             'createdAt' => $this->created_at?->toISOString(),
             'email' => $request->user()?->is($this->resource) ? $this->email : null,
         ];

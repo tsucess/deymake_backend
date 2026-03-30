@@ -7,13 +7,17 @@ use App\Http\Resources\ProfileResource;
 use App\Http\Resources\VideoResource;
 use App\Models\User;
 use App\Models\Video;
+use App\Support\PaginatedJson;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    public function show(User $user): JsonResponse
+    public function show(Request $request, User $user): JsonResponse
     {
+        $user = User::query()->withProfileAggregates()->findOrFail($user->id);
+
         return response()->json([
             'message' => 'User profile retrieved successfully.',
             'data' => [
@@ -22,40 +26,63 @@ class UserController extends Controller
         ]);
     }
 
-    public function posts(User $user): JsonResponse
+    public function posts(Request $request, User $user): JsonResponse
     {
-        $videos = Video::query()
-            ->with(['user', 'category', 'upload'])
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        $videos = PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($viewer)
             ->where('user_id', $user->id)
             ->where('is_draft', false)
-            ->latest()
-            ->get();
+            ->latest(), $request);
 
-        return response()->json([
-            'message' => 'User posts retrieved successfully.',
-            'data' => [
-                'videos' => VideoResource::collection($videos),
-            ],
-        ]);
+        return $this->videoResponse($request, 'User posts retrieved successfully.', $videos);
     }
 
     public function search(Request $request): JsonResponse
     {
-        $query = $request->string('q')->toString();
+        $query = $this->normalizedQuery($request);
 
-        $users = User::query()
-            ->when($query !== '', function ($builder) use ($query): void {
-                $builder->where('name', 'like', '%'.$query.'%')
-                    ->orWhere('email', 'like', '%'.$query.'%');
-            })
-            ->orderBy('name')
-            ->limit(10)
-            ->get();
+        $users = $query === ''
+            ? PaginatedJson::empty($request, 10, 25)
+            : PaginatedJson::paginate(User::query()
+                ->withProfileAggregates()
+                ->when($query !== '', function ($builder) use ($query): void {
+                    $builder->where('name', 'like', '%'.$query.'%')
+                        ->orWhere('email', 'like', '%'.$query.'%');
+                })
+                ->orderBy('name'), $request, 10, 25);
 
+        return $this->userResponse($request, 'Users retrieved successfully.', $users);
+    }
+
+    private function normalizedQuery(Request $request): string
+    {
+        return preg_replace('/\s+/', ' ', trim($request->string('q')->toString())) ?? '';
+    }
+
+    private function videoResponse(Request $request, string $message, LengthAwarePaginator $videos): JsonResponse
+    {
         return response()->json([
-            'message' => 'Users retrieved successfully.',
+            'message' => $message,
             'data' => [
-                'users' => ProfileResource::collection($users),
+                'videos' => PaginatedJson::items($request, $videos, VideoResource::class),
+            ],
+            'meta' => [
+                'videos' => PaginatedJson::meta($videos),
+            ],
+        ]);
+    }
+
+    private function userResponse(Request $request, string $message, LengthAwarePaginator $users): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'users' => PaginatedJson::items($request, $users, ProfileResource::class),
+            ],
+            'meta' => [
+                'users' => PaginatedJson::meta($users),
             ],
         ]);
     }

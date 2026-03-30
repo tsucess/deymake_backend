@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\ConversationMessageCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\MessageResource;
@@ -9,18 +10,21 @@ use App\Http\Resources\ProfileResource;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
-use App\Models\UserNotification;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Support\UserNotifier;
 
 class ConversationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
         $conversations = $request->user()->conversations()
-            ->with(['participants', 'messages.user'])
+            ->with($this->conversationResourceRelations())
             ->latest('conversations.updated_at')
             ->get();
+
+        $this->attachUnreadCounts($conversations, $request->user()->id);
 
         return response()->json([
             'message' => 'Conversations retrieved successfully.',
@@ -41,6 +45,7 @@ class ConversationController extends Controller
             ->values();
 
         $users = User::query()
+            ->withProfileAggregates()
             ->whereNotIn('id', $existingParticipantIds)
             ->orderBy('name')
             ->limit(5)
@@ -87,10 +92,10 @@ class ConversationController extends Controller
             ]);
 
             $conversation->touch();
-            $this->notify($validated['userId'], $request->user()->id, $conversation->id, $validated['message']);
+            UserNotifier::sendMessage($validated['userId'], $request->user()->id, $conversation->id, $validated['message']);
         }
 
-        $conversation->load(['participants', 'messages.user']);
+        $this->loadConversationForResource($conversation, $request->user()->id);
 
         return response()->json([
             'message' => 'Conversation ready successfully.',
@@ -104,7 +109,19 @@ class ConversationController extends Controller
     {
         $this->ensureParticipant($request, $conversation);
 
-        $messages = $conversation->messages()->with('user')->oldest()->get();
+        $validated = $request->validate([
+            'after' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $messagesQuery = $conversation->messages()
+            ->with(['user' => fn ($query) => $query->withProfileAggregates()])
+            ->oldest();
+
+        if (($validated['after'] ?? null) !== null) {
+            $messagesQuery->where('messages.id', '>', (int) $validated['after']);
+        }
+
+        $messages = $messagesQuery->get();
 
         return response()->json([
             'message' => 'Messages retrieved successfully.',
@@ -138,10 +155,12 @@ class ConversationController extends Controller
             ->pluck('users.id');
 
         foreach ($recipientIds as $recipientId) {
-            $this->notify((int) $recipientId, $request->user()->id, $conversation->id, $validated['body']);
+            UserNotifier::sendMessage((int) $recipientId, $request->user()->id, $conversation->id, $validated['body']);
         }
 
-        $message->load('user');
+        $message->load(['user' => fn ($query) => $query->withProfileAggregates()]);
+
+        ConversationMessageCreated::dispatch($message);
 
         return response()->json([
             'message' => 'Message created successfully.',
@@ -167,18 +186,44 @@ class ConversationController extends Controller
         abort_if(! $conversation->participants()->where('users.id', $request->user()->id)->exists(), 403);
     }
 
-    private function notify(int $recipientId, int $actorId, int $conversationId, string $body): void
+    private function conversationResourceRelations(): array
     {
-        if ($recipientId === $actorId) {
+        return [
+            'participants' => fn ($query) => $query->withProfileAggregates(),
+            'latestMessage.user' => fn ($query) => $query->withProfileAggregates(),
+        ];
+    }
+
+    private function loadConversationForResource(Conversation $conversation, int $userId): void
+    {
+        $conversation->load($this->conversationResourceRelations());
+        $this->attachUnreadCounts(new EloquentCollection([$conversation]), $userId);
+    }
+
+    private function attachUnreadCounts(EloquentCollection $conversations, int $userId): void
+    {
+        if ($conversations->isEmpty()) {
             return;
         }
 
-        UserNotification::create([
-            'user_id' => $recipientId,
-            'type' => 'message',
-            'title' => 'New message',
-            'body' => mb_strimwidth($body, 0, 120, '...'),
-            'data' => ['conversationId' => $conversationId],
-        ]);
+        $unreadCounts = Message::query()
+            ->selectRaw('messages.conversation_id, COUNT(*) as unread_count')
+            ->join('conversation_participants as participant_reads', function ($join) use ($userId): void {
+                $join->on('participant_reads.conversation_id', '=', 'messages.conversation_id')
+                    ->where('participant_reads.user_id', '=', $userId);
+            })
+            ->whereIn('messages.conversation_id', $conversations->modelKeys())
+            ->where('messages.user_id', '!=', $userId)
+            ->where(function ($query): void {
+                $query->whereNull('participant_reads.last_read_at')
+                    ->orWhereColumn('messages.created_at', '>', 'participant_reads.last_read_at');
+            })
+            ->groupBy('messages.conversation_id')
+            ->get()
+            ->pluck('unread_count', 'conversation_id');
+
+        $conversations->each(function (Conversation $conversation) use ($unreadCounts): void {
+            $conversation->setAttribute('unread_count', (int) ($unreadCounts[$conversation->id] ?? 0));
+        });
     }
 }

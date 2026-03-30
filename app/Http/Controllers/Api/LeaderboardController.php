@@ -17,6 +17,7 @@ class LeaderboardController extends Controller
         $since = $this->since($period);
 
         $scoredUsers = User::query()
+            ->withProfileAggregates()
             ->with(['videos' => function ($query) use ($since): void {
                 $query->where('is_draft', false);
 

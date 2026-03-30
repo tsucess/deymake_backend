@@ -4,14 +4,11 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\DB;
 
 class VideoResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $user = $request->user();
-
         return [
             'id' => $this->id,
             'type' => $this->type,
@@ -23,21 +20,21 @@ class VideoResource extends JsonResource
             'mediaUrl' => $this->media_url ?: $this->upload?->url,
             'thumbnailUrl' => $this->thumbnail_url,
             'views' => (int) $this->views_count,
-            'likes' => (int) DB::table('video_interactions')->where('video_id', $this->id)->where('type', 'like')->count(),
-            'dislikes' => (int) DB::table('video_interactions')->where('video_id', $this->id)->where('type', 'dislike')->count(),
-            'saves' => (int) DB::table('video_interactions')->where('video_id', $this->id)->where('type', 'save')->count(),
+            'likes' => (int) ($this->likes_count ?? 0),
+            'dislikes' => (int) ($this->dislikes_count ?? 0),
+            'saves' => (int) ($this->saves_count ?? 0),
             'shares' => (int) $this->shares_count,
-            'commentsCount' => (int) DB::table('comments')->where('video_id', $this->id)->count(),
+            'commentsCount' => (int) ($this->comments_count ?? 0),
             'isLive' => (bool) $this->is_live,
             'isDraft' => (bool) $this->is_draft,
             'author' => new ProfileResource($this->whenLoaded('user')),
             'creator' => new ProfileResource($this->whenLoaded('user')),
             'category' => $this->category ? new CategoryResource($this->category) : null,
             'currentUserState' => [
-                'liked' => $user ? DB::table('video_interactions')->where('video_id', $this->id)->where('user_id', $user->id)->where('type', 'like')->exists() : false,
-                'disliked' => $user ? DB::table('video_interactions')->where('video_id', $this->id)->where('user_id', $user->id)->where('type', 'dislike')->exists() : false,
-                'saved' => $user ? DB::table('video_interactions')->where('video_id', $this->id)->where('user_id', $user->id)->where('type', 'save')->exists() : false,
-                'subscribed' => $user ? DB::table('subscriptions')->where('creator_id', $this->user_id)->where('user_id', $user->id)->exists() : false,
+                'liked' => (bool) ($this->liked_by_current_user ?? false),
+                'disliked' => (bool) ($this->disliked_by_current_user ?? false),
+                'saved' => (bool) ($this->saved_by_current_user ?? false),
+                'subscribed' => (bool) ($this->user?->subscribed_by_current_user ?? false),
             ],
             'createdAt' => $this->created_at?->toISOString(),
         ];

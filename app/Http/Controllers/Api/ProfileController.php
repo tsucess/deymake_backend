@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProfileResource;
 use App\Http\Resources\VideoResource;
+use App\Models\User;
 use App\Models\Video;
+use App\Support\PaginatedJson;
 use App\Support\UserDefaults;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,10 +18,12 @@ class ProfileController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
+        $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
+
         return response()->json([
             'message' => 'Profile retrieved successfully.',
             'data' => [
-                'profile' => new ProfileResource($request->user()),
+                'profile' => new ProfileResource($profile),
             ],
         ]);
     }
@@ -37,22 +42,23 @@ class ProfileController extends Controller
             'avatar_url' => array_key_exists('avatarUrl', $validated) ? $validated['avatarUrl'] : $request->user()->avatar_url,
         ])->save();
 
+        $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
+
         return response()->json([
             'message' => 'Profile updated successfully.',
             'data' => [
-                'profile' => new ProfileResource($request->user()->fresh()),
+                'profile' => new ProfileResource($profile),
             ],
         ]);
     }
 
     public function posts(Request $request): JsonResponse
     {
-        return $this->videoResponse('Posts retrieved successfully.', Video::query()
-            ->with(['user', 'category', 'upload'])
+        return $this->videoResponse($request, 'Posts retrieved successfully.', PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($request->user())
             ->where('user_id', $request->user()->id)
             ->where('is_draft', false)
-            ->latest()
-            ->get());
+            ->latest(), $request));
     }
 
     public function liked(Request $request): JsonResponse
@@ -62,12 +68,11 @@ class ProfileController extends Controller
             ->where('type', 'like')
             ->pluck('video_id');
 
-        return $this->videoResponse('Liked videos retrieved successfully.', Video::query()
-            ->with(['user', 'category', 'upload'])
+        return $this->videoResponse($request, 'Liked videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
             ->where('is_draft', false)
-            ->latest()
-            ->get());
+            ->latest(), $request));
     }
 
     public function saved(Request $request): JsonResponse
@@ -77,22 +82,20 @@ class ProfileController extends Controller
             ->where('type', 'save')
             ->pluck('video_id');
 
-        return $this->videoResponse('Saved videos retrieved successfully.', Video::query()
-            ->with(['user', 'category', 'upload'])
+        return $this->videoResponse($request, 'Saved videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
             ->where('is_draft', false)
-            ->latest()
-            ->get());
+            ->latest(), $request));
     }
 
     public function drafts(Request $request): JsonResponse
     {
-        return $this->videoResponse('Draft videos retrieved successfully.', Video::query()
-            ->with(['user', 'category', 'upload'])
+        return $this->videoResponse($request, 'Draft videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($request->user())
             ->where('user_id', $request->user()->id)
             ->where('is_draft', true)
-            ->latest()
-            ->get());
+            ->latest(), $request));
     }
 
     public function preferences(Request $request): JsonResponse
@@ -130,12 +133,15 @@ class ProfileController extends Controller
         ]);
     }
 
-    private function videoResponse(string $message, $videos): JsonResponse
+    private function videoResponse(Request $request, string $message, LengthAwarePaginator $videos): JsonResponse
     {
         return response()->json([
             'message' => $message,
             'data' => [
-                'videos' => VideoResource::collection($videos),
+                'videos' => PaginatedJson::items($request, $videos, VideoResource::class),
+            ],
+            'meta' => [
+                'videos' => PaginatedJson::meta($videos),
             ],
         ]);
     }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -79,5 +80,22 @@ class User extends Authenticatable
         return $this->belongsToMany(Conversation::class, 'conversation_participants')
             ->withPivot('last_read_at')
             ->withTimestamps();
+    }
+
+    public function subscribers(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'subscriptions', 'creator_id', 'user_id')
+            ->withTimestamps();
+    }
+
+    public function subscribedCreators(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'subscriptions', 'user_id', 'creator_id')
+            ->withTimestamps();
+    }
+
+    public function scopeWithProfileAggregates(Builder $query): Builder
+    {
+        return $query->withCount('subscribers');
     }
 }

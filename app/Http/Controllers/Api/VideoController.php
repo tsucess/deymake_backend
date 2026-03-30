@@ -5,17 +5,27 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\Upload;
+use App\Models\User;
 use App\Models\Video;
+use App\Support\PaginatedJson;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class VideoController extends Controller
 {
+    private const VIEW_DEDUP_MINUTES = 1440;
+
+    private const SHARE_DEDUP_MINUTES = 60;
+
     public function index(Request $request): JsonResponse
     {
-        $videos = Video::query()
-            ->with(['user', 'category', 'upload'])
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        $videos = PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->when($request->filled('category'), function ($query) use ($request): void {
                 $category = $request->string('category')->toString();
@@ -28,49 +38,35 @@ class VideoController extends Controller
 
                 $query->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $category));
             })
-            ->latest()
-            ->get();
+            ->latest(), $request);
 
-        return response()->json([
-            'message' => 'Videos retrieved successfully.',
-            'data' => [
-                'videos' => VideoResource::collection($videos),
-            ],
-        ]);
+        return $this->videoResponse($request, 'Videos retrieved successfully.', $videos);
     }
 
-    public function trending(): JsonResponse
+    public function trending(Request $request): JsonResponse
     {
-        $videos = Video::query()
-            ->with(['user', 'category', 'upload'])
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        $videos = PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->orderByDesc('views_count')
-            ->latest()
-            ->get();
+            ->latest(), $request);
 
-        return response()->json([
-            'message' => 'Trending videos retrieved successfully.',
-            'data' => [
-                'videos' => VideoResource::collection($videos),
-            ],
-        ]);
+        return $this->videoResponse($request, 'Trending videos retrieved successfully.', $videos);
     }
 
-    public function live(): JsonResponse
+    public function live(Request $request): JsonResponse
     {
-        $videos = Video::query()
-            ->with(['user', 'category', 'upload'])
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        $videos = PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->where('is_live', true)
-            ->latest()
-            ->get();
+            ->latest(), $request);
 
-        return response()->json([
-            'message' => 'Live videos retrieved successfully.',
-            'data' => [
-                'videos' => VideoResource::collection($videos),
-            ],
-        ]);
+        return $this->videoResponse($request, 'Live videos retrieved successfully.', $videos);
     }
 
     public function store(Request $request): JsonResponse
@@ -113,7 +109,7 @@ class VideoController extends Controller
             'is_draft' => $validated['isDraft'] ?? true,
         ]);
 
-        $video->load(['user', 'category', 'upload']);
+        $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
             'message' => 'Video created successfully.',
@@ -131,7 +127,7 @@ class VideoController extends Controller
             abort(404);
         }
 
-        $video->load(['user', 'category', 'upload']);
+        $video = $this->loadVideoForResource($video->id, $viewer);
 
         return response()->json([
             'message' => 'Video retrieved successfully.',
@@ -141,10 +137,12 @@ class VideoController extends Controller
         ]);
     }
 
-    public function related(Video $video): JsonResponse
+    public function related(Request $request, Video $video): JsonResponse
     {
-        $related = Video::query()
-            ->with(['user', 'category', 'upload'])
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        $related = PaginatedJson::paginate(Video::query()
+            ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->where('id', '!=', $video->id)
             ->where(function ($query) use ($video): void {
@@ -154,22 +152,18 @@ class VideoController extends Controller
                     $query->orWhere('category_id', $video->category_id);
                 }
             })
-            ->latest()
-            ->limit(8)
-            ->get();
+            ->latest(), $request, 8, 24);
 
-        return response()->json([
-            'message' => 'Related videos retrieved successfully.',
-            'data' => [
-                'videos' => VideoResource::collection($related),
-            ],
-        ]);
+        return $this->videoResponse($request, 'Related videos retrieved successfully.', $related);
     }
 
-    public function recordView(Video $video): JsonResponse
+    public function recordView(Request $request, Video $video): JsonResponse
     {
-        $video->increment('views_count');
-        $video->load(['user', 'category', 'upload']);
+        if ($this->shouldRecordEngagement($request, $video, 'view', self::VIEW_DEDUP_MINUTES)) {
+            $video->increment('views_count');
+        }
+
+        $video = $this->loadVideoForResource($video->id, auth('sanctum')->user() ?? $request->user());
 
         return response()->json([
             'message' => 'Video view recorded successfully.',
@@ -244,7 +238,7 @@ class VideoController extends Controller
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
         ])->save();
 
-        $video->load(['user', 'category', 'upload']);
+        $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
             'message' => 'Video updated successfully.',
@@ -259,7 +253,7 @@ class VideoController extends Controller
         abort_if($video->user_id !== $request->user()->id, 403);
 
         $video->forceFill(['is_draft' => false])->save();
-        $video->load(['user', 'category', 'upload']);
+        $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
             'message' => 'Video published successfully.',
@@ -269,9 +263,11 @@ class VideoController extends Controller
         ]);
     }
 
-    public function share(Video $video): JsonResponse
+    public function share(Request $request, Video $video): JsonResponse
     {
-        $video->increment('shares_count');
+        if ($this->shouldRecordEngagement($request, $video, 'share', self::SHARE_DEDUP_MINUTES)) {
+            $video->increment('shares_count');
+        }
 
         return response()->json([
             'message' => 'Video share recorded successfully.',
@@ -280,5 +276,51 @@ class VideoController extends Controller
                 'shareUrl' => rtrim(config('app.url'), '/').'/videos/'.$video->id,
             ],
         ]);
+    }
+
+    private function videoResponse(Request $request, string $message, LengthAwarePaginator $videos): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'videos' => PaginatedJson::items($request, $videos, VideoResource::class),
+            ],
+            'meta' => [
+                'videos' => PaginatedJson::meta($videos),
+            ],
+        ]);
+    }
+
+    private function loadVideoForResource(int $videoId, ?User $viewer): Video
+    {
+        return Video::query()
+            ->withApiResourceData($viewer)
+            ->findOrFail($videoId);
+    }
+
+    private function shouldRecordEngagement(Request $request, Video $video, string $metric, int $ttlMinutes): bool
+    {
+        return Cache::add($this->engagementCacheKey($request, $video, $metric), true, now()->addMinutes($ttlMinutes));
+    }
+
+    private function engagementCacheKey(Request $request, Video $video, string $metric): string
+    {
+        return sprintf(
+            'video-engagement:%s:%d:%s',
+            $metric,
+            $video->id,
+            sha1($this->engagementActorFingerprint($request))
+        );
+    }
+
+    private function engagementActorFingerprint(Request $request): string
+    {
+        $viewer = auth('sanctum')->user() ?? $request->user();
+
+        if ($viewer) {
+            return 'user:'.$viewer->getAuthIdentifier();
+        }
+
+        return 'guest:'.($request->ip() ?? 'unknown-ip').':'.sha1((string) $request->userAgent());
     }
 }
