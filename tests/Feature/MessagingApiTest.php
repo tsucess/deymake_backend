@@ -18,7 +18,10 @@ class MessagingApiTest extends TestCase
         Event::fake([ConversationMessageCreated::class]);
 
         $sender = User::factory()->create(['name' => 'Sender']);
-        $recipient = User::factory()->create(['name' => 'Recipient']);
+        $recipient = User::factory()->create([
+            'name' => 'Recipient',
+            'preferences' => ['language' => 'fr'],
+        ]);
         $extra = User::factory()->create(['name' => 'Extra']);
 
         $sender->subscribers()->attach($extra->id);
@@ -101,13 +104,60 @@ class MessagingApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.conversations.0.unreadCount', 0);
 
-        $this->getJson('/api/v1/notifications')
+        $notifications = $this->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonCount(3, 'data.notifications');
+
+        $this->assertContains(
+            trans('messages.notifications.new_message_title', [], 'fr'),
+            array_column($notifications->json('data.notifications'), 'title'),
+        );
 
         $this->getJson('/api/v1/conversations/suggested')
             ->assertOk()
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.fullName', $extra->name);
+    }
+
+    public function test_locale_headers_localize_conversation_messages_and_statuses(): void
+    {
+        $sender = User::factory()->create(['name' => 'Sender']);
+        $recipient = User::factory()->create([
+            'name' => 'Recipient',
+            'is_online' => false,
+        ]);
+
+        Sanctum::actingAs($sender);
+
+        $conversation = $this->withHeaders(['X-Locale' => 'ha'])
+            ->postJson('/api/v1/conversations', [
+                'userId' => $recipient->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.conversations.ready', [], 'ha'))
+            ->assertJsonPath('data.conversation.status', trans('messages.conversations.no_messages_yet', [], 'ha'));
+
+        $conversationId = $conversation->json('data.conversation.id');
+
+        $this->withHeaders(['X-Locale' => 'yo'])
+            ->getJson('/api/v1/conversations')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.conversations.retrieved', [], 'yo'))
+            ->assertJsonPath('data.conversations.0.status', trans('messages.conversations.no_messages_yet', [], 'yo'));
+
+        $this->withHeaders(['X-Locale' => 'ig'])
+            ->postJson('/api/v1/conversations/'.$conversationId.'/messages', [
+                'body' => 'Ndewo',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.conversations.message_created', [], 'ig'));
+
+        $status = $this->withHeaders(['X-Locale' => 'es'])
+            ->getJson('/api/v1/conversations')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.conversations.retrieved', [], 'es'))
+            ->json('data.conversations.0.status');
+
+        $this->assertStringStartsWith(trans('messages.conversations.sent_prefix', [], 'es').' ', $status);
     }
 }

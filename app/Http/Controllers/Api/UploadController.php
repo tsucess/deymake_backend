@@ -32,18 +32,18 @@ class UploadController extends Controller
             report($exception);
 
             return response()->json([
-                'message' => 'Media upload service is not configured.',
+                'message' => __('messages.upload.service_not_configured'),
                 'errors' => [
-                    'file' => ['Set CLOUDINARY_URL before uploading media.'],
+                    'file' => [__('messages.upload.service_not_configured_detail')],
                 ],
             ], 503);
         } catch (ApiError|RuntimeException $exception) {
             report($exception);
 
             return response()->json([
-                'message' => 'Unable to upload file at the moment.',
+                'message' => __('messages.upload.failed'),
                 'errors' => [
-                    'file' => ['The media upload failed. Please try again.'],
+                    'file' => [__('messages.upload.failed_detail')],
                 ],
             ], 502);
         }
@@ -56,10 +56,15 @@ class UploadController extends Controller
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
             'size' => $file->getSize() ?: 0,
+            'processing_status' => $uploadedMedia['processing_status'] ?? 'completed',
+            'width' => $uploadedMedia['width'] ?? null,
+            'height' => $uploadedMedia['height'] ?? null,
+            'duration' => $uploadedMedia['duration'] ?? null,
+            'processed_url' => $uploadedMedia['processed_url'] ?? $uploadedMedia['url'] ?? null,
         ]);
 
         return response()->json([
-            'message' => 'Upload stored successfully.',
+            'message' => __('messages.upload.stored'),
             'data' => [
                 'upload' => new UploadResource($upload),
             ],
@@ -78,7 +83,7 @@ class UploadController extends Controller
             .'/'.Str::uuid().'.'.$extension;
 
         return response()->json([
-            'message' => 'Presign configuration generated successfully.',
+            'message' => __('messages.upload.presign_generated'),
             'data' => [
                 'strategy' => 'server-upload',
                 'provider' => 'cloudinary',

@@ -27,6 +27,9 @@ class Video extends Model
         'thumbnail_url',
         'is_live',
         'is_draft',
+        'live_started_at',
+        'live_ended_at',
+        'live_notified_at',
         'views_count',
         'shares_count',
     ];
@@ -37,6 +40,9 @@ class Video extends Model
             'tagged_users' => 'array',
             'is_live' => 'boolean',
             'is_draft' => 'boolean',
+            'live_started_at' => 'datetime',
+            'live_ended_at' => 'datetime',
+            'live_notified_at' => 'datetime',
         ];
     }
 

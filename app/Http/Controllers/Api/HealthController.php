@@ -10,7 +10,7 @@ class HealthController extends Controller
     public function __invoke(): JsonResponse
     {
         return response()->json([
-            'message' => 'DeyMake API is healthy.',
+            'message' => __('messages.health.healthy'),
             'data' => [
                 'status' => 'ok',
                 'app' => config('app.name'),

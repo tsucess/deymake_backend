@@ -8,20 +8,24 @@ use App\Http\Resources\VideoResource;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\PaginatedJson;
+use App\Support\SupportedLocales;
 use App\Support\UserDefaults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
 
         return response()->json([
-            'message' => 'Profile retrieved successfully.',
+            'message' => __('messages.profile.retrieved'),
             'data' => [
                 'profile' => new ProfileResource($profile),
             ],
@@ -30,6 +34,8 @@ class ProfileController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         $validated = $request->validate([
             'fullName' => ['sometimes', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:1000'],
@@ -45,7 +51,7 @@ class ProfileController extends Controller
         $profile = User::query()->withProfileAggregates()->findOrFail($request->user()->id);
 
         return response()->json([
-            'message' => 'Profile updated successfully.',
+            'message' => __('messages.profile.updated'),
             'data' => [
                 'profile' => new ProfileResource($profile),
             ],
@@ -54,7 +60,9 @@ class ProfileController extends Controller
 
     public function posts(Request $request): JsonResponse
     {
-        return $this->videoResponse($request, 'Posts retrieved successfully.', PaginatedJson::paginate(Video::query()
+        SupportedLocales::apply($request);
+
+        return $this->videoResponse($request, __('messages.feeds.posts_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->where('user_id', $request->user()->id)
             ->where('is_draft', false)
@@ -63,12 +71,14 @@ class ProfileController extends Controller
 
     public function liked(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         $videoIds = DB::table('video_interactions')
             ->where('user_id', $request->user()->id)
             ->where('type', 'like')
             ->pluck('video_id');
 
-        return $this->videoResponse($request, 'Liked videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+        return $this->videoResponse($request, __('messages.feeds.liked_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
             ->where('is_draft', false)
@@ -77,12 +87,14 @@ class ProfileController extends Controller
 
     public function saved(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         $videoIds = DB::table('video_interactions')
             ->where('user_id', $request->user()->id)
             ->where('type', 'save')
             ->pluck('video_id');
 
-        return $this->videoResponse($request, 'Saved videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+        return $this->videoResponse($request, __('messages.feeds.saved_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
             ->where('is_draft', false)
@@ -91,7 +103,9 @@ class ProfileController extends Controller
 
     public function drafts(Request $request): JsonResponse
     {
-        return $this->videoResponse($request, 'Draft videos retrieved successfully.', PaginatedJson::paginate(Video::query()
+        SupportedLocales::apply($request);
+
+        return $this->videoResponse($request, __('messages.feeds.drafts_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->where('user_id', $request->user()->id)
             ->where('is_draft', true)
@@ -100,8 +114,10 @@ class ProfileController extends Controller
 
     public function preferences(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         return response()->json([
-            'message' => 'Preferences retrieved successfully.',
+            'message' => __('messages.preferences.retrieved'),
             'data' => [
                 'preferences' => array_replace_recursive(UserDefaults::preferences(), $request->user()->preferences ?? []),
             ],
@@ -110,11 +126,15 @@ class ProfileController extends Controller
 
     public function updatePreferences(Request $request): JsonResponse
     {
+        SupportedLocales::apply($request);
+
         $validated = $request->validate([
             'notificationSettings' => ['sometimes', 'array'],
-            'language' => ['sometimes', 'string', 'max:20'],
+            'language' => ['sometimes', 'string', 'max:20', Rule::in(SupportedLocales::all())],
             'displayPreferences' => ['sometimes', 'array'],
             'accessibilityPreferences' => ['sometimes', 'array'],
+        ], [
+            'language.in' => __('messages.validation.language_supported'),
         ]);
 
         $preferences = array_replace_recursive(
@@ -126,7 +146,7 @@ class ProfileController extends Controller
         $request->user()->forceFill(['preferences' => $preferences])->save();
 
         return response()->json([
-            'message' => 'Preferences updated successfully.',
+            'message' => __('messages.preferences.updated'),
             'data' => [
                 'preferences' => $preferences,
             ],

@@ -15,9 +15,14 @@ class UploadResource extends JsonResource
             'disk' => $this->disk,
             'path' => $this->path,
             'url' => $this->url,
+            'processedUrl' => $this->processed_url,
             'originalName' => $this->original_name,
             'mimeType' => $this->mime_type,
             'size' => (int) $this->size,
+            'processingStatus' => $this->processing_status,
+            'width' => $this->width,
+            'height' => $this->height,
+            'duration' => $this->duration,
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }

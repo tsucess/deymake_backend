@@ -31,7 +31,7 @@ class SearchController extends Controller
             : PaginatedJson::paginate($this->categoriesQuery($query), $request, 10, 25), CategoryResource::class);
 
         return response()->json([
-            'message' => 'Search results retrieved successfully.',
+            'message' => __('messages.search.global_retrieved'),
             'data' => [
                 'videos' => $videos['items'],
                 'creators' => $creators['items'],
@@ -60,7 +60,7 @@ class SearchController extends Controller
             : PaginatedJson::paginate($this->categoriesQuery($query), $request, 5, 10), CategoryResource::class);
 
         return response()->json([
-            'message' => 'Search suggestions retrieved successfully.',
+            'message' => __('messages.search.suggestions_retrieved'),
             'data' => [
                 'videos' => $videos['items'],
                 'creators' => $creators['items'],
@@ -84,7 +84,7 @@ class SearchController extends Controller
             : PaginatedJson::paginate($this->videosQuery($query, $viewer), $request, 12, 25);
 
         return response()->json([
-            'message' => 'Video search results retrieved successfully.',
+            'message' => __('messages.search.videos_retrieved'),
             'data' => [
                 'videos' => PaginatedJson::items($request, $videos, VideoResource::class),
             ],
@@ -100,7 +100,7 @@ class SearchController extends Controller
 
         return $this->singleCollectionResponse(
             $request,
-            'Creator search results retrieved successfully.',
+            __('messages.search.creators_retrieved'),
             'creators',
             $query === ''
                 ? PaginatedJson::empty($request, 12, 25)
@@ -115,7 +115,7 @@ class SearchController extends Controller
 
         return $this->singleCollectionResponse(
             $request,
-            'Category search results retrieved successfully.',
+            __('messages.search.categories_retrieved'),
             'categories',
             $query === ''
                 ? PaginatedJson::empty($request, 12, 25)

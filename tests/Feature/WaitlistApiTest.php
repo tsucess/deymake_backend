@@ -13,6 +13,7 @@ class WaitlistApiTest extends TestCase
     {
         $this->getJson('/api/v1/health')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.health.healthy'))
             ->assertJsonPath('data.status', 'ok');
     }
 
@@ -30,7 +31,7 @@ class WaitlistApiTest extends TestCase
 
         $response
             ->assertCreated()
-            ->assertJsonPath('message', 'You have been added to the waitlist.')
+            ->assertJsonPath('message', trans('messages.waitlist.added'))
             ->assertJsonPath('data.waitlistEntry.email', 'waitlist@example.com')
             ->assertJsonPath('data.waitlistEntry.status', 'pending');
 
@@ -59,5 +60,26 @@ class WaitlistApiTest extends TestCase
         $this->postJson('/api/v1/waitlist', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
+    }
+
+    public function test_health_and_waitlist_messages_honor_locale_headers(): void
+    {
+        $this->withHeaders(['X-Locale' => 'fr'])
+            ->getJson('/api/v1/health')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.health.healthy', [], 'fr'));
+
+        $this->withHeaders(['X-Locale' => 'yo'])
+            ->postJson('/api/v1/waitlist', [
+                'firstName' => 'Rise Network',
+                'email' => 'waitlist-yo@example.com',
+                'phone' => '+2348000000001',
+                'country' => 'Nigeria',
+                'describes' => 'Creator',
+                'loveToSee' => 'Creator monetization tools',
+                'agreed' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.waitlist.added', [], 'yo'));
     }
 }

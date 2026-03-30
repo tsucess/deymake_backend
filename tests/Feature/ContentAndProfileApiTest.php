@@ -63,10 +63,12 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/home')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.home.retrieved'))
             ->assertJsonPath('data.categories.0.slug', 'music');
 
         $this->getJson('/api/v1/videos/trending')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.trending_retrieved'))
             ->assertJsonCount(3, 'data.videos')
             ->assertJsonPath('meta.videos.total', 3)
             ->assertJsonPath('meta.videos.currentPage', 1);
@@ -80,11 +82,13 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/live')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_retrieved'))
             ->assertJsonPath('data.videos.0.id', $liveVideo->id)
             ->assertJsonPath('meta.videos.total', 1);
 
         $this->getJson('/api/v1/videos/'.$mainVideo->id)
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.retrieved'))
             ->assertJsonPath('data.video.author.fullName', 'Creator One')
             ->assertJsonPath('data.video.author.subscriberCount', 1)
             ->assertJsonPath('data.video.likes', 1)
@@ -94,19 +98,23 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/'.$mainVideo->id.'/related')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.related_retrieved'))
             ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
             ->assertJsonPath('meta.videos.total', 2);
 
         $this->postJson('/api/v1/videos/'.$mainVideo->id.'/view')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.view_recorded'))
             ->assertJsonPath('data.views', 501);
 
         $this->postJson('/api/v1/videos/'.$mainVideo->id.'/share')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.share_recorded'))
             ->assertJsonPath('data.shares', 1);
 
         $this->getJson('/api/v1/search?q=Alpha')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.search.global_retrieved'))
             ->assertJsonPath('data.videos.0.id', $mainVideo->id)
             ->assertJsonPath('data.videos.0.author.subscriberCount', 1)
             ->assertJsonPath('data.videos.0.likes', 1)
@@ -116,10 +124,12 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/leaderboard?period=monthly')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
             ->assertJsonPath('data.standings.0.user.fullName', 'Creator One');
 
         $this->getJson('/api/v1/users/search?q=Creator&per_page=1&page=2')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.users.retrieved'))
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.fullName', 'Creator Two')
             ->assertJsonPath('meta.users.total', 2)
@@ -127,11 +137,13 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/users/'.$creator->id)
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.users.profile_retrieved'))
             ->assertJsonPath('data.user.fullName', 'Creator One')
             ->assertJsonPath('data.user.subscriberCount', 1);
 
         $this->getJson('/api/v1/users/'.$creator->id.'/posts')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.users.posts_retrieved'))
             ->assertJsonCount(2, 'data.videos')
             ->assertJsonPath('meta.videos.total', 2);
     }
@@ -171,7 +183,9 @@ class ContentAndProfileApiTest extends TestCase
             'file' => UploadedFile::fake()->image('poster.jpg'),
         ]);
 
-        $uploadResponse->assertCreated();
+        $uploadResponse
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.upload.stored'));
         $uploadId = $uploadResponse->json('data.upload.id');
         $this->assertDatabaseHas('uploads', [
             'id' => $uploadId,
@@ -187,21 +201,26 @@ class ContentAndProfileApiTest extends TestCase
             'isDraft' => true,
         ]);
 
+        $videoResponse->assertCreated()->assertJsonPath('message', trans('messages.videos.created'));
         $videoId = $videoResponse->json('data.video.id');
 
         $this->patchJson('/api/v1/videos/'.$videoId, ['title' => 'Viewer Draft'])
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.updated'))
             ->assertJsonPath('data.video.title', 'Viewer Draft');
 
         $this->postJson('/api/v1/videos/'.$videoId.'/publish')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.published'))
             ->assertJsonPath('data.video.isDraft', false);
 
         $liveUploadResponse = $this->postJson('/api/v1/uploads', [
             'file' => UploadedFile::fake()->create('live.mp4', 1024, 'video/mp4'),
         ]);
 
-        $liveUploadResponse->assertCreated();
+        $liveUploadResponse
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.upload.stored'));
         $liveUploadId = $liveUploadResponse->json('data.upload.id');
         $this->assertDatabaseHas('uploads', [
             'id' => $liveUploadId,
@@ -220,6 +239,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $liveVideoResponse
             ->assertCreated()
+            ->assertJsonPath('message', trans('messages.videos.created'))
             ->assertJsonPath('data.video.isLive', true)
             ->assertJsonPath('data.video.isDraft', false)
             ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4');
@@ -228,19 +248,36 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/live')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_retrieved'))
             ->assertJsonPath('data.videos.0.id', $liveVideoId)
             ->assertJsonPath('meta.videos.total', 1);
 
+        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.liked'));
+        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/like')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.like_removed'));
+        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.disliked'));
+        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.dislike_removed'));
+        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/save')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.saved'));
+        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/save')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.save_removed'));
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')->assertOk();
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')->assertOk();
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/save')->assertOk();
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/save')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/save')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/report', ['reason' => 'spam'])->assertCreated();
-        $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')->assertOk();
+        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/report', ['reason' => 'spam'])
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.videos.reported'));
+        $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.subscriptions.created'));
 
         $commentResponse = $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/comments', [
             'body' => 'Great post!',
@@ -248,6 +285,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $commentResponse
             ->assertCreated()
+            ->assertJsonPath('message', trans('messages.comments.created'))
             ->assertJsonPath('data.comment.user.fullName', 'Viewer')
             ->assertJsonPath('data.comment.user.subscriberCount', 0)
             ->assertJsonPath('data.comment.currentUserState.liked', false);
@@ -256,6 +294,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/'.$creatorVideo->id)
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.retrieved'))
             ->assertJsonPath('data.video.likes', 1)
             ->assertJsonPath('data.video.saves', 1)
             ->assertJsonPath('data.video.commentsCount', 1)
@@ -266,6 +305,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/'.$creatorVideo->id.'/comments')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.retrieved'))
             ->assertJsonCount(1, 'data.comments')
             ->assertJsonPath('data.comments.0.repliesCount', 0)
             ->assertJsonPath('data.comments.0.currentUserState.liked', false);
@@ -317,22 +357,33 @@ class ContentAndProfileApiTest extends TestCase
         Sanctum::actingAs($creator);
 
         $this->postJson('/api/v1/comments/'.$commentId.'/replies', ['body' => 'Thanks!'])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.comments.reply_created'));
 
-        $this->postJson('/api/v1/comments/'.$commentId.'/like')->assertOk();
-        $this->deleteJson('/api/v1/comments/'.$commentId.'/like')->assertOk();
-        $this->postJson('/api/v1/comments/'.$commentId.'/dislike')->assertOk();
-        $this->deleteJson('/api/v1/comments/'.$commentId.'/dislike')->assertOk();
+        $this->postJson('/api/v1/comments/'.$commentId.'/like')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.liked'));
+        $this->deleteJson('/api/v1/comments/'.$commentId.'/like')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.like_removed'));
+        $this->postJson('/api/v1/comments/'.$commentId.'/dislike')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.disliked'));
+        $this->deleteJson('/api/v1/comments/'.$commentId.'/dislike')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.dislike_removed'));
 
         $this->getJson('/api/v1/comments/'.$commentId.'/replies')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.replies_retrieved'))
             ->assertJsonCount(1, 'data.replies')
             ->assertJsonPath('data.replies.0.user.fullName', 'Creator')
             ->assertJsonPath('data.replies.0.user.subscriberCount', 1)
             ->assertJsonPath('data.replies.0.currentUserState.liked', false);
 
         $notifications = $this->getJson('/api/v1/notifications')
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.retrieved'));
 
         $this->assertGreaterThanOrEqual(2, count($notifications->json('data.notifications')));
 
@@ -340,23 +391,41 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->postJson('/api/v1/notifications/'.$notificationId.'/read')
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.marked_read'))
             ->assertJsonPath('data.notification.readAt', fn ($value) => $value !== null);
 
-        $this->postJson('/api/v1/notifications/read-all')->assertOk();
-        $this->deleteJson('/api/v1/notifications/'.$notificationId)->assertOk();
+        $this->postJson('/api/v1/notifications/read-all')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.all_marked_read'));
+        $this->deleteJson('/api/v1/notifications/'.$notificationId)
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.deleted'));
 
         Sanctum::actingAs($viewer);
 
         $viewerNotifications = $this->getJson('/api/v1/notifications')
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.retrieved'));
 
         $this->assertGreaterThanOrEqual(1, count($viewerNotifications->json('data.notifications')));
+        $viewerNotificationTitles = array_column($viewerNotifications->json('data.notifications'), 'title');
+        $viewerNotificationBodies = array_column($viewerNotifications->json('data.notifications'), 'body');
+
+        $this->assertContains(trans('messages.notifications.reply_title', [], 'fr'), $viewerNotificationTitles);
+        $this->assertContains(trans('messages.notifications.reply_body', ['name' => 'Creator'], 'fr'), $viewerNotificationBodies);
+        $this->assertContains(trans('messages.notifications.comment_like_title', [], 'fr'), $viewerNotificationTitles);
+        $this->assertContains(trans('messages.notifications.comment_like_body', ['name' => 'Creator'], 'fr'), $viewerNotificationBodies);
+        $this->assertContains(trans('messages.notifications.comment_dislike_title', [], 'fr'), $viewerNotificationTitles);
+        $this->assertContains(trans('messages.notifications.comment_dislike_body', ['name' => 'Creator'], 'fr'), $viewerNotificationBodies);
 
         $this->patchJson('/api/v1/comments/'.$commentId, ['body' => 'Edited comment'])
             ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.updated'))
             ->assertJsonPath('data.comment.body', 'Edited comment');
 
-        $this->deleteJson('/api/v1/comments/'.$commentId)->assertOk();
+        $this->deleteJson('/api/v1/comments/'.$commentId)
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.comments.deleted'));
         $this->assertDatabaseMissing('comments', ['id' => $commentId]);
     }
 
@@ -413,6 +482,45 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonCount(0, 'data.users')
             ->assertJsonPath('meta.users.total', 0)
             ->assertJsonPath('meta.users.perPage', 3);
+    }
+
+    public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void
+    {
+        $user = User::factory()->create([
+            'preferences' => ['language' => 'yo'],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->withHeaders(['X-Locale' => 'yo'])
+            ->getJson('/api/v1/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.preferences.retrieved', [], 'yo'))
+            ->assertJsonPath('data.preferences.language', 'yo');
+
+        $this->withHeaders(['X-Locale' => 'ha'])
+            ->patchJson('/api/v1/me/preferences', [
+                'displayPreferences' => ['theme' => 'dark'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.preferences.updated', [], 'ha'))
+            ->assertJsonPath('data.preferences.displayPreferences.theme', 'dark');
+
+        $this->withHeaders(['X-Locale' => 'en'])
+            ->patchJson('/api/v1/me/preferences', ['language' => 'invalid-locale'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['language'])
+            ->assertJsonPath('errors.language.0', trans('messages.validation.language_supported'));
+
+        $this->withHeaders(['X-Locale' => 'ig'])
+            ->getJson('/api/v1/home')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.home.retrieved', [], 'ig'));
+
+        $this->withHeaders(['X-Locale' => 'yo'])
+            ->getJson('/api/v1/leaderboard')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.leaderboard.retrieved', [], 'yo'));
     }
 
     public function test_public_view_and_share_metrics_are_deduplicated_per_client_fingerprint(): void

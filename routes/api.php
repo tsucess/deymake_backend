@@ -15,64 +15,69 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\VideoInteractionController;
 use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
-    Route::get('/health', HealthController::class);
+    Route::middleware(SetLocale::class)->group(function (): void {
+        Route::get('/health', HealthController::class);
 
-    Route::prefix('auth')->group(function (): void {
-        Route::post('/register', [AuthController::class, 'register']);
-        Route::post('/login', [AuthController::class, 'login']);
-        Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-        Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-        Route::get('/oauth/{provider}/redirect', [AuthController::class, 'oauthRedirect']);
-        Route::get('/oauth/{provider}/callback', [AuthController::class, 'oauthCallback']);
+        Route::prefix('auth')->group(function (): void {
+            Route::post('/register', [AuthController::class, 'register']);
+            Route::post('/login', [AuthController::class, 'login']);
+            Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+            Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+            Route::get('/oauth/{provider}/redirect', [AuthController::class, 'oauthRedirect']);
+            Route::get('/oauth/{provider}/callback', [AuthController::class, 'oauthCallback']);
+        });
 
-        Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('/waitlist', [WaitlistController::class, 'store']);
+
+        Route::get('/home', [HomeController::class, 'index']);
+        Route::get('/categories', [HomeController::class, 'categories']);
+
+        Route::get('/videos/trending', [VideoController::class, 'trending']);
+        Route::get('/videos/live', [VideoController::class, 'live']);
+        Route::get('/videos', [VideoController::class, 'index']);
+        Route::get('/videos/{video}', [VideoController::class, 'show']);
+        Route::get('/videos/{video}/related', [VideoController::class, 'related']);
+        Route::post('/videos/{video}/view', [VideoController::class, 'recordView']);
+        Route::post('/videos/{video}/share', [VideoController::class, 'share']);
+        Route::get('/videos/{video}/comments', [CommentController::class, 'index']);
+
+        Route::get('/comments/{comment}/replies', [CommentController::class, 'replies']);
+
+        Route::get('/users/search', [UserController::class, 'search']);
+        Route::get('/users/{user}', [UserController::class, 'show']);
+        Route::get('/users/{user}/posts', [UserController::class, 'posts']);
+
+        Route::get('/leaderboard', [LeaderboardController::class, 'index']);
+
+        Route::get('/search/suggestions', [SearchController::class, 'suggestions']);
+        Route::get('/search/videos', [SearchController::class, 'videos']);
+        Route::get('/search/creators', [SearchController::class, 'creators']);
+        Route::get('/search/categories', [SearchController::class, 'categories']);
+        Route::get('/search', [SearchController::class, 'global']);
+
+        Route::get('/help', [InfoController::class, 'help']);
+        Route::get('/legal/privacy', [InfoController::class, 'privacy']);
+        Route::get('/legal/terms', [InfoController::class, 'terms']);
+    });
+
+    Route::middleware(['auth:sanctum', SetLocale::class])->group(function (): void {
+        Route::prefix('auth')->group(function (): void {
             Route::get('/me', [AuthController::class, 'me']);
             Route::post('/logout', [AuthController::class, 'logout']);
         });
-    });
 
-    Route::post('/waitlist', [WaitlistController::class, 'store']);
-
-    Route::get('/home', [HomeController::class, 'index']);
-    Route::get('/categories', [HomeController::class, 'categories']);
-
-    Route::get('/videos/trending', [VideoController::class, 'trending']);
-    Route::get('/videos/live', [VideoController::class, 'live']);
-    Route::get('/videos', [VideoController::class, 'index']);
-    Route::get('/videos/{video}', [VideoController::class, 'show']);
-    Route::get('/videos/{video}/related', [VideoController::class, 'related']);
-    Route::post('/videos/{video}/view', [VideoController::class, 'recordView']);
-    Route::post('/videos/{video}/share', [VideoController::class, 'share']);
-    Route::get('/videos/{video}/comments', [CommentController::class, 'index']);
-
-    Route::get('/comments/{comment}/replies', [CommentController::class, 'replies']);
-
-    Route::get('/users/search', [UserController::class, 'search']);
-    Route::get('/users/{user}', [UserController::class, 'show']);
-    Route::get('/users/{user}/posts', [UserController::class, 'posts']);
-
-    Route::get('/leaderboard', [LeaderboardController::class, 'index']);
-
-    Route::get('/search/suggestions', [SearchController::class, 'suggestions']);
-    Route::get('/search/videos', [SearchController::class, 'videos']);
-    Route::get('/search/creators', [SearchController::class, 'creators']);
-    Route::get('/search/categories', [SearchController::class, 'categories']);
-    Route::get('/search', [SearchController::class, 'global']);
-
-    Route::get('/help', [InfoController::class, 'help']);
-    Route::get('/legal/privacy', [InfoController::class, 'privacy']);
-    Route::get('/legal/terms', [InfoController::class, 'terms']);
-
-    Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('/uploads', [UploadController::class, 'store']);
         Route::post('/uploads/presign', [UploadController::class, 'presign']);
 
         Route::post('/videos', [VideoController::class, 'store']);
         Route::patch('/videos/{video}', [VideoController::class, 'update']);
         Route::post('/videos/{video}/publish', [VideoController::class, 'publish']);
+        Route::post('/videos/{video}/live/start', [VideoController::class, 'startLive']);
+        Route::post('/videos/{video}/live/stop', [VideoController::class, 'stopLive']);
         Route::post('/videos/{video}/report', [VideoController::class, 'report']);
 
         Route::post('/videos/{video}/like', [VideoInteractionController::class, 'like']);

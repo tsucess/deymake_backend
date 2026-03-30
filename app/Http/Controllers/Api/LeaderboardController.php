@@ -56,7 +56,7 @@ class LeaderboardController extends Controller
         }
 
         return response()->json([
-            'message' => 'Leaderboard retrieved successfully.',
+            'message' => __('messages.leaderboard.retrieved'),
             'data' => [
                 'period' => $period,
                 'podium' => $scoredUsers->take(3)->values(),

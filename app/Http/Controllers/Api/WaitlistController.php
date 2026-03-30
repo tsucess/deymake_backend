@@ -24,7 +24,7 @@ class WaitlistController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'You have been added to the waitlist.',
+            'message' => __('messages.waitlist.added'),
             'data' => [
                 'waitlistEntry' => new WaitlistEntryResource($waitlistEntry),
             ],

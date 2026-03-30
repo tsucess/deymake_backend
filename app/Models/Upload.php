@@ -20,7 +20,22 @@ class Upload extends Model
         'original_name',
         'mime_type',
         'size',
+        'processing_status',
+        'width',
+        'height',
+        'duration',
+        'processed_url',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'size' => 'integer',
+            'width' => 'integer',
+            'height' => 'integer',
+            'duration' => 'float',
+        ];
+    }
 
     public function user(): BelongsTo
     {
@@ -35,7 +50,7 @@ class Upload extends Model
     public function getUrlAttribute(): string
     {
         if ($this->disk === 'cloudinary') {
-            return $this->path;
+            return $this->processed_url ?: $this->path;
         }
 
         return Storage::disk($this->disk)->url($this->path);

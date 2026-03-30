@@ -18,7 +18,7 @@ class NotificationController extends Controller
             ->get();
 
         return response()->json([
-            'message' => 'Notifications retrieved successfully.',
+            'message' => __('messages.notifications.retrieved'),
             'data' => [
                 'notifications' => UserNotificationResource::collection($notifications),
             ],
@@ -32,7 +32,7 @@ class NotificationController extends Controller
         $notification->forceFill(['read_at' => now()])->save();
 
         return response()->json([
-            'message' => 'Notification marked as read successfully.',
+            'message' => __('messages.notifications.marked_read'),
             'data' => [
                 'notification' => new UserNotificationResource($notification),
             ],
@@ -47,7 +47,7 @@ class NotificationController extends Controller
             ->update(['read_at' => now()]);
 
         return response()->json([
-            'message' => 'All notifications marked as read successfully.',
+            'message' => __('messages.notifications.all_marked_read'),
         ]);
     }
 
@@ -58,7 +58,7 @@ class NotificationController extends Controller
         $notification->delete();
 
         return response()->json([
-            'message' => 'Notification deleted successfully.',
+            'message' => __('messages.notifications.deleted'),
         ]);
     }
 

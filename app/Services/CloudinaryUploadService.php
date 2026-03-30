@@ -28,6 +28,11 @@ class CloudinaryUploadService
             'disk' => 'cloudinary',
             'path' => $secureUrl,
             'url' => $secureUrl,
+            'processed_url' => $this->processedUrlFor($secureUrl, $type),
+            'processing_status' => 'completed',
+            'width' => isset($result['width']) ? (int) $result['width'] : null,
+            'height' => isset($result['height']) ? (int) $result['height'] : null,
+            'duration' => isset($result['duration']) ? (float) $result['duration'] : null,
         ];
     }
 
@@ -45,5 +50,14 @@ class CloudinaryUploadService
             $type === 'video' ? 'videos' : 'images',
             $userId ? 'user-'.$userId : null,
         ]));
+    }
+
+    protected function processedUrlFor(string $secureUrl, string $type): string
+    {
+        $transformation = $type === 'video'
+            ? 'q_auto,f_auto,vc_auto'
+            : 'q_auto,f_auto';
+
+        return preg_replace('/\/upload\//', '/upload/'.$transformation.'/', $secureUrl, 1) ?: $secureUrl;
     }
 }

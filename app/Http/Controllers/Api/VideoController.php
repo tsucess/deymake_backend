@@ -8,6 +8,7 @@ use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\PaginatedJson;
+use App\Support\UserNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,7 @@ class VideoController extends Controller
             })
             ->latest(), $request);
 
-        return $this->videoResponse($request, 'Videos retrieved successfully.', $videos);
+        return $this->videoResponse($request, __('messages.videos.list_retrieved'), $videos);
     }
 
     public function trending(Request $request): JsonResponse
@@ -53,7 +54,7 @@ class VideoController extends Controller
             ->orderByDesc('views_count')
             ->latest(), $request);
 
-        return $this->videoResponse($request, 'Trending videos retrieved successfully.', $videos);
+        return $this->videoResponse($request, __('messages.videos.trending_retrieved'), $videos);
     }
 
     public function live(Request $request): JsonResponse
@@ -64,9 +65,10 @@ class VideoController extends Controller
             ->withApiResourceData($viewer)
             ->where('is_draft', false)
             ->where('is_live', true)
+            ->orderByDesc('live_started_at')
             ->latest(), $request);
 
-        return $this->videoResponse($request, 'Live videos retrieved successfully.', $videos);
+        return $this->videoResponse($request, __('messages.videos.live_retrieved'), $videos);
     }
 
     public function store(Request $request): JsonResponse
@@ -87,10 +89,14 @@ class VideoController extends Controller
             'isDraft' => ['sometimes', 'boolean'],
         ]);
 
+        $isLiveRequested = (bool) ($validated['isLive'] ?? false);
+
+        abort_if($isLiveRequested && $validated['type'] !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
         $upload = isset($validated['uploadId']) ? Upload::query()->findOrFail($validated['uploadId']) : null;
 
         if ($upload && $upload->user_id !== $request->user()->id) {
-            abort(403, 'You are not allowed to use this upload.');
+            abort(403, __('messages.videos.upload_forbidden'));
         }
 
         $video = Video::create([
@@ -105,14 +111,18 @@ class VideoController extends Controller
             'tagged_users' => $validated['taggedUsers'] ?? [],
             'media_url' => $validated['mediaUrl'] ?? $upload?->url,
             'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
-            'is_live' => $validated['isLive'] ?? false,
-            'is_draft' => $validated['isDraft'] ?? true,
+            'is_live' => $isLiveRequested,
+            'is_draft' => $validated['isDraft'] ?? ! $isLiveRequested,
         ]);
+
+        if ($isLiveRequested) {
+            $this->startLiveSession($video);
+        }
 
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
-            'message' => 'Video created successfully.',
+            'message' => __('messages.videos.created'),
             'data' => [
                 'video' => new VideoResource($video),
             ],
@@ -130,7 +140,7 @@ class VideoController extends Controller
         $video = $this->loadVideoForResource($video->id, $viewer);
 
         return response()->json([
-            'message' => 'Video retrieved successfully.',
+            'message' => __('messages.videos.retrieved'),
             'data' => [
                 'video' => new VideoResource($video),
             ],
@@ -154,7 +164,7 @@ class VideoController extends Controller
             })
             ->latest(), $request, 8, 24);
 
-        return $this->videoResponse($request, 'Related videos retrieved successfully.', $related);
+        return $this->videoResponse($request, __('messages.videos.related_retrieved'), $related);
     }
 
     public function recordView(Request $request, Video $video): JsonResponse
@@ -166,7 +176,7 @@ class VideoController extends Controller
         $video = $this->loadVideoForResource($video->id, auth('sanctum')->user() ?? $request->user());
 
         return response()->json([
-            'message' => 'Video view recorded successfully.',
+            'message' => __('messages.videos.view_recorded'),
             'data' => [
                 'views' => (int) $video->views_count,
                 'video' => new VideoResource($video),
@@ -191,7 +201,7 @@ class VideoController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Video reported successfully.',
+            'message' => __('messages.videos.reported'),
         ], 201);
     }
 
@@ -215,12 +225,17 @@ class VideoController extends Controller
             'isDraft' => ['sometimes', 'boolean'],
         ]);
 
+        $requestedLive = array_key_exists('isLive', $validated) ? (bool) $validated['isLive'] : null;
+        $nextType = $validated['type'] ?? $video->type;
+
+        abort_if(($requestedLive === true || $video->is_live) && $nextType !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
         $upload = array_key_exists('uploadId', $validated)
             ? Upload::query()->find($validated['uploadId'])
             : $video->upload;
 
         if ($upload && $upload->user_id !== $request->user()->id) {
-            abort(403, 'You are not allowed to use this upload.');
+            abort(403, __('messages.videos.upload_forbidden'));
         }
 
         $video->fill([
@@ -234,14 +249,21 @@ class VideoController extends Controller
             'tagged_users' => $validated['taggedUsers'] ?? $video->tagged_users,
             'media_url' => $validated['mediaUrl'] ?? $upload?->url ?? $video->media_url,
             'thumbnail_url' => array_key_exists('thumbnailUrl', $validated) ? $validated['thumbnailUrl'] : $video->thumbnail_url,
-            'is_live' => $validated['isLive'] ?? $video->is_live,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
         ])->save();
+
+        if ($requestedLive === true) {
+            $this->startLiveSession($video);
+        }
+
+        if ($requestedLive === false && $video->is_live) {
+            $this->stopLiveSession($video);
+        }
 
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
-            'message' => 'Video updated successfully.',
+            'message' => __('messages.videos.updated'),
             'data' => [
                 'video' => new VideoResource($video),
             ],
@@ -256,7 +278,38 @@ class VideoController extends Controller
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
-            'message' => 'Video published successfully.',
+            'message' => __('messages.videos.published'),
+            'data' => [
+                'video' => new VideoResource($video),
+            ],
+        ]);
+    }
+
+    public function startLive(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->user_id !== $request->user()->id, 403);
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
+        $this->startLiveSession($video);
+        $video = $this->loadVideoForResource($video->id, $request->user());
+
+        return response()->json([
+            'message' => __('messages.videos.live_started'),
+            'data' => [
+                'video' => new VideoResource($video),
+            ],
+        ]);
+    }
+
+    public function stopLive(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->user_id !== $request->user()->id, 403);
+
+        $this->stopLiveSession($video);
+        $video = $this->loadVideoForResource($video->id, $request->user());
+
+        return response()->json([
+            'message' => __('messages.videos.live_stopped'),
             'data' => [
                 'video' => new VideoResource($video),
             ],
@@ -270,7 +323,7 @@ class VideoController extends Controller
         }
 
         return response()->json([
-            'message' => 'Video share recorded successfully.',
+            'message' => __('messages.videos.share_recorded'),
             'data' => [
                 'shares' => (int) $video->shares_count,
                 'shareUrl' => rtrim(config('app.url'), '/').'/videos/'.$video->id,
@@ -296,6 +349,59 @@ class VideoController extends Controller
         return Video::query()
             ->withApiResourceData($viewer)
             ->findOrFail($videoId);
+    }
+
+    private function startLiveSession(Video $video): void
+    {
+        $wasLive = (bool) $video->is_live;
+        $shouldNotify = ! $wasLive && $video->live_notified_at === null;
+
+        $video->forceFill([
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => $wasLive ? ($video->live_started_at ?? now()) : now(),
+            'live_ended_at' => null,
+        ])->save();
+
+        if (! $shouldNotify) {
+            return;
+        }
+
+        $this->notifySubscribersAboutLive($video->fresh(['user']));
+
+        $video->forceFill([
+            'live_notified_at' => now(),
+        ])->save();
+    }
+
+    private function stopLiveSession(Video $video): void
+    {
+        $video->forceFill([
+            'is_live' => false,
+            'live_ended_at' => now(),
+            'live_notified_at' => null,
+        ])->save();
+    }
+
+    private function notifySubscribersAboutLive(Video $video): void
+    {
+        $subscriberIds = DB::table('subscriptions')
+            ->where('creator_id', $video->user_id)
+            ->pluck('user_id');
+
+        $creatorName = $video->user?->name ?: 'Creator';
+
+        foreach ($subscriberIds as $subscriberId) {
+            UserNotifier::sendTranslated(
+                (int) $subscriberId,
+                $video->user_id,
+                'live',
+                'messages.notifications.live_now_title',
+                'messages.notifications.live_now_body',
+                ['name' => $creatorName],
+                ['creatorId' => $video->user_id, 'videoId' => $video->id],
+            );
+        }
     }
 
     private function shouldRecordEngagement(Request $request, Video $video, string $metric, int $ttlMinutes): bool

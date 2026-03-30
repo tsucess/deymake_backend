@@ -45,7 +45,7 @@ class VideoInteractionController extends Controller
 
     public function subscribe(Request $request, User $creator): JsonResponse
     {
-        abort_if($creator->is($request->user()), 422, 'You cannot subscribe to yourself.');
+        abort_if($creator->is($request->user()), 422, __('messages.subscriptions.self_not_allowed'));
 
         DB::table('subscriptions')->updateOrInsert(
             [
@@ -58,14 +58,20 @@ class VideoInteractionController extends Controller
             ]
         );
 
-        UserNotifier::send($creator->id, $request->user()->id, 'subscription', 'New subscriber', $request->user()->name.' subscribed to your profile.', [
-            'creatorId' => $creator->id,
-        ]);
+        UserNotifier::sendTranslated(
+            $creator->id,
+            $request->user()->id,
+            'subscription',
+            'messages.notifications.subscription_title',
+            'messages.notifications.subscription_body',
+            ['name' => $request->user()->name],
+            ['creatorId' => $creator->id],
+        );
 
         $creator->loadCount('subscribers');
 
         return response()->json([
-            'message' => 'Creator subscribed successfully.',
+            'message' => __('messages.subscriptions.created'),
             'data' => [
                 'creator' => [
                     'id' => $creator->id,
@@ -86,7 +92,7 @@ class VideoInteractionController extends Controller
         $creator->loadCount('subscribers');
 
         return response()->json([
-            'message' => 'Creator unsubscribed successfully.',
+            'message' => __('messages.subscriptions.removed'),
             'data' => [
                 'creator' => [
                     'id' => $creator->id,
@@ -134,13 +140,11 @@ class VideoInteractionController extends Controller
             }
 
             if (in_array($type, ['like', 'dislike'], true)) {
-                UserNotifier::send(
+                UserNotifier::sendTranslated(
                     $video->user_id,
                     $request->user()->id,
                     'video_'.$type,
-                    ucfirst($type).' on your video',
-                    $request->user()->name.' '.$type.'d your video.',
-                    ['videoId' => $video->id]
+                    ...$this->interactionNotification($request->user()->name, $type, $video)
                 );
             }
         } else {
@@ -152,11 +156,38 @@ class VideoInteractionController extends Controller
             ->findOrFail($video->id);
 
         return response()->json([
-            'message' => 'Video '.($active ? $type.'d' : $type.' removed').' successfully.',
+            'message' => __($this->interactionMessageKey($type, $active)),
             'data' => [
                 'video' => new VideoResource($video),
             ],
         ]);
+    }
+
+    private function interactionMessageKey(string $type, bool $active): string
+    {
+        return match ([$type, $active]) {
+            ['like', true] => 'messages.videos.liked',
+            ['like', false] => 'messages.videos.like_removed',
+            ['dislike', true] => 'messages.videos.disliked',
+            ['dislike', false] => 'messages.videos.dislike_removed',
+            ['save', true] => 'messages.videos.saved',
+            ['save', false] => 'messages.videos.save_removed',
+        };
+    }
+
+    private function interactionNotification(string $actorName, string $type, Video $video): array
+    {
+        [$titleKey, $bodyKey] = match ($type) {
+            'like' => ['video_like_title', 'video_like_body'],
+            'dislike' => ['video_dislike_title', 'video_dislike_body'],
+        };
+
+        return [
+            'messages.notifications.'.$titleKey,
+            'messages.notifications.'.$bodyKey,
+            ['name' => $actorName],
+            ['videoId' => $video->id],
+        ];
     }
 
 }

@@ -33,7 +33,11 @@ class ConversationResource extends JsonResource
             'participants' => ProfileResource::collection($this->participants),
             'lastMessage' => $lastMessage ? new MessageResource($lastMessage->loadMissing('user')) : null,
             'unreadCount' => $unreadCount,
-            'status' => $participant?->is_online ? 'Active' : ($lastMessage ? 'Sent '.$lastMessage->created_at->diffForHumans() : 'No messages yet'),
+            'status' => $participant?->is_online
+                ? __('messages.conversations.active_status')
+                : ($lastMessage
+                    ? __('messages.conversations.sent_prefix').' '.$lastMessage->created_at->diffForHumans()
+                    : __('messages.conversations.no_messages_yet')),
             'createdAt' => $this->created_at?->toISOString(),
             'updatedAt' => $this->updated_at?->toISOString(),
         ];

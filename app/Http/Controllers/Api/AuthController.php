@@ -39,7 +39,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registration successful.',
+            'message' => __('messages.auth.registered'),
             'data' => [
                 'user' => new UserResource($user),
                 'token' => $token,
@@ -54,9 +54,9 @@ class AuthController extends Controller
 
         if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
             return response()->json([
-                'message' => 'Invalid credentials.',
+                'message' => __('messages.auth.invalid_credentials'),
                 'errors' => [
-                    'email' => ['The provided credentials are incorrect.'],
+                    'email' => [__('messages.auth.invalid_credentials_detail')],
                 ],
             ], 422);
         }
@@ -66,7 +66,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login successful.',
+            'message' => __('messages.auth.login_success'),
             'data' => [
                 'user' => new UserResource($user),
                 'token' => $token,
@@ -78,7 +78,7 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json([
-            'message' => 'Authenticated user retrieved successfully.',
+            'message' => __('messages.auth.me_retrieved'),
             'data' => [
                 'user' => new UserResource($request->user()),
             ],
@@ -98,7 +98,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'Logout successful.',
+            'message' => __('messages.auth.logout_success'),
         ]);
     }
 
@@ -119,7 +119,7 @@ class AuthController extends Controller
         );
 
         return response()->json([
-            'message' => 'Password reset token generated successfully.',
+            'message' => __('messages.auth.password_reset_token_generated'),
             'data' => [
                 'email' => $validated['email'],
                 'resetToken' => $token,
@@ -140,9 +140,9 @@ class AuthController extends Controller
 
         if (! $reset || now()->diffInMinutes($reset->created_at) > 60 || ! Hash::check($validated['token'], $reset->token)) {
             return response()->json([
-                'message' => 'Invalid or expired reset token.',
+                'message' => __('messages.auth.reset_token_invalid'),
                 'errors' => [
-                    'token' => ['The provided reset token is invalid or expired.'],
+                    'token' => [__('messages.auth.reset_token_invalid_detail')],
                 ],
             ], 422);
         }
@@ -153,7 +153,7 @@ class AuthController extends Controller
         DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
 
         return response()->json([
-            'message' => 'Password reset successful.',
+            'message' => __('messages.auth.password_reset_success'),
             'data' => [
                 'user' => new UserResource($user),
             ],
@@ -195,11 +195,11 @@ class AuthController extends Controller
         $code = (string) $request->query('code', '');
 
         if ($state === '' || ! Cache::pull($this->oauthStateCacheKey($provider, $state))) {
-            return $this->oauthErrorResponse($request, $provider, 'Invalid or expired OAuth state. Please try again.');
+            return $this->oauthErrorResponse($request, $provider, __('messages.auth.oauth.invalid_state'));
         }
 
         if ($code === '') {
-            return $this->oauthErrorResponse($request, $provider, 'Missing OAuth authorization code. Please try again.');
+            return $this->oauthErrorResponse($request, $provider, __('messages.auth.oauth.missing_code'));
         }
 
         try {
@@ -217,7 +217,7 @@ class AuthController extends Controller
             return $this->oauthErrorResponse(
                 $request,
                 $provider,
-                'Unable to complete '.ucfirst($provider).' sign in right now. Please try again.',
+                __('messages.auth.oauth.signin_failed', ['provider' => ucfirst($provider)]),
                 502,
             );
         }
@@ -234,7 +234,7 @@ class AuthController extends Controller
         return $this->oauthErrorResponse(
             $request,
             $provider,
-            ucfirst($provider).' OAuth is not configured on this backend yet.',
+            __('messages.auth.oauth.provider_not_configured', ['provider' => ucfirst($provider)]),
             503,
             false,
         );
@@ -307,7 +307,7 @@ class AuthController extends Controller
         $accessToken = $payload['access_token'] ?? null;
 
         if (! is_string($accessToken) || $accessToken === '') {
-            throw new RuntimeException('OAuth provider did not return an access token.');
+            throw new RuntimeException(__('messages.auth.oauth.missing_access_token'));
         }
 
         return $accessToken;
@@ -329,11 +329,11 @@ class AuthController extends Controller
         $email = trim((string) ($payload['email'] ?? ''));
 
         if ($providerId === '') {
-            throw new RuntimeException('OAuth provider did not return a user identifier.');
+            throw new RuntimeException(__('messages.auth.oauth.missing_user_id'));
         }
 
         if ($email === '') {
-            throw new RuntimeException('OAuth provider did not return an email address for this account.');
+            throw new RuntimeException(__('messages.auth.oauth.missing_email'));
         }
 
         return [

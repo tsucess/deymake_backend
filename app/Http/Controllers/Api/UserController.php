@@ -19,7 +19,7 @@ class UserController extends Controller
         $user = User::query()->withProfileAggregates()->findOrFail($user->id);
 
         return response()->json([
-            'message' => 'User profile retrieved successfully.',
+            'message' => __('messages.users.profile_retrieved'),
             'data' => [
                 'user' => new ProfileResource($user),
             ],
@@ -36,7 +36,7 @@ class UserController extends Controller
             ->where('is_draft', false)
             ->latest(), $request);
 
-        return $this->videoResponse($request, 'User posts retrieved successfully.', $videos);
+        return $this->videoResponse($request, __('messages.users.posts_retrieved'), $videos);
     }
 
     public function search(Request $request): JsonResponse
@@ -53,7 +53,7 @@ class UserController extends Controller
                 })
                 ->orderBy('name'), $request, 10, 25);
 
-        return $this->userResponse($request, 'Users retrieved successfully.', $users);
+        return $this->userResponse($request, __('messages.users.retrieved'), $users);
     }
 
     private function normalizedQuery(Request $request): string

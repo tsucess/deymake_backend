@@ -27,7 +27,7 @@ class CommentController extends Controller
             ->get();
 
         return response()->json([
-            'message' => 'Comments retrieved successfully.',
+            'message' => __('messages.comments.retrieved'),
             'data' => [
                 'comments' => CommentResource::collection($comments),
             ],
@@ -48,19 +48,20 @@ class CommentController extends Controller
             'body' => $validated['body'],
         ]);
 
-        UserNotifier::send(
+        UserNotifier::sendTranslated(
             $video->user_id,
             $request->user()->id,
             'comment',
-            'New comment on your video',
-            $request->user()->name.' commented on your video.',
+            'messages.notifications.comment_title',
+            'messages.notifications.comment_body',
+            ['name' => $request->user()->name],
             ['videoId' => $video->id, 'commentId' => $comment->id]
         );
 
         $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
-            'message' => 'Comment created successfully.',
+            'message' => __('messages.comments.created'),
             'data' => [
                 'comment' => new CommentResource($comment),
             ],
@@ -76,7 +77,7 @@ class CommentController extends Controller
         $replies = $comment->replies()->withApiResourceData($viewer)->latest()->get();
 
         return response()->json([
-            'message' => 'Replies retrieved successfully.',
+            'message' => __('messages.comments.replies_retrieved'),
             'data' => [
                 'replies' => CommentResource::collection($replies),
             ],
@@ -99,19 +100,20 @@ class CommentController extends Controller
             'body' => $validated['body'],
         ]);
 
-        UserNotifier::send(
+        UserNotifier::sendTranslated(
             $comment->user_id,
             $request->user()->id,
             'reply',
-            'New reply to your comment',
-            $request->user()->name.' replied to your comment.',
+            'messages.notifications.reply_title',
+            'messages.notifications.reply_body',
+            ['name' => $request->user()->name],
             ['videoId' => $comment->video_id, 'commentId' => $comment->id, 'replyId' => $reply->id]
         );
 
         $reply = $this->loadCommentForResource($reply->id, $request->user());
 
         return response()->json([
-            'message' => 'Reply created successfully.',
+            'message' => __('messages.comments.reply_created'),
             'data' => [
                 'reply' => new CommentResource($reply),
             ],
@@ -130,7 +132,7 @@ class CommentController extends Controller
         $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
-            'message' => 'Comment updated successfully.',
+            'message' => __('messages.comments.updated'),
             'data' => [
                 'comment' => new CommentResource($comment),
             ],
@@ -144,7 +146,7 @@ class CommentController extends Controller
         $comment->delete();
 
         return response()->json([
-            'message' => 'Comment deleted successfully.',
+            'message' => __('messages.comments.deleted'),
         ]);
     }
 
@@ -204,13 +206,11 @@ class CommentController extends Controller
                     ->delete();
             }
 
-            UserNotifier::send(
+            UserNotifier::sendTranslated(
                 $comment->user_id,
                 $request->user()->id,
                 'comment_'.$type,
-                ucfirst($type).' on your comment',
-                $request->user()->name.' '.$type.'d your comment.',
-                ['commentId' => $comment->id, 'videoId' => $comment->video_id]
+                ...$this->interactionNotification($request->user()->name, $type, $comment)
             );
         } else {
             $query->delete();
@@ -219,7 +219,7 @@ class CommentController extends Controller
         $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
-            'message' => 'Comment '.($active ? $type.'d' : $type.' removed').' successfully.',
+            'message' => __($this->interactionMessageKey($type, $active)),
             'data' => [
                 'comment' => new CommentResource($comment),
             ],
@@ -240,5 +240,30 @@ class CommentController extends Controller
         return Comment::query()
             ->withApiResourceData($viewer)
             ->findOrFail($commentId);
+    }
+
+    private function interactionMessageKey(string $type, bool $active): string
+    {
+        return match ([$type, $active]) {
+            ['like', true] => 'messages.comments.liked',
+            ['like', false] => 'messages.comments.like_removed',
+            ['dislike', true] => 'messages.comments.disliked',
+            ['dislike', false] => 'messages.comments.dislike_removed',
+        };
+    }
+
+    private function interactionNotification(string $actorName, string $type, Comment $comment): array
+    {
+        [$titleKey, $bodyKey] = match ($type) {
+            'like' => ['comment_like_title', 'comment_like_body'],
+            'dislike' => ['comment_dislike_title', 'comment_dislike_body'],
+        };
+
+        return [
+            'messages.notifications.'.$titleKey,
+            'messages.notifications.'.$bodyKey,
+            ['name' => $actorName],
+            ['commentId' => $comment->id, 'videoId' => $comment->video_id],
+        ];
     }
 }

@@ -10,10 +10,10 @@ class InfoController extends Controller
     public function help(): JsonResponse
     {
         return response()->json([
-            'message' => 'Help content retrieved successfully.',
+            'message' => __('messages.info.help_retrieved'),
             'data' => [
-                'title' => 'Help Center',
-                'content' => 'For support, contact the DeyMake team or consult the in-app guidance for uploads, engagement, and messaging.',
+                'title' => __('messages.info.help_title'),
+                'content' => __('messages.info.help_content'),
             ],
         ]);
     }
@@ -21,10 +21,10 @@ class InfoController extends Controller
     public function privacy(): JsonResponse
     {
         return response()->json([
-            'message' => 'Privacy policy retrieved successfully.',
+            'message' => __('messages.info.privacy_retrieved'),
             'data' => [
-                'title' => 'Privacy Policy',
-                'content' => 'DeyMake stores account, profile, content, and engagement data to deliver the platform experience. Avoid uploading sensitive personal information.',
+                'title' => __('messages.info.privacy_title'),
+                'content' => __('messages.info.privacy_content'),
             ],
         ]);
     }
@@ -32,10 +32,10 @@ class InfoController extends Controller
     public function terms(): JsonResponse
     {
         return response()->json([
-            'message' => 'Terms and conditions retrieved successfully.',
+            'message' => __('messages.info.terms_retrieved'),
             'data' => [
-                'title' => 'Terms of Service',
-                'content' => 'By using DeyMake, you agree to comply with community rules, respect creators, and only upload content you own or are authorized to share.',
+                'title' => __('messages.info.terms_title'),
+                'content' => __('messages.info.terms_content'),
             ],
         ]);
     }

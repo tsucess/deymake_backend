@@ -9,6 +9,10 @@ class VideoResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $mediaUrl = $this->type === 'video'
+            ? ($this->upload?->processed_url ?: $this->media_url ?: $this->upload?->url)
+            : ($this->media_url ?: $this->upload?->url);
+
         return [
             'id' => $this->id,
             'type' => $this->type,
@@ -17,8 +21,14 @@ class VideoResource extends JsonResource
             'description' => $this->description,
             'location' => $this->location,
             'taggedUsers' => $this->tagged_users ?? [],
-            'mediaUrl' => $this->media_url ?: $this->upload?->url,
+            'mediaUrl' => $mediaUrl,
+            'originalMediaUrl' => $this->upload?->path ?: $this->media_url,
+            'processedMediaUrl' => $this->upload?->processed_url,
             'thumbnailUrl' => $this->thumbnail_url,
+            'processingStatus' => $this->upload?->processing_status ?? 'completed',
+            'duration' => $this->upload?->duration,
+            'width' => $this->upload?->width,
+            'height' => $this->upload?->height,
             'views' => (int) $this->views_count,
             'likes' => (int) ($this->likes_count ?? 0),
             'dislikes' => (int) ($this->dislikes_count ?? 0),
@@ -27,6 +37,8 @@ class VideoResource extends JsonResource
             'commentsCount' => (int) ($this->comments_count ?? 0),
             'isLive' => (bool) $this->is_live,
             'isDraft' => (bool) $this->is_draft,
+            'liveStartedAt' => $this->live_started_at?->toISOString(),
+            'liveEndedAt' => $this->live_ended_at?->toISOString(),
             'author' => new ProfileResource($this->whenLoaded('user')),
             'creator' => new ProfileResource($this->whenLoaded('user')),
             'category' => $this->category ? new CategoryResource($this->category) : null,

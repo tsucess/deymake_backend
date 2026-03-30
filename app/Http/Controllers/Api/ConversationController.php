@@ -27,7 +27,7 @@ class ConversationController extends Controller
         $this->attachUnreadCounts($conversations, $request->user()->id);
 
         return response()->json([
-            'message' => 'Conversations retrieved successfully.',
+            'message' => __('messages.conversations.retrieved'),
             'data' => [
                 'conversations' => ConversationResource::collection($conversations),
             ],
@@ -52,7 +52,7 @@ class ConversationController extends Controller
             ->get();
 
         return response()->json([
-            'message' => 'Suggested conversation users retrieved successfully.',
+            'message' => __('messages.conversations.suggested_retrieved'),
             'data' => [
                 'users' => ProfileResource::collection($users),
             ],
@@ -66,7 +66,7 @@ class ConversationController extends Controller
             'message' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        abort_if((int) $validated['userId'] === (int) $request->user()->id, 422, 'You cannot start a conversation with yourself.');
+        abort_if((int) $validated['userId'] === (int) $request->user()->id, 422, __('messages.conversations.self_not_allowed'));
 
         $participantIds = [(int) $request->user()->id, (int) $validated['userId']];
 
@@ -98,7 +98,7 @@ class ConversationController extends Controller
         $this->loadConversationForResource($conversation, $request->user()->id);
 
         return response()->json([
-            'message' => 'Conversation ready successfully.',
+            'message' => __('messages.conversations.ready'),
             'data' => [
                 'conversation' => new ConversationResource($conversation),
             ],
@@ -124,7 +124,7 @@ class ConversationController extends Controller
         $messages = $messagesQuery->get();
 
         return response()->json([
-            'message' => 'Messages retrieved successfully.',
+            'message' => __('messages.conversations.messages_retrieved'),
             'data' => [
                 'messages' => MessageResource::collection($messages),
             ],
@@ -163,7 +163,7 @@ class ConversationController extends Controller
         ConversationMessageCreated::dispatch($message);
 
         return response()->json([
-            'message' => 'Message created successfully.',
+            'message' => __('messages.conversations.message_created'),
             'data' => [
                 'message' => new MessageResource($message),
             ],
@@ -177,7 +177,7 @@ class ConversationController extends Controller
         $conversation->participants()->updateExistingPivot($request->user()->id, ['last_read_at' => now()]);
 
         return response()->json([
-            'message' => 'Conversation marked as read successfully.',
+            'message' => __('messages.conversations.marked_read'),
         ]);
     }
 
