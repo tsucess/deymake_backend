@@ -94,10 +94,36 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function creatorPlans(): HasMany
+    {
+        return $this->hasMany(CreatorPlan::class, 'creator_id');
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(Membership::class, 'member_id');
+    }
+
+    public function managedMemberships(): HasMany
+    {
+        return $this->hasMany(Membership::class, 'creator_id');
+    }
+
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(UserWebhook::class);
+    }
+
     public function scopeWithProfileAggregates(Builder $query, ?self $viewer = null): Builder
     {
         return $query
             ->withCount('subscribers')
+            ->withCount([
+                'creatorPlans',
+                'creatorPlans as active_creator_plans_count' => fn (Builder $plansQuery) => $plansQuery->where('is_active', true),
+                'webhooks',
+                'tokens',
+            ])
             ->when($viewer, function (Builder $builder) use ($viewer): void {
                 $builder->withExists([
                     'subscribers as subscribed_by_current_user' => fn (Builder $subscribersQuery) => $subscribersQuery->whereKey($viewer->id),

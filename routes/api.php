@@ -3,10 +3,12 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\DeveloperController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InfoController;
 use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\MembershipController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SearchController;
@@ -50,6 +52,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/users/search', [UserController::class, 'search']);
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::get('/users/{user}/posts', [UserController::class, 'posts']);
+        Route::get('/users/{user}/plans', [MembershipController::class, 'creatorPlans']);
 
         Route::get('/leaderboard', [LeaderboardController::class, 'index']);
 
@@ -110,6 +113,26 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/drafts', [ProfileController::class, 'drafts']);
             Route::get('/preferences', [ProfileController::class, 'preferences']);
             Route::patch('/preferences', [ProfileController::class, 'updatePreferences']);
+        });
+
+        Route::prefix('developer')->group(function (): void {
+            Route::get('/', [DeveloperController::class, 'overview']);
+            Route::post('/api-keys', [DeveloperController::class, 'storeApiKey']);
+            Route::delete('/api-keys/{token}', [DeveloperController::class, 'destroyApiKey']);
+            Route::post('/webhooks', [DeveloperController::class, 'storeWebhook']);
+            Route::patch('/webhooks/{webhook}', [DeveloperController::class, 'updateWebhook']);
+            Route::post('/webhooks/{webhook}/rotate-secret', [DeveloperController::class, 'rotateWebhookSecret']);
+            Route::delete('/webhooks/{webhook}', [DeveloperController::class, 'destroyWebhook']);
+        });
+
+        Route::prefix('memberships')->group(function (): void {
+            Route::get('/creator', [MembershipController::class, 'creatorDashboard']);
+            Route::get('/mine', [MembershipController::class, 'myMemberships']);
+            Route::post('/plans', [MembershipController::class, 'storePlan']);
+            Route::patch('/plans/{plan}', [MembershipController::class, 'updatePlan']);
+            Route::delete('/plans/{plan}', [MembershipController::class, 'destroyPlan']);
+            Route::post('/plans/{plan}/subscribe', [MembershipController::class, 'subscribe']);
+            Route::post('/{membership}/cancel', [MembershipController::class, 'cancel']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);

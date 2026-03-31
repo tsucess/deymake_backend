@@ -16,6 +16,9 @@ class ProfileResource extends JsonResource
             'avatarUrl' => $this->avatar_url,
             'isOnline' => (bool) ($this->is_online ?? false),
             'subscriberCount' => (int) ($this->subscribers_count ?? 0),
+            'isDeveloper' => (int) ($this->tokens_count ?? 0) > 0 || (int) ($this->webhooks_count ?? 0) > 0,
+            'hasActivePlans' => (int) ($this->active_creator_plans_count ?? 0) > 0,
+            'activePlansCount' => (int) ($this->active_creator_plans_count ?? 0),
             'currentUserState' => [
                 'subscribed' => (bool) ($this->subscribed_by_current_user ?? false),
             ],
