@@ -50,9 +50,10 @@ class LeaderboardController extends Controller
             ->values();
 
         $currentUserRank = null;
+        $currentUser = auth('sanctum')->user();
 
-        if ($request->user()) {
-            $currentUserRank = $scoredUsers->firstWhere('userId', $request->user()->id);
+        if ($currentUser) {
+            $currentUserRank = $scoredUsers->firstWhere('userId', $currentUser->id);
         }
 
         return response()->json([

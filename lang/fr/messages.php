@@ -39,6 +39,13 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
     'videos' => [
         'live_started' => 'Le direct a démarré avec succès.',
         'live_stopped' => 'Le direct a été arrêté avec succès.',
+        'live_not_active' => 'Ce direct n’est plus actif.',
+        'live_signal_sent' => 'Le signal du direct a été envoyé avec succès.',
+        'live_signals_retrieved' => 'Les signaux du direct ont été récupérés avec succès.',
+        'live_signal_recipient_required' => 'Un destinataire est requis pour ce signal du direct.',
+        'live_signal_recipient_invalid' => 'Vous ne pouvez pas vous envoyer un signal du direct à vous-même.',
+        'live_signal_type_not_allowed' => 'Ce type de signal du direct n’est pas autorisé pour ce participant.',
+        'live_signal_payload_required' => 'Ce signal du direct ne contient pas les données requises.',
         'only_video_can_go_live' => 'Seules les vidéos peuvent être diffusées en direct.',
         'upload_must_finish_processing_for_live' => 'Attendez la fin du traitement de la vidéo avant de lancer le direct.',
     ],

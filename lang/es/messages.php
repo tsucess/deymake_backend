@@ -24,6 +24,13 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
     'videos' => [
         'live_started' => 'La transmisión en vivo se inició correctamente.',
         'live_stopped' => 'La transmisión en vivo se detuvo correctamente.',
+        'live_not_active' => 'Esta transmisión en vivo ya no está activa.',
+        'live_signal_sent' => 'La señal en vivo se envió correctamente.',
+        'live_signals_retrieved' => 'Las señales en vivo se obtuvieron correctamente.',
+        'live_signal_recipient_required' => 'Se requiere un destinatario para esta señal en vivo.',
+        'live_signal_recipient_invalid' => 'No puedes enviarte una señal en vivo a ti mismo.',
+        'live_signal_type_not_allowed' => 'Este tipo de señal en vivo no está permitido para el participante actual.',
+        'live_signal_payload_required' => 'A esta señal en vivo le faltan los datos requeridos.',
         'only_video_can_go_live' => 'Solo los videos pueden transmitirse en vivo.',
         'upload_must_finish_processing_for_live' => 'Espera a que termine el procesamiento del video antes de iniciar la transmisión en vivo.',
     ],

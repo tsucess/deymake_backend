@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Comment;
+use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
@@ -149,6 +150,38 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.videos.total', 2);
     }
 
+    public function test_leaderboard_resolves_current_user_rank_from_sanctum_token_on_public_route(): void
+    {
+        $leader = User::factory()->create(['name' => 'Leader', 'email' => 'leader@example.com']);
+        $viewer = User::factory()->create(['name' => 'Viewer', 'email' => 'viewer-rank@example.com']);
+
+        Video::create([
+            'user_id' => $leader->id,
+            'type' => 'video',
+            'title' => 'Top clip',
+            'is_draft' => false,
+            'views_count' => 200,
+        ]);
+
+        Video::create([
+            'user_id' => $viewer->id,
+            'type' => 'video',
+            'title' => 'Second clip',
+            'is_draft' => false,
+            'views_count' => 120,
+        ]);
+
+        $token = $viewer->createToken('leaderboard-token')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/leaderboard?period=monthly')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
+            ->assertJsonPath('data.currentUserRank.userId', $viewer->id)
+            ->assertJsonPath('data.currentUserRank.rank', 2)
+            ->assertJsonPath('data.currentUserRank.user.fullName', 'Viewer');
+    }
+
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
     {
         $this->mock(CloudinaryUploadService::class, function ($mock): void {
@@ -252,6 +285,11 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.videos.live_retrieved'))
             ->assertJsonPath('data.videos.0.id', $liveVideoId)
             ->assertJsonPath('meta.videos.total', 1);
+
+        $this->postJson('/api/v1/videos/'.$liveVideoId.'/share')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.share_recorded'))
+            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/live/'.$liveVideoId);
 
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')
             ->assertOk()
@@ -573,6 +611,102 @@ class ContentAndProfileApiTest extends TestCase
             );
     }
 
+    public function test_live_signals_can_be_exchanged_between_viewer_and_creator_and_are_cleared_when_live_stops(): void
+    {
+        $category = Category::create(['name' => 'Live', 'slug' => 'live']);
+        $creator = User::factory()->create(['name' => 'Live Creator', 'email' => 'live-owner@example.com']);
+        $viewer = User::factory()->create(['name' => 'Live Viewer', 'email' => 'live-viewer@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'RTC Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $offerResponse = $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'type' => 'offer',
+            'sdp' => 'viewer-offer-sdp',
+        ]);
+
+        $offerResponse
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.videos.live_signal_sent'))
+            ->assertJsonPath('data.signal.type', 'offer')
+            ->assertJsonPath('data.signal.senderId', $viewer->id)
+            ->assertJsonPath('data.signal.recipientId', $creator->id)
+            ->assertJsonPath('data.signal.payload.sdp', 'viewer-offer-sdp');
+
+        Sanctum::actingAs($creator);
+
+        $creatorSignals = $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_signals_retrieved'))
+            ->assertJsonPath('data.signals.0.type', 'offer')
+            ->assertJsonPath('data.signals.0.senderId', $viewer->id)
+            ->assertJsonPath('data.signals.0.payload.sdp', 'viewer-offer-sdp');
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'answer',
+            'sdp' => 'creator-answer-sdp',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'answer')
+            ->assertJsonPath('data.signal.recipientId', $viewer->id);
+
+        Sanctum::actingAs($viewer);
+
+        $viewerSignals = $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->assertJsonPath('data.signals.0.type', 'answer')
+            ->assertJsonPath('data.signals.0.payload.sdp', 'creator-answer-sdp');
+
+        $latestSignalId = $viewerSignals->json('data.latestSignalId');
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'candidate',
+            'candidate' => [
+                'candidate' => 'candidate:1 1 udp 2122260223 127.0.0.1 3478 typ host',
+                'sdpMid' => '0',
+                'sdpMLineIndex' => 0,
+            ],
+        ])
+            ->assertCreated();
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals?after='.$latestSignalId)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.signals')
+            ->assertJsonPath('data.signals.0.type', 'candidate')
+            ->assertJsonPath('data.signals.0.payload.candidate.sdpMid', '0');
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/stop')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_stopped'));
+
+        $this->assertDatabaseCount('live_signals', 0);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_not_active'));
+
+        $this->assertSame(0, LiveSignal::query()->count());
+    }
+
     public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void
     {
         $user = User::factory()->create([
@@ -649,7 +783,8 @@ class ContentAndProfileApiTest extends TestCase
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
             ->postJson('/api/v1/videos/'.$video->id.'/share')
             ->assertOk()
-            ->assertJsonPath('data.shares', 1);
+            ->assertJsonPath('data.shares', 1)
+            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/video/'.$video->id);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])

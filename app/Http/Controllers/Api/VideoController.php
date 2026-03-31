@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
+use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
@@ -326,6 +327,76 @@ class VideoController extends Controller
         ]);
     }
 
+    public function sendSignal(Request $request, Video $video): JsonResponse
+    {
+        $viewer = $request->user();
+        $this->ensureVideoIsLive($video);
+
+        $validated = $request->validate([
+            'recipientId' => ['nullable', 'integer', 'exists:users,id'],
+            'type' => ['required', 'in:offer,answer,candidate'],
+            'sdp' => ['nullable', 'string'],
+            'candidate' => ['nullable', 'array'],
+        ]);
+
+        $isCreator = $viewer->id === $video->user_id;
+        $recipientId = $isCreator ? ($validated['recipientId'] ?? null) : $video->user_id;
+
+        abort_if($isCreator && ! $recipientId, 422, __('messages.videos.live_signal_recipient_required'));
+        abort_if(! $isCreator && $validated['type'] === 'answer', 422, __('messages.videos.live_signal_type_not_allowed'));
+        abort_if($isCreator && $validated['type'] === 'offer', 422, __('messages.videos.live_signal_type_not_allowed'));
+        abort_if($recipientId === $viewer->id, 422, __('messages.videos.live_signal_recipient_invalid'));
+        abort_if(in_array($validated['type'], ['offer', 'answer'], true) && ! filled($validated['sdp'] ?? null), 422, __('messages.videos.live_signal_payload_required'));
+        abort_if($validated['type'] === 'candidate' && empty($validated['candidate']), 422, __('messages.videos.live_signal_payload_required'));
+
+        $signal = LiveSignal::query()->create([
+            'video_id' => $video->id,
+            'sender_id' => $viewer->id,
+            'recipient_id' => $recipientId,
+            'kind' => $validated['type'],
+            'payload' => array_filter([
+                'sdp' => $validated['sdp'] ?? null,
+                'candidate' => $validated['candidate'] ?? null,
+            ], static fn ($value) => $value !== null),
+        ]);
+
+        return response()->json([
+            'message' => __('messages.videos.live_signal_sent'),
+            'data' => [
+                'signal' => $this->formatLiveSignal($signal),
+            ],
+        ], 201);
+    }
+
+    public function getSignals(Request $request, Video $video): JsonResponse
+    {
+        $viewer = $request->user();
+        $this->ensureVideoIsLive($video);
+
+        $validated = $request->validate([
+            'after' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $after = (int) ($validated['after'] ?? 0);
+
+        $signals = LiveSignal::query()
+            ->where('video_id', $video->id)
+            ->where('recipient_id', $viewer->id)
+            ->where('id', '>', $after)
+            ->orderBy('id')
+            ->get();
+
+        $latestSignalId = $signals->last()?->id ?? $after;
+
+        return response()->json([
+            'message' => __('messages.videos.live_signals_retrieved'),
+            'data' => [
+                'signals' => $signals->map(fn (LiveSignal $signal) => $this->formatLiveSignal($signal))->values(),
+                'latestSignalId' => $latestSignalId,
+            ],
+        ]);
+    }
+
     public function share(Request $request, Video $video): JsonResponse
     {
         if ($this->shouldRecordEngagement($request, $video, 'share', self::SHARE_DEDUP_MINUTES)) {
@@ -336,9 +407,17 @@ class VideoController extends Controller
             'message' => __('messages.videos.share_recorded'),
             'data' => [
                 'shares' => (int) $video->shares_count,
-                'shareUrl' => rtrim(config('app.url'), '/').'/videos/'.$video->id,
+                'shareUrl' => $this->buildFrontendVideoUrl($video),
             ],
         ]);
+    }
+
+    private function buildFrontendVideoUrl(Video $video): string
+    {
+        $baseUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
+        $path = ($video->is_live ? '/live/' : '/video/').$video->id;
+
+        return $baseUrl.$path;
     }
 
     private function videoResponse(Request $request, string $message, LengthAwarePaginator $videos): JsonResponse
@@ -365,6 +444,10 @@ class VideoController extends Controller
     {
         $wasLive = (bool) $video->is_live;
         $shouldNotify = ! $wasLive && $video->live_notified_at === null;
+
+        if (! $wasLive) {
+            $video->liveSignals()->delete();
+        }
 
         $video->forceFill([
             'is_live' => true,
@@ -399,11 +482,30 @@ class VideoController extends Controller
 
     private function stopLiveSession(Video $video): void
     {
+        $video->liveSignals()->delete();
+
         $video->forceFill([
             'is_live' => false,
             'live_ended_at' => now(),
             'live_notified_at' => null,
         ])->save();
+    }
+
+    private function ensureVideoIsLive(Video $video): void
+    {
+        abort_if(! $video->is_live, 409, __('messages.videos.live_not_active'));
+    }
+
+    private function formatLiveSignal(LiveSignal $signal): array
+    {
+        return [
+            'id' => $signal->id,
+            'type' => $signal->kind,
+            'payload' => $signal->payload ?? [],
+            'senderId' => $signal->sender_id,
+            'recipientId' => $signal->recipient_id,
+            'createdAt' => $signal->created_at?->toISOString(),
+        ];
     }
 
     private function notifySubscribersAboutLive(Video $video): void

@@ -66,6 +66,11 @@ class Video extends Model
         return $this->hasMany(Comment::class);
     }
 
+    public function liveSignals(): HasMany
+    {
+        return $this->hasMany(LiveSignal::class);
+    }
+
     public function likes(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'video_interactions')
