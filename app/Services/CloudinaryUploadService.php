@@ -36,6 +36,45 @@ class CloudinaryUploadService
         ];
     }
 
+    public function createDirectUploadSignature(string $type, ?int $userId = null): array
+    {
+        $configuration = $this->configuration();
+        $resourceType = $this->resourceTypeFor($type);
+        $timestamp = time();
+        $parameters = [
+            'folder' => $this->folderFor($type, $userId),
+            'overwrite' => 'false',
+            'public_id' => (string) Str::uuid(),
+            'timestamp' => $timestamp,
+        ];
+
+        return [
+            'provider' => 'cloudinary',
+            'resource_type' => $resourceType,
+            'endpoint' => sprintf(
+                'https://api.cloudinary.com/v1_1/%s/%s/upload',
+                $configuration['cloud_name'],
+                $resourceType,
+            ),
+            'fields' => [
+                ...$parameters,
+                'api_key' => $configuration['api_key'],
+                'signature' => $this->signParameters($parameters, $configuration['api_secret']),
+            ],
+        ];
+    }
+
+    public function isManagedUrl(string $url): bool
+    {
+        $configuration = $this->configuration();
+        $parts = parse_url($url);
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $path = trim((string) ($parts['path'] ?? ''), '/');
+
+        return $host === 'res.cloudinary.com'
+            && str_starts_with($path, trim($configuration['cloud_name'], '/').'/');
+    }
+
     protected function client(): Cloudinary
     {
         return new Cloudinary(config('services.cloudinary.url'));
@@ -52,12 +91,54 @@ class CloudinaryUploadService
         ]));
     }
 
-    protected function processedUrlFor(string $secureUrl, string $type): string
+    public function processedUrlFor(string $secureUrl, string $type): string
     {
         $transformation = $type === 'video'
             ? 'q_auto,f_auto,vc_auto'
             : 'q_auto,f_auto';
 
         return preg_replace('/\/upload\//', '/upload/'.$transformation.'/', $secureUrl, 1) ?: $secureUrl;
+    }
+
+    protected function resourceTypeFor(string $type): string
+    {
+        return $type === 'video' ? 'video' : 'image';
+    }
+
+    protected function configuration(): array
+    {
+        $configuredUrl = (string) config('services.cloudinary.url');
+        $parts = parse_url($configuredUrl);
+        $cloudName = trim((string) ($parts['host'] ?? ''), '/');
+        $apiKey = rawurldecode((string) ($parts['user'] ?? ''));
+        $apiSecret = rawurldecode((string) ($parts['pass'] ?? ''));
+
+        if ($cloudName === '' || $apiKey === '' || $apiSecret === '') {
+            throw new RuntimeException('Cloudinary service is not configured.');
+        }
+
+        return [
+            'cloud_name' => $cloudName,
+            'api_key' => $apiKey,
+            'api_secret' => $apiSecret,
+        ];
+    }
+
+    protected function signParameters(array $parameters, string $apiSecret): string
+    {
+        $parameters = array_filter(
+            $parameters,
+            static fn (mixed $value): bool => $value !== null && $value !== ''
+        );
+
+        ksort($parameters);
+
+        $signatureBase = implode('&', array_map(
+            static fn (string $key, mixed $value): string => $key.'='.(string) $value,
+            array_keys($parameters),
+            $parameters,
+        ));
+
+        return sha1($signatureBase.$apiSecret);
     }
 }

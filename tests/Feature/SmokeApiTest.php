@@ -94,19 +94,23 @@ class SmokeApiTest extends TestCase
         $subscriber = User::factory()->create(['name' => 'Subscriber']);
         $creator = User::factory()->create(['name' => 'Creator']);
 
+        config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);
+
         Sanctum::actingAs($subscriber);
 
         $this->postJson('/api/v1/uploads/presign', [
             'type' => 'video',
             'originalName' => 'clip.mp4',
         ])->assertOk()
-            ->assertJsonPath('data.strategy', 'server-upload')
+            ->assertJsonPath('data.strategy', 'client-direct-upload')
             ->assertJsonPath('data.provider', 'cloudinary')
             ->assertJsonPath('data.method', 'POST')
-            ->assertJsonPath('data.endpoint', url('/api/v1/uploads'))
-            ->assertJsonPath('data.path', fn ($value) => is_string($value)
-                && str_starts_with($value, 'deymake/uploads/')
-                && str_ends_with($value, '.mp4'));
+            ->assertJsonPath('data.endpoint', 'https://api.cloudinary.com/v1_1/demo/video/upload')
+            ->assertJsonPath('data.resourceType', 'video')
+            ->assertJsonPath('data.fields.api_key', 'test-key')
+            ->assertJsonPath('data.fields.folder', 'deymake/uploads/videos/user-1')
+            ->assertJsonPath('data.fields.public_id', fn ($value) => is_string($value) && $value !== '')
+            ->assertJsonPath('data.fields.signature', fn ($value) => is_string($value) && $value !== '');
 
         $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')
             ->assertOk()

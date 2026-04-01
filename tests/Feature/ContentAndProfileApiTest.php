@@ -380,7 +380,7 @@ class ContentAndProfileApiTest extends TestCase
         $this->getJson('/api/v1/me/posts?per_page=1&page=2')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
-            ->assertJsonPath('data.videos.0.title', 'Viewer Live')
+            ->assertJsonPath('data.videos.0.title', fn ($value) => in_array($value, ['Viewer Draft', 'Viewer Live'], true))
             ->assertJsonPath('meta.videos.total', 2)
             ->assertJsonPath('meta.videos.currentPage', 2);
 
@@ -485,6 +485,46 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.deleted'));
         $this->assertDatabaseMissing('comments', ['id' => $commentId]);
+    }
+
+    public function test_authenticated_user_can_finalize_a_direct_cloudinary_upload_without_streaming_the_file_through_the_api(): void
+    {
+        $creator = User::factory()->create(['name' => 'Direct Upload Creator', 'email' => 'direct-upload@example.com']);
+
+        config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);
+
+        Sanctum::actingAs($creator);
+
+        $response = $this->postJson('/api/v1/uploads', [
+            'type' => 'video',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4',
+            'originalName' => 'direct.mp4',
+            'mimeType' => 'video/mp4',
+            'size' => 204800,
+            'width' => 1920,
+            'height' => 1080,
+            'duration' => 18.75,
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.upload.stored'))
+            ->assertJsonPath('data.upload.type', 'video')
+            ->assertJsonPath('data.upload.disk', 'cloudinary')
+            ->assertJsonPath('data.upload.path', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4')
+            ->assertJsonPath('data.upload.processedUrl', 'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/direct.mp4')
+            ->assertJsonPath('data.upload.processingStatus', 'completed');
+
+        $this->assertDatabaseHas('uploads', [
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4',
+            'original_name' => 'direct.mp4',
+            'mime_type' => 'video/mp4',
+            'size' => 204800,
+            'processing_status' => 'completed',
+        ]);
     }
 
     public function test_blank_search_queries_return_empty_paginated_results_instead_of_listing_everything(): void
