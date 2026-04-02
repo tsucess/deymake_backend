@@ -3,15 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Notifications\SendEmailVerificationCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AuthApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_user_can_register_and_receive_a_token(): void
+    public function test_user_can_register_and_receive_a_verification_code(): void
     {
+        Notification::fake();
+
         $response = $this->postJson('/api/v1/auth/register', [
             'fullName' => 'Rise Network',
             'username' => 'rise.network',
@@ -21,17 +25,32 @@ class AuthApiTest extends TestCase
 
         $response
             ->assertCreated()
-            ->assertJsonPath('message', trans('messages.auth.registered'))
+            ->assertJsonPath('message', trans('messages.auth.verification_code_sent'))
+            ->assertJsonPath('data.verification.required', true)
+            ->assertJsonPath('data.verification.email', 'rise@example.com')
             ->assertJsonStructure([
                 'message',
-                'data' => ['user' => ['id', 'fullName', 'username', 'email', 'createdAt'], 'token', 'tokenType'],
+                'data' => [
+                    'user' => ['id', 'fullName', 'username', 'email', 'createdAt'],
+                    'verification' => ['required', 'email', 'expiresInMinutes'],
+                ],
             ]);
+
+        $response->assertJsonMissingPath('data.token');
+
+        $user = User::query()->where('email', 'rise@example.com')->firstOrFail();
 
         $this->assertDatabaseHas('users', [
             'email' => 'rise@example.com',
             'name' => 'Rise Network',
             'username' => 'rise.network',
         ]);
+        $this->assertDatabaseHas('email_verification_codes', [
+            'email' => 'rise@example.com',
+            'user_id' => $user->id,
+        ]);
+
+        Notification::assertSentTo($user, SendEmailVerificationCode::class);
     }
 
     public function test_user_can_login_and_receive_a_token(): void
@@ -57,6 +76,37 @@ class AuthApiTest extends TestCase
             ]);
 
         $response->assertJsonPath('data.user.username', $user->username);
+    }
+
+    public function test_unverified_user_login_requires_email_verification(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->unverified()->create([
+            'name' => 'Rise Network',
+            'username' => 'rise.network',
+            'email' => 'rise@example.com',
+            'password' => 'Password1',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'Password1',
+        ]);
+
+        $response
+            ->assertStatus(202)
+            ->assertJsonPath('message', trans('messages.auth.verification_required'))
+            ->assertJsonPath('data.verification.required', true)
+            ->assertJsonPath('data.verification.email', $user->email)
+            ->assertJsonPath('data.user.username', $user->username);
+
+        $this->assertDatabaseHas('email_verification_codes', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        Notification::assertSentTo($user, SendEmailVerificationCode::class);
     }
 
     public function test_authenticated_user_can_fetch_profile_and_logout(): void

@@ -21,8 +21,8 @@ class ContentAndProfileApiTest extends TestCase
     public function test_public_discovery_search_and_public_profile_endpoints_return_data(): void
     {
         $category = Category::create(['name' => 'Music', 'slug' => 'music', 'subscribers_count' => 1200]);
-        $creator = User::factory()->create(['name' => 'Creator One', 'email' => 'creator@example.com']);
-        $otherCreator = User::factory()->create(['name' => 'Creator Two', 'email' => 'creator2@example.com']);
+        $creator = User::factory()->create(['name' => 'Creator One', 'username' => 'creator.one', 'email' => 'creator@example.com']);
+        $otherCreator = User::factory()->create(['name' => 'Creator Two', 'username' => 'creator.two', 'email' => 'creator2@example.com']);
 
         $mainVideo = Video::create([
             'user_id' => $creator->id,
@@ -92,6 +92,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.retrieved'))
             ->assertJsonPath('data.video.author.fullName', 'Creator One')
+            ->assertJsonPath('data.video.author.username', 'creator.one')
             ->assertJsonPath('data.video.author.subscriberCount', 1)
             ->assertJsonPath('data.video.likes', 1)
             ->assertJsonPath('data.video.commentsCount', 1)
@@ -127,13 +128,15 @@ class ContentAndProfileApiTest extends TestCase
         $this->getJson('/api/v1/leaderboard?period=monthly')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
-            ->assertJsonPath('data.standings.0.user.fullName', 'Creator One');
+            ->assertJsonPath('data.standings.0.user.fullName', 'Creator One')
+            ->assertJsonPath('data.standings.0.user.username', 'creator.one');
 
         $this->getJson('/api/v1/users/search?q=Creator&per_page=1&page=2')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.users.retrieved'))
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.fullName', 'Creator Two')
+            ->assertJsonPath('data.users.0.username', 'creator.two')
             ->assertJsonPath('meta.users.total', 2)
             ->assertJsonPath('meta.users.currentPage', 2);
 
@@ -141,6 +144,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', trans('messages.users.profile_retrieved'))
             ->assertJsonPath('data.user.fullName', 'Creator One')
+            ->assertJsonPath('data.user.username', 'creator.one')
             ->assertJsonPath('data.user.subscriberCount', 1);
 
         $this->getJson('/api/v1/users/'.$creator->id.'/posts')
@@ -152,8 +156,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_leaderboard_resolves_current_user_rank_from_sanctum_token_on_public_route(): void
     {
-        $leader = User::factory()->create(['name' => 'Leader', 'email' => 'leader@example.com']);
-        $viewer = User::factory()->create(['name' => 'Viewer', 'email' => 'viewer-rank@example.com']);
+        $leader = User::factory()->create(['name' => 'Leader', 'username' => 'leader.rank', 'email' => 'leader@example.com']);
+        $viewer = User::factory()->create(['name' => 'Viewer', 'username' => 'viewer.rank', 'email' => 'viewer-rank@example.com']);
 
         Video::create([
             'user_id' => $leader->id,
@@ -179,7 +183,8 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
             ->assertJsonPath('data.currentUserRank.userId', $viewer->id)
             ->assertJsonPath('data.currentUserRank.rank', 2)
-            ->assertJsonPath('data.currentUserRank.user.fullName', 'Viewer');
+            ->assertJsonPath('data.currentUserRank.user.fullName', 'Viewer')
+            ->assertJsonPath('data.currentUserRank.user.username', 'viewer.rank');
     }
 
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
@@ -202,8 +207,9 @@ class ContentAndProfileApiTest extends TestCase
         });
 
         $category = Category::create(['name' => 'Comedy', 'slug' => 'comedy']);
-        $creator = User::factory()->create(['name' => 'Creator', 'email' => 'creator@example.com']);
-        $viewer = User::factory()->create(['name' => 'Viewer', 'email' => 'viewer@example.com']);
+        $creator = User::factory()->create(['name' => 'Creator', 'username' => 'creator.handle', 'email' => 'creator@example.com']);
+        $viewer = User::factory()->create(['name' => 'Viewer', 'username' => 'viewer.handle', 'email' => 'viewer@example.com']);
+        $featuredCreator = User::factory()->create(['name' => 'Featured Creator', 'username' => 'featured.creator', 'email' => 'featured@example.com']);
 
         $creatorVideo = Video::create([
             'user_id' => $creator->id,
@@ -229,16 +235,24 @@ class ContentAndProfileApiTest extends TestCase
             'path' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
         ]);
 
+        $expectedTaggedUsers = [$creator->id, $viewer->id, $featuredCreator->id];
+        sort($expectedTaggedUsers);
+
         $videoResponse = $this->postJson('/api/v1/videos', [
             'uploadId' => $uploadId,
             'categoryId' => $category->id,
             'type' => 'image',
-            'caption' => 'Draft caption',
+            'caption' => 'Draft caption with @creator.handle and #featured.creator',
+            'description' => 'Featuring @viewer.handle too',
             'isDraft' => true,
         ]);
 
-        $videoResponse->assertCreated()->assertJsonPath('message', trans('messages.videos.created'));
+        $videoResponse
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.videos.created'))
+            ->assertJsonPath('data.video.taggedUsers', $expectedTaggedUsers);
         $videoId = $videoResponse->json('data.video.id');
+        $this->assertSame($expectedTaggedUsers, Video::findOrFail($videoId)->tagged_users);
 
         $this->patchJson('/api/v1/videos/'.$videoId, ['title' => 'Viewer Draft'])
             ->assertOk()
@@ -329,6 +343,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.comments.created'))
             ->assertJsonPath('data.comment.user.fullName', 'Viewer')
+            ->assertJsonPath('data.comment.user.username', 'viewer.handle')
             ->assertJsonPath('data.comment.user.subscriberCount', 0)
             ->assertJsonPath('data.comment.currentUserState.liked', false);
 
@@ -355,28 +370,33 @@ class ContentAndProfileApiTest extends TestCase
         $this->getJson('/api/v1/me/profile')
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer')
+            ->assertJsonPath('data.profile.username', 'viewer.handle')
             ->assertJsonPath('data.profile.subscriberCount', 0)
             ->assertJsonPath('data.profile.currentUserState.subscribed', false);
 
         $this->getJson('/api/v1/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('data.user.fullName', 'Creator')
+            ->assertJsonPath('data.user.username', 'creator.handle')
             ->assertJsonPath('data.user.subscriberCount', 1)
             ->assertJsonPath('data.user.currentUserState.subscribed', true);
 
         $this->getJson('/api/v1/users/search?q=Creator')
             ->assertOk()
             ->assertJsonPath('data.users.0.fullName', 'Creator')
+            ->assertJsonPath('data.users.0.username', 'creator.handle')
             ->assertJsonPath('data.users.0.currentUserState.subscribed', true);
 
         $this->getJson('/api/v1/search/creators?q=Creator')
             ->assertOk()
             ->assertJsonPath('data.creators.0.fullName', 'Creator')
+            ->assertJsonPath('data.creators.0.username', 'creator.handle')
             ->assertJsonPath('data.creators.0.currentUserState.subscribed', true);
 
-        $this->patchJson('/api/v1/me/profile', ['fullName' => 'Viewer Updated', 'bio' => 'Updated bio'])
+        $this->patchJson('/api/v1/me/profile', ['fullName' => 'Viewer Updated', 'username' => 'viewer.updated', 'bio' => 'Updated bio'])
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated')
+            ->assertJsonPath('data.profile.username', 'viewer.updated')
             ->assertJsonPath('data.profile.subscriberCount', 0)
             ->assertJsonPath('data.profile.currentUserState.subscribed', false);
 
@@ -439,6 +459,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.comments.replies_retrieved'))
             ->assertJsonCount(1, 'data.replies')
             ->assertJsonPath('data.replies.0.user.fullName', 'Creator')
+            ->assertJsonPath('data.replies.0.user.username', 'creator.handle')
             ->assertJsonPath('data.replies.0.user.subscriberCount', 1)
             ->assertJsonPath('data.replies.0.currentUserState.liked', false);
 

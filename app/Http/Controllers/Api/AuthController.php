@@ -7,8 +7,10 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Notifications\SendEmailVerificationCode;
 use App\Support\Username;
 use App\Support\UserDefaults;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,6 +19,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -26,6 +29,8 @@ use Throwable;
 class AuthController extends Controller
 {
     private const OAUTH_PROVIDERS = ['google', 'facebook'];
+
+    private const VERIFICATION_CODE_TTL_MINUTES = 10;
 
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -38,19 +43,12 @@ class AuthController extends Controller
             'email' => $request->string('email')->toString(),
             'password' => $request->string('password')->toString(),
             'preferences' => UserDefaults::preferences(),
-            'is_online' => true,
+            'is_online' => false,
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $this->issueVerificationCode($user);
 
-        return response()->json([
-            'message' => __('messages.auth.registered'),
-            'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-                'tokenType' => 'Bearer',
-            ],
-        ], 201);
+        return $this->verificationRequiredResponse($user, __('messages.auth.verification_code_sent'), 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -70,16 +68,93 @@ class AuthController extends Controller
             ], 422);
         }
 
+        if (! $user->email_verified_at) {
+            $this->issueVerificationCode($user);
+
+            return $this->verificationRequiredResponse($user, __('messages.auth.verification_required'), 202);
+        }
+
         $user->forceFill(['is_online' => true])->save();
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        return $this->authenticatedResponse($user, __('messages.auth.login_success'));
+    }
+
+    public function verifyEmailCode(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', Rule::exists('users', 'email')],
+            'code' => ['required', 'string', 'size:4'],
+        ]);
+
+        $user = User::query()->where('email', $validated['email'])->firstOrFail();
+
+        if ($user->email_verified_at) {
+            return response()->json([
+                'message' => __('messages.auth.already_verified'),
+                'errors' => [
+                    'email' => [__('messages.auth.already_verified_detail')],
+                ],
+            ], 422);
+        }
+
+        $verification = DB::table('email_verification_codes')
+            ->where('email', $validated['email'])
+            ->first();
+
+        if (! $verification || ! hash_equals((string) $verification->code, $validated['code'])) {
+            return response()->json([
+                'message' => __('messages.auth.verification_code_invalid'),
+                'errors' => [
+                    'code' => [__('messages.auth.verification_code_invalid_detail')],
+                ],
+            ], 422);
+        }
+
+        if (Carbon::parse($verification->expires_at)->isPast()) {
+            DB::table('email_verification_codes')->where('email', $validated['email'])->delete();
+
+            return response()->json([
+                'message' => __('messages.auth.verification_code_expired'),
+                'errors' => [
+                    'code' => [__('messages.auth.verification_code_expired_detail')],
+                ],
+            ], 422);
+        }
+
+        $user->forceFill([
+            'email_verified_at' => now(),
+            'is_online' => true,
+        ])->save();
+
+        DB::table('email_verification_codes')->where('email', $validated['email'])->delete();
+
+        return $this->authenticatedResponse($user, __('messages.auth.email_verified'));
+    }
+
+    public function resendVerificationCode(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', Rule::exists('users', 'email')],
+        ]);
+
+        $user = User::query()->where('email', $validated['email'])->firstOrFail();
+
+        if ($user->email_verified_at) {
+            return response()->json([
+                'message' => __('messages.auth.already_verified'),
+                'errors' => [
+                    'email' => [__('messages.auth.already_verified_detail')],
+                ],
+            ], 422);
+        }
+
+        $this->issueVerificationCode($user);
 
         return response()->json([
-            'message' => __('messages.auth.login_success'),
+            'message' => __('messages.auth.verification_code_resent'),
             'data' => [
-                'user' => new UserResource($user),
-                'token' => $token,
-                'tokenType' => 'Bearer',
+                'email' => $user->email,
+                'expiresInMinutes' => self::VERIFICATION_CODE_TTL_MINUTES,
             ],
         ]);
     }
@@ -452,5 +527,53 @@ class AuthController extends Controller
                 ->exists(),
             $fallback !== '' ? $fallback : 'user',
         );
+    }
+
+    private function authenticatedResponse(User $user, string $message, int $status = 200): JsonResponse
+    {
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'user' => new UserResource($user),
+                'token' => $token,
+                'tokenType' => 'Bearer',
+            ],
+        ], $status);
+    }
+
+    private function verificationRequiredResponse(User $user, string $message, int $status = 202): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'user' => new UserResource($user),
+                'verification' => [
+                    'required' => true,
+                    'email' => $user->email,
+                    'expiresInMinutes' => self::VERIFICATION_CODE_TTL_MINUTES,
+                ],
+            ],
+        ], $status);
+    }
+
+    private function issueVerificationCode(User $user): void
+    {
+        $code = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+
+        DB::table('email_verification_codes')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'user_id' => $user->id,
+                'code' => $code,
+                'expires_at' => now()->addMinutes(self::VERIFICATION_CODE_TTL_MINUTES),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        Notification::locale(app()->getLocale())
+            ->send($user, new SendEmailVerificationCode($code, self::VERIFICATION_CODE_TTL_MINUTES));
     }
 }

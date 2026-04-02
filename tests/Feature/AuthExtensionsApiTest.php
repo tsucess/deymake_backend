@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Notifications\SendEmailVerificationCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AuthExtensionsApiTest extends TestCase
@@ -34,9 +37,64 @@ class AuthExtensionsApiTest extends TestCase
         ])->assertOk()->assertJsonPath('message', 'Password reset successful.');
 
         $this->postJson('/api/v1/auth/login', [
-            'email' => $user->email,
+            'identifier' => $user->email,
             'password' => 'NewPassword1',
-        ])->assertOk()->assertJsonPath('message', 'Login successful.');
+        ])->assertOk()->assertJsonPath('message', trans('messages.auth.login_success'));
+    }
+
+    public function test_unverified_user_can_verify_email_with_a_four_digit_code_and_receive_a_token(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'email' => 'verify@example.com',
+            'password' => 'Password1',
+        ]);
+
+        DB::table('email_verification_codes')->insert([
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'code' => '1234',
+            'expires_at' => now()->addMinutes(10),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/api/v1/auth/verify-email-code', [
+            'email' => $user->email,
+            'code' => '1234',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.auth.email_verified'))
+            ->assertJsonPath('data.user.email', $user->email)
+            ->assertJsonPath('data.tokenType', 'Bearer');
+
+        $this->assertNotNull($user->fresh()->email_verified_at);
+        $this->assertDatabaseMissing('email_verification_codes', [
+            'email' => $user->email,
+        ]);
+    }
+
+    public function test_unverified_user_can_resend_a_verification_code(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->unverified()->create([
+            'email' => 'verify@example.com',
+        ]);
+
+        $this->postJson('/api/v1/auth/resend-verification-code', [
+            'email' => $user->email,
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.auth.verification_code_resent'))
+            ->assertJsonPath('data.email', $user->email)
+            ->assertJsonPath('data.expiresInMinutes', 10);
+
+        $this->assertDatabaseHas('email_verification_codes', [
+            'email' => $user->email,
+            'user_id' => $user->id,
+        ]);
+
+        Notification::assertSentTo($user, SendEmailVerificationCode::class);
     }
 
     public function test_oauth_endpoints_report_when_provider_credentials_are_missing(): void
