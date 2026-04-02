@@ -486,6 +486,7 @@ class VideoController extends Controller
 
         $video->forceFill([
             'is_live' => false,
+            'is_draft' => true,
             'live_ended_at' => now(),
             'live_notified_at' => null,
         ])->save();

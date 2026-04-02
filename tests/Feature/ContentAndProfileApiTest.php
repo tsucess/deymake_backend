@@ -736,6 +736,12 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_stopped'));
 
+        $this->assertDatabaseHas('videos', [
+            'id' => $video->id,
+            'is_live' => false,
+            'is_draft' => true,
+        ]);
+
         $this->assertDatabaseCount('live_signals', 0);
 
         Sanctum::actingAs($viewer);
