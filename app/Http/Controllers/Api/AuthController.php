@@ -69,9 +69,9 @@ class AuthController extends Controller
         }
 
         if (! $user->email_verified_at) {
-            $this->issueVerificationCode($user);
-
-            return $this->verificationRequiredResponse($user, __('messages.auth.verification_required'), 202);
+            return response()->json([
+                'message' => __('messages.auth.verification_required'),
+            ], 403);
         }
 
         $user->forceFill(['is_online' => true])->save();

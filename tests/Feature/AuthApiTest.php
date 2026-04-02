@@ -95,18 +95,17 @@ class AuthApiTest extends TestCase
         ]);
 
         $response
-            ->assertStatus(202)
-            ->assertJsonPath('message', trans('messages.auth.verification_required'))
-            ->assertJsonPath('data.verification.required', true)
-            ->assertJsonPath('data.verification.email', $user->email)
-            ->assertJsonPath('data.user.username', $user->username);
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.auth.verification_required'));
 
-        $this->assertDatabaseHas('email_verification_codes', [
+        $response->assertJsonMissingPath('data.token');
+        $response->assertJsonMissingPath('data.verification');
+
+        $this->assertDatabaseMissing('email_verification_codes', [
             'email' => $user->email,
-            'user_id' => $user->id,
         ]);
 
-        Notification::assertSentTo($user, SendEmailVerificationCode::class);
+        Notification::assertNothingSent();
     }
 
     public function test_authenticated_user_can_fetch_profile_and_logout(): void
