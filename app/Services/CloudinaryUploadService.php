@@ -94,10 +94,15 @@ class CloudinaryUploadService
     public function processedUrlFor(string $secureUrl, string $type): string
     {
         $transformation = $type === 'video'
-            ? 'q_auto,f_auto,vc_auto'
+            ? 'q_auto:best,f_auto,vc_auto'
             : 'q_auto,f_auto';
 
-        return preg_replace('/\/upload\//', '/upload/'.$transformation.'/', $secureUrl, 1) ?: $secureUrl;
+        return $this->transformedUrlFor($secureUrl, $transformation);
+    }
+
+    public function streamUrlFor(string $secureUrl): string
+    {
+        return $this->transformedUrlFor($secureUrl, 'sp_auto', '.m3u8');
     }
 
     protected function resourceTypeFor(string $type): string
@@ -140,5 +145,18 @@ class CloudinaryUploadService
         ));
 
         return sha1($signatureBase.$apiSecret);
+    }
+
+    protected function transformedUrlFor(string $secureUrl, string $transformation, ?string $extension = null): string
+    {
+        $transformedUrl = preg_replace('/\/upload\//', '/upload/'.$transformation.'/', $secureUrl, 1) ?: $secureUrl;
+
+        if ($extension === null) {
+            return $transformedUrl;
+        }
+
+        $withExtension = preg_replace('/\.[^.\/?#]+(?=($|[?#]))/', $extension, $transformedUrl, 1);
+
+        return $withExtension ?: $transformedUrl;
     }
 }

@@ -184,7 +184,9 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
     {
-        $this->mock(CloudinaryUploadService::class, function ($mock): void {
+        config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);
+
+        $this->partialMock(CloudinaryUploadService::class, function ($mock): void {
             $mock->shouldReceive('upload')->twice()->andReturn(
                 [
                     'disk' => 'cloudinary',
@@ -276,7 +278,8 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.videos.created'))
             ->assertJsonPath('data.video.isLive', true)
             ->assertJsonPath('data.video.isDraft', false)
-            ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4');
+            ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4')
+            ->assertJsonPath('data.video.streamUrl', 'https://res.cloudinary.com/demo/video/upload/sp_auto/v1/deymake/uploads/videos/user-2/live.m3u8');
 
         $liveVideoId = $liveVideoResponse->json('data.video.id');
 
@@ -512,7 +515,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.upload.type', 'video')
             ->assertJsonPath('data.upload.disk', 'cloudinary')
             ->assertJsonPath('data.upload.path', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4')
-            ->assertJsonPath('data.upload.processedUrl', 'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/direct.mp4')
+            ->assertJsonPath('data.upload.processedUrl', 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/direct.mp4')
             ->assertJsonPath('data.upload.processingStatus', 'completed');
 
         $this->assertDatabaseHas('uploads', [
@@ -584,6 +587,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_video_uploads_must_finish_processing_before_they_can_go_live(): void
     {
+        config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);
+
         $category = Category::create(['name' => 'Live', 'slug' => 'live']);
         $creator = User::factory()->create(['name' => 'Live Creator', 'email' => 'live-creator@example.com']);
 
@@ -638,7 +643,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $upload->forceFill([
             'processing_status' => 'completed',
-            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto/v1/deymake/uploads/videos/live-processing.mp4',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/live-processing.mp4',
         ])->save();
 
         $this->postJson('/api/v1/videos/'.$video->id.'/live/start')
@@ -647,7 +652,11 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.video.isLive', true)
             ->assertJsonPath(
                 'data.video.mediaUrl',
-                'https://res.cloudinary.com/demo/video/upload/q_auto,f_auto/v1/deymake/uploads/videos/live-processing.mp4'
+                'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/live-processing.mp4'
+            )
+            ->assertJsonPath(
+                'data.video.streamUrl',
+                'https://res.cloudinary.com/demo/video/upload/sp_auto/v1/deymake/uploads/videos/live-processing.m3u8'
             );
     }
 

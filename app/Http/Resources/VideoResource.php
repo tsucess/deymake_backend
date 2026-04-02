@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\CloudinaryUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,9 +10,19 @@ class VideoResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $originalMediaUrl = $this->upload?->path ?: $this->media_url;
         $mediaUrl = $this->type === 'video'
             ? ($this->upload?->processed_url ?: $this->media_url ?: $this->upload?->url)
             : ($this->media_url ?: $this->upload?->url);
+        $streamUrl = null;
+
+        if ($this->type === 'video' && is_string($originalMediaUrl) && $originalMediaUrl !== '') {
+            $cloudinary = app(CloudinaryUploadService::class);
+
+            if ($cloudinary->isManagedUrl($originalMediaUrl)) {
+                $streamUrl = $cloudinary->streamUrlFor($originalMediaUrl);
+            }
+        }
 
         return [
             'id' => $this->id,
@@ -22,8 +33,9 @@ class VideoResource extends JsonResource
             'location' => $this->location,
             'taggedUsers' => $this->tagged_users ?? [],
             'mediaUrl' => $mediaUrl,
-            'originalMediaUrl' => $this->upload?->path ?: $this->media_url,
+            'originalMediaUrl' => $originalMediaUrl,
             'processedMediaUrl' => $this->upload?->processed_url,
+            'streamUrl' => $streamUrl,
             'thumbnailUrl' => $this->thumbnail_url,
             'processingStatus' => $this->upload?->processing_status ?? 'completed',
             'duration' => $this->upload?->duration,
