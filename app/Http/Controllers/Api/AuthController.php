@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Support\Username;
 use App\Support\UserDefaults;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +31,10 @@ class AuthController extends Controller
     {
         $user = User::create([
             'name' => $request->string('fullName')->toString(),
+            'username' => Username::normalize(
+                $request->string('username')->toString(),
+                Str::before($request->string('email')->toString(), '@'),
+            ),
             'email' => $request->string('email')->toString(),
             'password' => $request->string('password')->toString(),
             'preferences' => UserDefaults::preferences(),
@@ -50,13 +55,17 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::query()->where('email', $request->string('email')->toString())->first();
+        $identifier = trim($request->string('identifier')->toString());
+
+        $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
+            ? User::query()->where('email', $identifier)->first()
+            : User::query()->where('username', Username::normalize($identifier))->first();
 
         if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
             return response()->json([
                 'message' => __('messages.auth.invalid_credentials'),
                 'errors' => [
-                    'email' => [__('messages.auth.invalid_credentials_detail')],
+                    'identifier' => [__('messages.auth.invalid_credentials_detail')],
                 ],
             ], 422);
         }
@@ -360,6 +369,7 @@ class AuthController extends Controller
         if (! $user) {
             return User::create([
                 'name' => $profile['name'],
+                'username' => $this->uniqueUsernameFor($profile['name'], $profile['email']),
                 'email' => $profile['email'],
                 'email_verified_at' => now(),
                 'password' => Str::password(32),
@@ -377,6 +387,10 @@ class AuthController extends Controller
             'is_online' => true,
             'email_verified_at' => $user->email_verified_at ?? now(),
         ];
+
+        if (! $user->username) {
+            $updates['username'] = $this->uniqueUsernameFor($profile['name'], $profile['email'], $user);
+        }
 
         if (! $user->provider || $user->provider === $provider) {
             $updates['provider'] = $provider;
@@ -424,5 +438,19 @@ class AuthController extends Controller
     private function oauthStateCacheKey(string $provider, string $state): string
     {
         return 'oauth_state:'.$provider.':'.$state;
+    }
+
+    private function uniqueUsernameFor(string $name, string $email, ?User $ignoreUser = null): string
+    {
+        $fallback = Str::before($email, '@');
+
+        return Username::unique(
+            $name !== '' ? $name : $fallback,
+            static fn (string $candidate): bool => User::query()
+                ->when($ignoreUser, fn ($query) => $query->whereKeyNot($ignoreUser->id))
+                ->where('username', $candidate)
+                ->exists(),
+            $fallback !== '' ? $fallback : 'user',
+        );
     }
 }

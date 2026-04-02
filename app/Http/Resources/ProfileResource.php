@@ -12,6 +12,7 @@ class ProfileResource extends JsonResource
         return [
             'id' => $this->id,
             'fullName' => $this->name,
+            'username' => $this->username,
             'bio' => $this->bio,
             'avatarUrl' => $this->avatar_url,
             'isOnline' => (bool) ($this->is_online ?? false),

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Video;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
+use App\Support\Username;
 use App\Support\UserDefaults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -38,12 +39,16 @@ class ProfileController extends Controller
 
         $validated = $request->validate([
             'fullName' => ['sometimes', 'string', 'max:255'],
+            'username' => ['sometimes', 'string', 'regex:'.Username::VALIDATION_REGEX, Rule::unique('users', 'username')->ignore($request->user()->id)],
             'bio' => ['nullable', 'string', 'max:1000'],
             'avatarUrl' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $request->user()->forceFill([
             'name' => $validated['fullName'] ?? $request->user()->name,
+            'username' => array_key_exists('username', $validated)
+                ? Username::normalize($validated['username'], $request->user()->name)
+                : $request->user()->username,
             'bio' => array_key_exists('bio', $validated) ? $validated['bio'] : $request->user()->bio,
             'avatar_url' => array_key_exists('avatarUrl', $validated) ? $validated['avatarUrl'] : $request->user()->avatar_url,
         ])->save();

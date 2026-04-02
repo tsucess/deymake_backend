@@ -14,6 +14,7 @@ class AuthApiTest extends TestCase
     {
         $response = $this->postJson('/api/v1/auth/register', [
             'fullName' => 'Rise Network',
+            'username' => 'rise.network',
             'email' => 'rise@example.com',
             'password' => 'Password1',
         ]);
@@ -23,12 +24,13 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.auth.registered'))
             ->assertJsonStructure([
                 'message',
-                'data' => ['user' => ['id', 'fullName', 'email', 'createdAt'], 'token', 'tokenType'],
+                'data' => ['user' => ['id', 'fullName', 'username', 'email', 'createdAt'], 'token', 'tokenType'],
             ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'rise@example.com',
             'name' => 'Rise Network',
+            'username' => 'rise.network',
         ]);
     }
 
@@ -36,12 +38,13 @@ class AuthApiTest extends TestCase
     {
         $user = User::factory()->create([
             'name' => 'Rise Network',
+            'username' => 'rise.network',
             'email' => 'rise@example.com',
             'password' => 'Password1',
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
-            'email' => $user->email,
+            'identifier' => $user->username,
             'password' => 'Password1',
         ]);
 
@@ -50,8 +53,10 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.auth.login_success'))
             ->assertJsonStructure([
                 'message',
-                'data' => ['user' => ['id', 'fullName', 'email', 'createdAt'], 'token', 'tokenType'],
+                'data' => ['user' => ['id', 'fullName', 'username', 'email', 'createdAt'], 'token', 'tokenType'],
             ]);
+
+        $response->assertJsonPath('data.user.username', $user->username);
     }
 
     public function test_authenticated_user_can_fetch_profile_and_logout(): void
@@ -77,13 +82,14 @@ class AuthApiTest extends TestCase
     {
         $user = User::factory()->create([
             'name' => 'Rise Network',
+            'username' => 'rise.network',
             'email' => 'rise@example.com',
             'password' => 'Password1',
         ]);
 
         $this->withHeaders(['X-Locale' => 'yo'])
             ->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
+                'identifier' => $user->email,
                 'password' => 'Password1',
             ])
             ->assertOk()
@@ -91,12 +97,12 @@ class AuthApiTest extends TestCase
 
         $this->withHeaders(['X-Locale' => 'ha'])
             ->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
+                'identifier' => $user->email,
                 'password' => 'WrongPassword1',
             ])
             ->assertUnprocessable()
             ->assertJsonPath('message', trans('messages.auth.invalid_credentials', [], 'ha'))
-            ->assertJsonPath('errors.email.0', trans('messages.auth.invalid_credentials_detail', [], 'ha'));
+            ->assertJsonPath('errors.identifier.0', trans('messages.auth.invalid_credentials_detail', [], 'ha'));
 
         $forgotPassword = $this->withHeaders(['X-Locale' => 'ig'])
             ->postJson('/api/v1/auth/forgot-password', [

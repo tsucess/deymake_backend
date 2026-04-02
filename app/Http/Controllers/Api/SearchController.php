@@ -163,11 +163,17 @@ class SearchController extends Controller
 
     private function usersQuery(string $query, ?User $viewer = null)
     {
+        $usernameQuery = ltrim($query, '@#');
+        $usernameQuery = $usernameQuery === '' ? $query : $usernameQuery;
+
         return User::query()
             ->withProfileAggregates($viewer)
-            ->when($query !== '', function ($builder) use ($query): void {
-                $builder->where('name', 'like', '%'.$query.'%')
-                    ->orWhere('email', 'like', '%'.$query.'%');
+            ->when($query !== '', function ($builder) use ($query, $usernameQuery): void {
+                $builder->where(function ($nested) use ($query, $usernameQuery): void {
+                    $nested->where('name', 'like', '%'.$query.'%')
+                        ->orWhere('email', 'like', '%'.$query.'%')
+                        ->orWhere('username', 'like', '%'.$usernameQuery.'%');
+                });
             })
             ->orderBy('name');
     }

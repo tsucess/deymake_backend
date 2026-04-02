@@ -9,6 +9,7 @@ use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\PaginatedJson;
+use App\Support\Username;
 use App\Support\UserNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -104,16 +105,20 @@ class VideoController extends Controller
             $this->ensureUploadReadyForLive($upload);
         }
 
+        $caption = $validated['caption'] ?? null;
+        $description = $validated['description'] ?? ($caption ?: null);
+        $taggedUsers = $this->resolveTaggedUserIds($caption, $description, $validated['taggedUsers'] ?? []);
+
         $video = Video::create([
             'user_id' => $request->user()->id,
             'category_id' => $validated['categoryId'] ?? null,
             'upload_id' => $upload?->id,
             'type' => $validated['type'],
             'title' => $validated['title'] ?? null,
-            'caption' => $validated['caption'] ?? null,
-            'description' => $validated['description'] ?? ($validated['caption'] ?? null),
+            'caption' => $caption,
+            'description' => $description,
             'location' => $validated['location'] ?? null,
-            'tagged_users' => $validated['taggedUsers'] ?? [],
+            'tagged_users' => $taggedUsers,
             'media_url' => $validated['mediaUrl'] ?? $upload?->url,
             'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
             'is_live' => $isLiveRequested,
@@ -247,15 +252,19 @@ class VideoController extends Controller
             $this->ensureUploadReadyForLive($upload);
         }
 
+        $caption = array_key_exists('caption', $validated) ? $validated['caption'] : $video->caption;
+        $description = array_key_exists('description', $validated) ? $validated['description'] : $video->description;
+        $taggedUsers = $this->resolveTaggedUserIds($caption, $description, $validated['taggedUsers'] ?? []);
+
         $video->fill([
             'type' => $validated['type'] ?? $video->type,
             'category_id' => $validated['categoryId'] ?? $video->category_id,
             'upload_id' => $upload?->id,
             'title' => $validated['title'] ?? $video->title,
-            'caption' => array_key_exists('caption', $validated) ? $validated['caption'] : $video->caption,
-            'description' => array_key_exists('description', $validated) ? $validated['description'] : $video->description,
+            'caption' => $caption,
+            'description' => $description,
             'location' => array_key_exists('location', $validated) ? $validated['location'] : $video->location,
-            'tagged_users' => $validated['taggedUsers'] ?? $video->tagged_users,
+            'tagged_users' => $taggedUsers,
             'media_url' => $validated['mediaUrl'] ?? $upload?->url ?? $video->media_url,
             'thumbnail_url' => array_key_exists('thumbnailUrl', $validated) ? $validated['thumbnailUrl'] : $video->thumbnail_url,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
@@ -528,6 +537,27 @@ class VideoController extends Controller
                 ['creatorId' => $video->user_id, 'videoId' => $video->id],
             );
         }
+    }
+
+    private function resolveTaggedUserIds(?string $caption, ?string $description, array $taggedUsers = []): array
+    {
+        $mentionedHandles = Username::extractMentionedHandles($caption, $description);
+        $mentionedUserIds = $mentionedHandles === []
+            ? []
+            : User::query()
+                ->whereIn('username', $mentionedHandles)
+                ->pluck('id')
+                ->map(static fn ($id) => (int) $id)
+                ->all();
+
+        $resolvedUserIds = array_values(array_unique(array_map('intval', array_filter([
+            ...$taggedUsers,
+            ...$mentionedUserIds,
+        ], static fn ($value) => $value !== null && $value !== 0))));
+
+        sort($resolvedUserIds);
+
+        return $resolvedUserIds;
     }
 
     private function shouldRecordEngagement(Request $request, Video $video, string $metric, int $ttlMinutes): bool

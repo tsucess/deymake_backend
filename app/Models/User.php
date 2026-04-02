@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Username;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -24,6 +26,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'email_verified_at',
         'password',
@@ -58,6 +61,22 @@ class User extends Authenticatable
             'preferences' => 'array',
             'is_online' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $user): void {
+            $fallback = Str::before((string) $user->email, '@');
+            $seed = (string) ($user->username ?: $user->name ?: $fallback ?: 'user');
+
+            $user->username = Username::unique(
+                $seed,
+                static fn (string $candidate): bool => self::query()
+                    ->where('username', $candidate)
+                    ->exists(),
+                $fallback !== '' ? $fallback : 'user',
+            );
+        });
     }
 
     public function videos(): HasMany

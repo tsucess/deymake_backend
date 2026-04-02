@@ -43,15 +43,20 @@ class UserController extends Controller
     public function search(Request $request): JsonResponse
     {
         $query = $this->normalizedQuery($request);
+        $usernameQuery = ltrim($query, '@#');
+        $usernameQuery = $usernameQuery === '' ? $query : $usernameQuery;
         $viewer = auth('sanctum')->user() ?? $request->user();
 
         $users = $query === ''
             ? PaginatedJson::empty($request, 10, 25)
             : PaginatedJson::paginate(User::query()
                 ->withProfileAggregates($viewer)
-                ->when($query !== '', function ($builder) use ($query): void {
-                    $builder->where('name', 'like', '%'.$query.'%')
-                        ->orWhere('email', 'like', '%'.$query.'%');
+                ->when($query !== '', function ($builder) use ($query, $usernameQuery): void {
+                    $builder->where(function ($nested) use ($query, $usernameQuery): void {
+                        $nested->where('name', 'like', '%'.$query.'%')
+                            ->orWhere('email', 'like', '%'.$query.'%')
+                            ->orWhere('username', 'like', '%'.$usernameQuery.'%');
+                    });
                 })
                 ->orderBy('name'), $request, 10, 25);
 
