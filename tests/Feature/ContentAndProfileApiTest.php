@@ -783,6 +783,45 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertSame(0, LiveSignal::query()->count());
     }
 
+    public function test_live_session_returns_agora_credentials_for_creator_and_viewer_roles(): void
+    {
+        config()->set('services.agora.app_id', 'test-agora-app');
+        config()->set('services.agora.app_certificate', 'test-agora-certificate');
+        config()->set('services.agora.token_ttl', 900);
+
+        $category = Category::create(['name' => 'Live', 'slug' => 'live']);
+        $creator = User::factory()->create(['name' => 'Live Creator', 'email' => 'agora-owner@example.com']);
+        $viewer = User::factory()->create(['name' => 'Live Viewer', 'email' => 'agora-viewer@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Agora Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=audience')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_session_retrieved'))
+            ->assertJsonPath('data.session.appId', 'test-agora-app')
+            ->assertJsonPath('data.session.channelName', 'live-video-'.$video->id)
+            ->assertJsonPath('data.session.uid', 'user-'.$viewer->id)
+            ->assertJsonPath('data.session.role', 'audience');
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertOk()
+            ->assertJsonPath('data.session.uid', 'user-'.$creator->id)
+            ->assertJsonPath('data.session.role', 'host')
+            ->assertJsonPath('data.session.token', fn (string $token) => $token !== '');
+    }
+
     public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void
     {
         $user = User::factory()->create([

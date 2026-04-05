@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use TaylanUnutmaz\AgoraTokenBuilder\RtcTokenBuilder;
 
 class VideoController extends Controller
 {
@@ -336,6 +337,50 @@ class VideoController extends Controller
         ]);
     }
 
+    public function liveSession(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
+        $viewer = $request->user();
+        $isCreator = $viewer->id === $video->user_id;
+        $requestedRole = strtolower((string) $request->query('role', 'audience'));
+        $agoraRole = $requestedRole === 'host' ? 'host' : 'audience';
+
+        abort_if(! $video->is_live && ! $isCreator, 409, __('messages.videos.live_not_active'));
+
+        $appId = (string) config('services.agora.app_id');
+        $appCertificate = (string) config('services.agora.app_certificate');
+        $ttlSeconds = max((int) config('services.agora.token_ttl', 3600), 60);
+
+        abort_if($appId === '' || $appCertificate === '', 503, 'Agora live streaming is not configured.');
+
+        $channelName = $this->buildLiveChannelName($video);
+        $userAccount = sprintf('user-%s', $viewer->id);
+        $expiresAt = now()->addSeconds($ttlSeconds);
+        $token = RtcTokenBuilder::buildTokenWithUserAccount(
+            $appId,
+            $appCertificate,
+            $channelName,
+            $userAccount,
+            $agoraRole === 'host' ? RtcTokenBuilder::RolePublisher : RtcTokenBuilder::RoleSubscriber,
+            $expiresAt->timestamp,
+        );
+
+        return response()->json([
+            'message' => __('messages.videos.live_session_retrieved'),
+            'data' => [
+                'session' => [
+                    'appId' => $appId,
+                    'channelName' => $channelName,
+                    'token' => $token,
+                    'uid' => $userAccount,
+                    'role' => $agoraRole,
+                    'expiresAt' => $expiresAt->toISOString(),
+                ],
+            ],
+        ]);
+    }
+
     public function sendSignal(Request $request, Video $video): JsonResponse
     {
         $viewer = $request->user();
@@ -504,6 +549,11 @@ class VideoController extends Controller
     private function ensureVideoIsLive(Video $video): void
     {
         abort_if(! $video->is_live, 409, __('messages.videos.live_not_active'));
+    }
+
+    private function buildLiveChannelName(Video $video): string
+    {
+        return sprintf('live-video-%s', $video->id);
     }
 
     private function formatLiveSignal(LiveSignal $signal): array

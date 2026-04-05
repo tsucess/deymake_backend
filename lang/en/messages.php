@@ -148,6 +148,7 @@ return [
         'published' => 'Video published successfully.',
         'live_started' => 'Livestream started successfully.',
         'live_stopped' => 'Livestream stopped successfully.',
+        'live_session_retrieved' => 'Live session retrieved successfully.',
         'live_not_active' => 'This livestream is no longer active.',
         'live_signal_sent' => 'Live signal sent successfully.',
         'live_signals_retrieved' => 'Live signals retrieved successfully.',

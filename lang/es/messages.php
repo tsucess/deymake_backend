@@ -24,6 +24,7 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
     'videos' => [
         'live_started' => 'La transmisión en vivo se inició correctamente.',
         'live_stopped' => 'La transmisión en vivo se detuvo correctamente.',
+        'live_session_retrieved' => 'La sesión en vivo se obtuvo correctamente.',
         'live_not_active' => 'Esta transmisión en vivo ya no está activa.',
         'live_signal_sent' => 'La señal en vivo se envió correctamente.',
         'live_signals_retrieved' => 'Las señales en vivo se obtuvieron correctamente.',

@@ -65,6 +65,7 @@ return array_replace_recursive(require __DIR__.'/../en/messages.php', [
     'videos' => [
         'live_started' => 'Le direct a démarré avec succès.',
         'live_stopped' => 'Le direct a été arrêté avec succès.',
+        'live_session_retrieved' => 'La session du direct a été récupérée avec succès.',
         'live_not_active' => 'Ce direct n’est plus actif.',
         'live_signal_sent' => 'Le signal du direct a été envoyé avec succès.',
         'live_signals_retrieved' => 'Les signaux du direct ont été récupérés avec succès.',

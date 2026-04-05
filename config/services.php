@@ -33,6 +33,12 @@ return [
         'folder' => env('CLOUDINARY_UPLOAD_FOLDER', 'deymake/uploads'),
     ],
 
+    'agora' => [
+        'app_id' => env('AGORA_APP_ID'),
+        'app_certificate' => env('AGORA_APP_CERTIFICATE'),
+        'token_ttl' => (int) env('AGORA_TOKEN_TTL_SECONDS', 3600),
+    ],
+
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
