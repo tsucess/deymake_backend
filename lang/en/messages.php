@@ -55,6 +55,7 @@ return [
     'profile' => [
         'retrieved' => 'Profile retrieved successfully.',
         'updated' => 'Profile updated successfully.',
+        'subscribers_retrieved' => 'Subscribers retrieved successfully.',
     ],
     'feeds' => [
         'posts_retrieved' => 'Posts retrieved successfully.',

@@ -110,6 +110,7 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('me')->group(function (): void {
             Route::get('/profile', [ProfileController::class, 'show']);
             Route::patch('/profile', [ProfileController::class, 'update']);
+            Route::get('/subscribers', [ProfileController::class, 'subscribers']);
             Route::get('/posts', [ProfileController::class, 'posts']);
             Route::get('/liked', [ProfileController::class, 'liked']);
             Route::get('/saved', [ProfileController::class, 'saved']);

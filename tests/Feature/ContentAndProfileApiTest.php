@@ -187,6 +187,25 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.currentUserRank.user.username', 'viewer.rank');
     }
 
+    public function test_authenticated_user_can_fetch_their_subscribers(): void
+    {
+        $creator = User::factory()->create(['name' => 'Creator Prime', 'username' => 'creator.prime']);
+        $firstSubscriber = User::factory()->create(['name' => 'Grace Hopper', 'username' => 'grace.hopper']);
+        $secondSubscriber = User::factory()->create(['name' => 'Katherine Johnson', 'username' => 'katherine.j']);
+
+        $creator->subscribers()->attach($firstSubscriber->id, ['created_at' => now()->subMinute(), 'updated_at' => now()->subMinute()]);
+        $creator->subscribers()->attach($secondSubscriber->id, ['created_at' => now(), 'updated_at' => now()]);
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/me/subscribers')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.profile.subscribers_retrieved'))
+            ->assertJsonPath('meta.subscribers.total', 2)
+            ->assertJsonPath('data.subscribers.0.fullName', 'Katherine Johnson')
+            ->assertJsonPath('data.subscribers.1.fullName', 'Grace Hopper');
+    }
+
     public function test_authenticated_user_can_manage_uploads_videos_engagement_profile_and_notifications(): void
     {
         config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);

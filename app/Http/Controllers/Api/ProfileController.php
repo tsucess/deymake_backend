@@ -117,6 +117,22 @@ class ProfileController extends Controller
             ->latest(), $request));
     }
 
+    public function subscribers(Request $request): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        return $this->userResponse(
+            $request,
+            __('messages.profile.subscribers_retrieved'),
+            PaginatedJson::paginate(
+                $request->user()->subscribers()
+                    ->withProfileAggregates($request->user())
+                    ->orderByPivot('created_at', 'desc'),
+                $request
+            )
+        );
+    }
+
     public function preferences(Request $request): JsonResponse
     {
         SupportedLocales::apply($request);
@@ -167,6 +183,19 @@ class ProfileController extends Controller
             ],
             'meta' => [
                 'videos' => PaginatedJson::meta($videos),
+            ],
+        ]);
+    }
+
+    private function userResponse(Request $request, string $message, LengthAwarePaginator $users): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'data' => [
+                'subscribers' => PaginatedJson::items($request, $users, ProfileResource::class),
+            ],
+            'meta' => [
+                'subscribers' => PaginatedJson::meta($users),
             ],
         ]);
     }
