@@ -530,6 +530,89 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertDatabaseMissing('comments', ['id' => $commentId]);
     }
 
+    public function test_reply_notifications_are_sent_to_all_prior_thread_participants(): void
+    {
+        $category = Category::create(['name' => 'Reply Threads', 'slug' => 'reply-threads']);
+        $creator = User::factory()->create(['name' => 'Creator Responder', 'username' => 'creator.responder']);
+        $originalCommenter = User::factory()->create([
+            'name' => 'Audience One',
+            'username' => 'audience.one',
+            'preferences' => ['language' => 'fr'],
+        ]);
+        $replyAuthor = User::factory()->create([
+            'name' => 'Audience Two',
+            'username' => 'audience.two',
+            'preferences' => ['language' => 'en'],
+        ]);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Threaded Replies',
+            'is_draft' => false,
+        ]);
+
+        $comment = Comment::create([
+            'video_id' => $video->id,
+            'user_id' => $originalCommenter->id,
+            'body' => 'First comment',
+        ]);
+
+        $reply = Comment::create([
+            'video_id' => $video->id,
+            'user_id' => $replyAuthor->id,
+            'parent_id' => $comment->id,
+            'body' => 'Follow-up reply',
+        ]);
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/comments/'.$reply->id.'/replies', ['body' => 'Creator response'])
+            ->assertCreated()
+            ->assertJsonPath('data.reply.parentId', $reply->id);
+
+        $this->assertDatabaseCount('user_notifications', 2);
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $replyAuthor->id,
+            'type' => 'reply',
+            'title' => trans('messages.notifications.reply_title', [], 'en'),
+            'body' => trans('messages.notifications.reply_body', ['name' => 'Creator Responder'], 'en'),
+        ]);
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $originalCommenter->id,
+            'type' => 'reply',
+            'title' => trans('messages.notifications.reply_title', [], 'fr'),
+            'body' => trans('messages.notifications.reply_body', ['name' => 'Creator Responder'], 'fr'),
+        ]);
+    }
+
+    public function test_users_receive_subscription_notifications_when_another_creator_subscribes_to_them(): void
+    {
+        $subscriber = User::factory()->create([
+            'name' => 'Creator Subscriber',
+            'username' => 'creator.subscriber',
+        ]);
+        $recipient = User::factory()->create([
+            'name' => 'Audience Recipient',
+            'username' => 'audience.recipient',
+            'preferences' => ['language' => 'fr'],
+        ]);
+
+        Sanctum::actingAs($subscriber);
+
+        $this->postJson('/api/v1/creators/'.$recipient->id.'/subscribe')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.subscriptions.created'));
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $recipient->id,
+            'type' => 'subscription',
+            'title' => trans('messages.notifications.subscription_title', [], 'fr'),
+            'body' => trans('messages.notifications.subscription_body', ['name' => 'Creator Subscriber'], 'fr'),
+        ]);
+    }
+
     public function test_authenticated_user_can_finalize_a_direct_cloudinary_upload_without_streaming_the_file_through_the_api(): void
     {
         $creator = User::factory()->create(['name' => 'Direct Upload Creator', 'email' => 'direct-upload@example.com']);

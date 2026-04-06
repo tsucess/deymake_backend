@@ -108,15 +108,7 @@ class CommentController extends Controller
             $comment->video->increment('live_comments_count');
         }
 
-        UserNotifier::sendTranslated(
-            $comment->user_id,
-            $request->user()->id,
-            'reply',
-            'messages.notifications.reply_title',
-            'messages.notifications.reply_body',
-            ['name' => $request->user()->name],
-            ['videoId' => $comment->video_id, 'commentId' => $comment->id, 'replyId' => $reply->id]
-        );
+        $this->sendReplyNotifications($comment, $request->user(), $reply);
 
         $reply = $this->loadCommentForResource($reply->id, $request->user());
 
@@ -248,6 +240,35 @@ class CommentController extends Controller
         return Comment::query()
             ->withApiResourceData($viewer)
             ->findOrFail($commentId);
+    }
+
+    private function sendReplyNotifications(Comment $comment, User $actor, Comment $reply): void
+    {
+        foreach ($this->replyNotificationRecipients($comment) as $recipientId) {
+            UserNotifier::sendTranslated(
+                $recipientId,
+                $actor->id,
+                'reply',
+                'messages.notifications.reply_title',
+                'messages.notifications.reply_body',
+                ['name' => $actor->name],
+                ['videoId' => $comment->video_id, 'commentId' => $comment->id, 'replyId' => $reply->id]
+            );
+        }
+    }
+
+    private function replyNotificationRecipients(Comment $comment): array
+    {
+        $recipientIds = [];
+        $current = $comment;
+
+        while ($current) {
+            $recipientIds[] = (int) $current->user_id;
+            $current->loadMissing('parent');
+            $current = $current->parent;
+        }
+
+        return array_values(array_unique(array_filter($recipientIds)));
     }
 
     private function interactionMessageKey(string $type, bool $active): string
