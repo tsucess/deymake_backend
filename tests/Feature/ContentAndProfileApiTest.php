@@ -841,6 +841,175 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.session.token', fn (string $token) => $token !== '');
     }
 
+    public function test_live_likes_can_be_sent_multiple_times_by_host_and_audience_and_remain_visible_in_profile_feeds(): void
+    {
+        $category = Category::create(['name' => 'Live', 'slug' => 'live-likes']);
+        $creator = User::factory()->create(['name' => 'Live Creator', 'username' => 'live.creator', 'email' => 'live-creator-likes@example.com']);
+        $viewer = User::factory()->create(['name' => 'Live Viewer', 'username' => 'live.viewer', 'email' => 'live-viewer-likes@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Crowded Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+            'views_count' => 12,
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.liked'))
+            ->assertJsonPath('data.video.likes', 1)
+            ->assertJsonPath('data.video.liveLikes', 1)
+            ->assertJsonPath('data.engagement.type', 'like')
+            ->assertJsonPath('data.video.currentUserState.liked', false);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+            ->assertOk()
+            ->assertJsonPath('data.video.likes', 2)
+            ->assertJsonPath('data.video.liveLikes', 2);
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+            ->assertOk()
+            ->assertJsonPath('data.video.likes', 3)
+            ->assertJsonPath('data.video.liveLikes', 3);
+
+        $this->assertDatabaseCount('live_like_events', 3);
+
+        $this->getJson('/api/v1/videos/'.$video->id)
+            ->assertOk()
+            ->assertJsonPath('data.video.likes', 3)
+            ->assertJsonPath('data.video.liveLikes', 3);
+
+        $this->getJson('/api/v1/me/posts')
+            ->assertOk()
+            ->assertJsonPath('data.videos.0.id', $video->id)
+            ->assertJsonPath('data.videos.0.likes', 3)
+            ->assertJsonPath('data.videos.0.liveLikes', 3)
+            ->assertJsonPath('data.videos.0.views', 12);
+    }
+
+    public function test_live_presence_and_engagements_track_peak_viewers_and_live_comments(): void
+    {
+        $category = Category::create(['name' => 'Live Presence', 'slug' => 'live-presence']);
+        $creator = User::factory()->create(['name' => 'Presence Host', 'username' => 'presence.host', 'email' => 'presence-host@example.com']);
+        $viewer = User::factory()->create(['name' => 'Presence Viewer', 'username' => 'presence.viewer', 'email' => 'presence-viewer@example.com']);
+        $viewerTwo = User::factory()->create(['name' => 'Presence Fan', 'username' => 'presence.fan', 'email' => 'presence-fan@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Tracked Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'viewer-one',
+            'role' => 'audience',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 1)
+            ->assertJsonPath('data.analytics.peakViewers', 1);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'This stream is amazing',
+        ])
+            ->assertCreated();
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'Need an encore',
+        ])
+            ->assertCreated();
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'host-one',
+            'role' => 'host',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 2)
+            ->assertJsonPath('data.analytics.peakViewers', 2);
+
+        Sanctum::actingAs($viewerTwo);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'viewer-two',
+            'role' => 'audience',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 3)
+            ->assertJsonPath('data.analytics.peakViewers', 3);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'Best live today',
+        ])
+            ->assertCreated();
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence/leave', [
+            'sessionKey' => 'viewer-two',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 2)
+            ->assertJsonPath('data.analytics.peakViewers', 3);
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/engagements?includeSummary=1')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'comment', 'body' => 'This stream is amazing'])
+            ->assertJsonFragment(['type' => 'like'])
+            ->assertJsonPath('data.summary.topCommenters.0.actor.fullName', 'Presence Viewer')
+            ->assertJsonPath('data.summary.topCommenters.0.commentsCount', 2)
+            ->assertJsonPath('data.summary.topFans.0.actor.fullName', 'Presence Fan')
+            ->assertJsonPath('data.summary.topFans.0.engagementCount', 4)
+            ->assertJsonPath('data.summary.topLikers.0.actor.fullName', 'Presence Fan')
+            ->assertJsonPath('data.summary.topLikers.0.likesCount', 3)
+            ->assertJsonPath('data.summary.totals.likes', 4)
+            ->assertJsonPath('data.summary.totals.comments', 3)
+            ->assertJsonPath('data.summary.totals.uniqueFans', 2)
+            ->assertJsonPath('data.summary.retention.peakViewers', 3)
+            ->assertJsonStructure([
+                'data' => [
+                    'summary' => [
+                        'timeline' => [['label', 'likesCount', 'commentsCount', 'engagementCount', 'viewersCount']],
+                        'viewerTrend' => [['label', 'viewersCount']],
+                        'peakMoments' => [['label', 'engagementCount', 'viewersCount']],
+                        'retention' => ['startViewers', 'endViewers', 'averageViewers', 'peakViewers', 'retentionRate'],
+                    ],
+                ],
+            ]);
+
+        $this->getJson('/api/v1/videos/'.$video->id)
+            ->assertOk()
+            ->assertJsonPath('data.video.currentViewers', 2)
+            ->assertJsonPath('data.video.liveAnalytics.peakViewers', 3)
+            ->assertJsonPath('data.video.liveComments', 3)
+            ->assertJsonPath('data.video.liveAnalytics.liveComments', 3);
+
+        $this->getJson('/api/v1/me/posts')
+            ->assertOk()
+            ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 3)
+            ->assertJsonPath('data.videos.0.liveComments', 3);
+    }
+
     public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void
     {
         $user = User::factory()->create([

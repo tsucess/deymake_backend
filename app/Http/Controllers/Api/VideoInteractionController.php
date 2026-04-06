@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
+use App\Models\LiveLikeEvent;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\UserNotifier;
@@ -16,6 +17,42 @@ class VideoInteractionController extends Controller
     public function like(Request $request, Video $video): JsonResponse
     {
         return $this->toggleVideoInteraction($request, $video, 'like', true);
+    }
+
+    public function liveLike(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+        abort_if(! $video->is_live, 409, __('messages.videos.live_not_active'));
+
+        $event = LiveLikeEvent::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $request->user()->id,
+        ]);
+
+        $event->load('user');
+
+        $video = Video::query()
+            ->withApiResourceData($request->user())
+            ->findOrFail($video->id);
+
+        return response()->json([
+            'message' => __('messages.videos.liked'),
+            'data' => [
+                'video' => new VideoResource($video),
+                'engagement' => [
+                    'id' => 'like-'.$event->id,
+                    'type' => 'like',
+                    'body' => null,
+                    'createdAt' => $event->created_at?->toISOString(),
+                    'actor' => [
+                        'id' => $event->user?->id,
+                        'fullName' => $event->user?->name,
+                        'username' => $event->user?->username,
+                        'avatarUrl' => $event->user?->avatar_url,
+                    ],
+                ],
+            ],
+        ]);
     }
 
     public function unlike(Request $request, Video $video): JsonResponse

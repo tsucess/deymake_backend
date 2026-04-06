@@ -48,6 +48,10 @@ class CommentController extends Controller
             'body' => $validated['body'],
         ]);
 
+        if ($video->is_live) {
+            $video->increment('live_comments_count');
+        }
+
         UserNotifier::sendTranslated(
             $video->user_id,
             $request->user()->id,
@@ -99,6 +103,10 @@ class CommentController extends Controller
             'parent_id' => $comment->id,
             'body' => $validated['body'],
         ]);
+
+        if ($comment->video?->is_live) {
+            $comment->video->increment('live_comments_count');
+        }
 
         UserNotifier::sendTranslated(
             $comment->user_id,

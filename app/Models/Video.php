@@ -32,6 +32,8 @@ class Video extends Model
         'live_notified_at',
         'views_count',
         'shares_count',
+        'live_comments_count',
+        'live_peak_viewers_count',
     ];
 
     protected function casts(): array
@@ -71,6 +73,16 @@ class Video extends Model
         return $this->hasMany(LiveSignal::class);
     }
 
+    public function liveLikeEvents(): HasMany
+    {
+        return $this->hasMany(LiveLikeEvent::class);
+    }
+
+    public function livePresenceSessions(): HasMany
+    {
+        return $this->hasMany(LivePresenceSession::class);
+    }
+
     public function likes(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'video_interactions')
@@ -102,7 +114,16 @@ class Video extends Model
                 'category',
                 'upload',
             ])
-            ->withCount(['likes', 'dislikes', 'saves', 'comments'])
+            ->withCount([
+                'likes',
+                'dislikes',
+                'saves',
+                'comments',
+                'liveLikeEvents',
+                'livePresenceSessions as current_viewers_count' => fn (Builder $presenceQuery) => $presenceQuery
+                    ->whereNull('left_at')
+                    ->where('last_seen_at', '>=', now()->subSeconds(30)),
+            ])
             ->when($viewer, function (Builder $videoQuery) use ($viewer): void {
                 $videoQuery->withExists([
                     'likes as liked_by_current_user' => fn (Builder $likesQuery) => $likesQuery->whereKey($viewer->id),

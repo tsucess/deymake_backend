@@ -84,6 +84,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/videos/{video}/live/session', [VideoController::class, 'liveSession']);
         Route::post('/videos/{video}/live/start', [VideoController::class, 'startLive']);
         Route::post('/videos/{video}/live/stop', [VideoController::class, 'stopLive']);
+        Route::post('/videos/{video}/live/like', [VideoInteractionController::class, 'liveLike']);
+        Route::get('/videos/{video}/live/engagements', [VideoController::class, 'liveEngagements']);
+        Route::post('/videos/{video}/live/presence', [VideoController::class, 'recordPresence']);
+        Route::post('/videos/{video}/live/presence/leave', [VideoController::class, 'leavePresence']);
         Route::post('/videos/{video}/live/signals', [VideoController::class, 'sendSignal']);
         Route::get('/videos/{video}/live/signals', [VideoController::class, 'getSignals']);
         Route::post('/videos/{video}/report', [VideoController::class, 'report']);

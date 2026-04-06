@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
+use App\Models\Comment;
+use App\Models\LiveLikeEvent;
+use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
@@ -14,6 +17,7 @@ use App\Support\UserNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use TaylanUnutmaz\AgoraTokenBuilder\RtcTokenBuilder;
@@ -23,6 +27,16 @@ class VideoController extends Controller
     private const VIEW_DEDUP_MINUTES = 1440;
 
     private const SHARE_DEDUP_MINUTES = 60;
+
+    private const LIVE_PRESENCE_TTL_SECONDS = 30;
+
+    private const LIVE_ANALYTICS_LEADERBOARD_LIMIT = 5;
+
+    private const LIVE_ANALYTICS_PEAK_MOMENTS_LIMIT = 3;
+
+    private const LIVE_ANALYTICS_MIN_BUCKETS = 4;
+
+    private const LIVE_ANALYTICS_MAX_BUCKETS = 8;
 
     public function index(Request $request): JsonResponse
     {
@@ -381,6 +395,132 @@ class VideoController extends Controller
         ]);
     }
 
+    public function liveEngagements(Request $request, Video $video): JsonResponse
+    {
+        $viewer = $request->user();
+        $isCreator = $viewer->id === $video->user_id;
+
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+        abort_if(! $video->is_live && ! $isCreator, 409, __('messages.videos.live_not_active'));
+
+        $limit = min(max((int) $request->query('limit', 12), 1), 25);
+
+        $likeEvents = $this->liveLikeEventsQuery($video)
+            ->with('user')
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(fn (LiveLikeEvent $event): array => [
+                'id' => 'like-'.$event->id,
+                'type' => 'like',
+                'body' => null,
+                'createdAt' => $event->created_at?->toISOString(),
+                'actor' => $this->formatLiveEngagementActor($event->user),
+            ]);
+
+        $commentEvents = $this->liveCommentsQuery($video)
+            ->with('user')
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(fn (Comment $comment): array => [
+                'id' => 'comment-'.$comment->id,
+                'type' => 'comment',
+                'body' => $comment->body,
+                'createdAt' => $comment->created_at?->toISOString(),
+                'actor' => $this->formatLiveEngagementActor($comment->user),
+            ]);
+
+        $engagements = $likeEvents
+            ->concat($commentEvents)
+            ->sortByDesc('createdAt')
+            ->take($limit)
+            ->values();
+
+        $data = [
+            'engagements' => $engagements,
+        ];
+
+        if ($isCreator && $request->boolean('includeSummary')) {
+            $data['summary'] = $this->buildLiveEngagementSummary($video);
+        }
+
+        return response()->json([
+            'message' => __('messages.videos.retrieved'),
+            'data' => $data,
+        ]);
+    }
+
+    public function recordPresence(Request $request, Video $video): JsonResponse
+    {
+        $validated = $request->validate([
+            'sessionKey' => ['required', 'string', 'max:120'],
+            'role' => ['nullable', 'in:host,audience'],
+        ]);
+
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+        $this->ensureVideoIsLive($video);
+
+        $presence = LivePresenceSession::query()->firstOrNew([
+            'video_id' => $video->id,
+            'session_key' => $validated['sessionKey'],
+        ]);
+
+        if (! $presence->exists) {
+            $presence->joined_at = now();
+        }
+
+        $presence->user_id = $request->user()->id;
+        $presence->role = $validated['role'] ?? 'audience';
+        $presence->last_seen_at = now();
+        $presence->left_at = null;
+        $presence->save();
+
+        $currentViewers = $this->activePresenceCount($video);
+
+        if ($currentViewers > (int) $video->live_peak_viewers_count) {
+            $video->forceFill(['live_peak_viewers_count' => $currentViewers])->save();
+        }
+
+        return response()->json([
+            'message' => __('messages.videos.updated'),
+            'data' => [
+                'analytics' => [
+                    'currentViewers' => $currentViewers,
+                    'peakViewers' => max($currentViewers, (int) $video->fresh()->live_peak_viewers_count),
+                ],
+            ],
+        ]);
+    }
+
+    public function leavePresence(Request $request, Video $video): JsonResponse
+    {
+        $validated = $request->validate([
+            'sessionKey' => ['required', 'string', 'max:120'],
+        ]);
+
+        abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
+
+        LivePresenceSession::query()
+            ->where('video_id', $video->id)
+            ->where('session_key', $validated['sessionKey'])
+            ->where('user_id', $request->user()->id)
+            ->update([
+                'left_at' => now(),
+                'last_seen_at' => now(),
+            ]);
+
+        return response()->json([
+            'message' => __('messages.videos.updated'),
+            'data' => [
+                'analytics' => [
+                    'currentViewers' => $this->activePresenceCount($video),
+                    'peakViewers' => (int) $video->live_peak_viewers_count,
+                ],
+            ],
+        ]);
+    }
+
     public function sendSignal(Request $request, Video $video): JsonResponse
     {
         $viewer = $request->user();
@@ -503,6 +643,10 @@ class VideoController extends Controller
             $video->liveSignals()->delete();
         }
 
+        $video->livePresenceSessions()->update([
+            'left_at' => now(),
+        ]);
+
         $video->forceFill([
             'is_live' => true,
             'is_draft' => false,
@@ -537,6 +681,9 @@ class VideoController extends Controller
     private function stopLiveSession(Video $video): void
     {
         $video->liveSignals()->delete();
+        $video->livePresenceSessions()->update([
+            'left_at' => now(),
+        ]);
 
         $video->forceFill([
             'is_live' => false,
@@ -554,6 +701,335 @@ class VideoController extends Controller
     private function buildLiveChannelName(Video $video): string
     {
         return sprintf('live-video-%s', $video->id);
+    }
+
+    private function activePresenceCount(Video $video): int
+    {
+        return LivePresenceSession::query()
+            ->where('video_id', $video->id)
+            ->whereNull('left_at')
+            ->where('last_seen_at', '>=', now()->subSeconds(self::LIVE_PRESENCE_TTL_SECONDS))
+            ->count();
+    }
+
+    private function liveLikeEventsQuery(Video $video)
+    {
+        return LiveLikeEvent::query()
+            ->where('video_id', $video->id)
+            ->when($video->live_started_at, fn ($query) => $query->where('created_at', '>=', $video->live_started_at))
+            ->when($video->live_ended_at, fn ($query) => $query->where('created_at', '<=', $video->live_ended_at));
+    }
+
+    private function liveCommentsQuery(Video $video)
+    {
+        return Comment::query()
+            ->where('video_id', $video->id)
+            ->when($video->live_started_at, fn ($query) => $query->where('created_at', '>=', $video->live_started_at))
+            ->when($video->live_ended_at, fn ($query) => $query->where('created_at', '<=', $video->live_ended_at));
+    }
+
+    private function buildLiveEngagementSummary(Video $video): array
+    {
+        [$startedAt, $endedAt] = $this->resolveLiveAnalyticsWindow($video);
+
+        $likeCounts = $this->liveLikeEventsQuery($video)
+            ->select('user_id', DB::raw('COUNT(*) as likes_count'), DB::raw('MAX(created_at) as last_liked_at'))
+            ->whereNotNull('user_id')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $commentCounts = $this->liveCommentsQuery($video)
+            ->select('user_id', DB::raw('COUNT(*) as comments_count'), DB::raw('MAX(created_at) as last_commented_at'))
+            ->whereNotNull('user_id')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
+        $userIds = $likeCounts->keys()
+            ->merge($commentCounts->keys())
+            ->filter()
+            ->unique()
+            ->values();
+
+        $users = User::query()
+            ->whereIn('id', $userIds)
+            ->get()
+            ->keyBy('id');
+
+        $topFans = $userIds
+            ->map(function ($userId) use ($users, $likeCounts, $commentCounts): ?array {
+                $user = $users->get($userId);
+
+                if (! $user) {
+                    return null;
+                }
+
+                $likesCount = (int) ($likeCounts->get($userId)?->likes_count ?? 0);
+                $commentsCount = (int) ($commentCounts->get($userId)?->comments_count ?? 0);
+                $lastEngagedAt = max(
+                    (string) ($likeCounts->get($userId)?->last_liked_at ?? ''),
+                    (string) ($commentCounts->get($userId)?->last_commented_at ?? '')
+                );
+
+                return [
+                    'actor' => $this->formatLiveEngagementActor($user),
+                    'likesCount' => $likesCount,
+                    'commentsCount' => $commentsCount,
+                    'engagementCount' => $likesCount + $commentsCount,
+                    'lastEngagedAt' => $lastEngagedAt !== '' ? Carbon::parse($lastEngagedAt)->toISOString() : null,
+                ];
+            })
+            ->filter()
+            ->sort(function (array $left, array $right): int {
+                return [
+                    $right['engagementCount'],
+                    $right['likesCount'],
+                    $right['commentsCount'],
+                    $right['lastEngagedAt'] ?? '',
+                ] <=> [
+                    $left['engagementCount'],
+                    $left['likesCount'],
+                    $left['commentsCount'],
+                    $left['lastEngagedAt'] ?? '',
+                ];
+            })
+            ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
+            ->values();
+
+        $topCommenters = $commentCounts
+            ->map(function ($row, $userId) use ($users): ?array {
+                $user = $users->get($userId);
+
+                if (! $user) {
+                    return null;
+                }
+
+                return [
+                    'actor' => $this->formatLiveEngagementActor($user),
+                    'commentsCount' => (int) ($row->comments_count ?? 0),
+                    'lastCommentedAt' => $row->last_commented_at ? Carbon::parse((string) $row->last_commented_at)->toISOString() : null,
+                ];
+            })
+            ->filter()
+            ->sort(function (array $left, array $right): int {
+                return [
+                    $right['commentsCount'],
+                    $right['lastCommentedAt'] ?? '',
+                ] <=> [
+                    $left['commentsCount'],
+                    $left['lastCommentedAt'] ?? '',
+                ];
+            })
+            ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
+            ->values();
+
+        $topLikers = $likeCounts
+            ->map(function ($row, $userId) use ($users): ?array {
+                $user = $users->get($userId);
+
+                if (! $user) {
+                    return null;
+                }
+
+                return [
+                    'actor' => $this->formatLiveEngagementActor($user),
+                    'likesCount' => (int) ($row->likes_count ?? 0),
+                    'lastLikedAt' => $row->last_liked_at ? Carbon::parse((string) $row->last_liked_at)->toISOString() : null,
+                ];
+            })
+            ->filter()
+            ->sort(function (array $left, array $right): int {
+                return [
+                    $right['likesCount'],
+                    $right['lastLikedAt'] ?? '',
+                ] <=> [
+                    $left['likesCount'],
+                    $left['lastLikedAt'] ?? '',
+                ];
+            })
+            ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
+            ->values();
+
+        [$timeline, $viewerTrend, $peakMoments, $retention] = $this->buildLiveAnalyticsTimeline($video, $startedAt, $endedAt);
+
+        $totalLikes = (int) $likeCounts->sum('likes_count');
+        $totalComments = (int) $commentCounts->sum('comments_count');
+
+        return [
+            'topFans' => $topFans,
+            'topCommenters' => $topCommenters,
+            'topLikers' => $topLikers,
+            'timeline' => $timeline,
+            'viewerTrend' => $viewerTrend,
+            'peakMoments' => $peakMoments,
+            'retention' => $retention,
+            'totals' => [
+                'likes' => $totalLikes,
+                'comments' => $totalComments,
+                'engagements' => $totalLikes + $totalComments,
+                'uniqueFans' => $users->count(),
+            ],
+        ];
+    }
+
+    private function buildLiveAnalyticsTimeline(Video $video, Carbon $startedAt, Carbon $endedAt): array
+    {
+        $durationSeconds = max(1, $startedAt->diffInSeconds($endedAt));
+        $bucketCount = max(
+            self::LIVE_ANALYTICS_MIN_BUCKETS,
+            min(self::LIVE_ANALYTICS_MAX_BUCKETS, (int) ceil($durationSeconds / 90))
+        );
+        $bucketSizeSeconds = max(1, (int) ceil($durationSeconds / $bucketCount));
+
+        $likeEvents = $this->liveLikeEventsQuery($video)
+            ->get(['created_at']);
+
+        $commentEvents = $this->liveCommentsQuery($video)
+            ->get(['created_at']);
+
+        $presenceSessions = LivePresenceSession::query()
+            ->where('video_id', $video->id)
+            ->get(['joined_at', 'last_seen_at', 'left_at', 'created_at']);
+
+        $timeline = collect(range(0, $bucketCount - 1))
+            ->map(function (int $index) use ($startedAt, $endedAt, $bucketCount, $bucketSizeSeconds, $likeEvents, $commentEvents, $presenceSessions): array {
+                $bucketStart = $startedAt->copy()->addSeconds($index * $bucketSizeSeconds);
+                $bucketEnd = $index === $bucketCount - 1
+                    ? $endedAt->copy()
+                    : $startedAt->copy()->addSeconds(($index + 1) * $bucketSizeSeconds);
+
+                if ($bucketEnd->greaterThan($endedAt)) {
+                    $bucketEnd = $endedAt->copy();
+                }
+
+                if ($bucketEnd->lessThan($bucketStart)) {
+                    $bucketEnd = $bucketStart->copy();
+                }
+
+                $midpoint = $bucketStart->copy()->addSeconds((int) floor($bucketStart->diffInSeconds($bucketEnd) / 2));
+                $inclusiveEnd = $index === $bucketCount - 1;
+
+                $likesCount = $likeEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
+                $commentsCount = $commentEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
+                $viewersCount = $presenceSessions->filter(fn (LivePresenceSession $session) => $this->presenceSessionIsActiveAt($session, $midpoint, $endedAt))->count();
+
+                return [
+                    'label' => $this->formatLiveAnalyticsOffsetLabel($startedAt->diffInSeconds($bucketStart)),
+                    'startedAt' => $bucketStart->toISOString(),
+                    'endedAt' => $bucketEnd->toISOString(),
+                    'midpointAt' => $midpoint->toISOString(),
+                    'likesCount' => $likesCount,
+                    'commentsCount' => $commentsCount,
+                    'engagementCount' => $likesCount + $commentsCount,
+                    'viewersCount' => $viewersCount,
+                ];
+            })
+            ->values();
+
+        $viewerTrend = $timeline
+            ->map(fn (array $bucket): array => [
+                'label' => $bucket['label'],
+                'timestamp' => $bucket['midpointAt'],
+                'viewersCount' => $bucket['viewersCount'],
+            ])
+            ->values();
+
+        $peakMoments = $timeline
+            ->filter(fn (array $bucket): bool => $bucket['engagementCount'] > 0 || $bucket['viewersCount'] > 0)
+            ->sort(function (array $left, array $right): int {
+                return [
+                    $right['engagementCount'],
+                    $right['viewersCount'],
+                    $right['startedAt'],
+                ] <=> [
+                    $left['engagementCount'],
+                    $left['viewersCount'],
+                    $left['startedAt'],
+                ];
+            })
+            ->take(self::LIVE_ANALYTICS_PEAK_MOMENTS_LIMIT)
+            ->values();
+
+        $viewerCounts = $viewerTrend->pluck('viewersCount');
+        $startViewers = (int) ($viewerCounts->first() ?? 0);
+        $endViewers = (int) ($viewerCounts->last() ?? 0);
+        $peakViewers = (int) ($viewerCounts->max() ?? 0);
+
+        $retention = [
+            'startViewers' => $startViewers,
+            'endViewers' => $endViewers,
+            'averageViewers' => (int) round((float) ($viewerCounts->avg() ?? 0)),
+            'peakViewers' => $peakViewers,
+            'retentionRate' => $peakViewers > 0 ? (int) round(($endViewers / $peakViewers) * 100) : 0,
+        ];
+
+        return [$timeline, $viewerTrend, $peakMoments, $retention];
+    }
+
+    private function resolveLiveAnalyticsWindow(Video $video): array
+    {
+        $startedAt = $video->live_started_at?->copy() ?? $video->created_at?->copy() ?? now();
+        $endedAt = $video->live_ended_at?->copy() ?? now();
+
+        if ($endedAt->lessThan($startedAt)) {
+            $endedAt = $startedAt->copy();
+        }
+
+        return [$startedAt, $endedAt];
+    }
+
+    private function eventFallsWithinBucket($timestamp, Carbon $bucketStart, Carbon $bucketEnd, bool $inclusiveEnd = false): bool
+    {
+        if (! $timestamp instanceof Carbon) {
+            return false;
+        }
+
+        if ($timestamp->lessThan($bucketStart)) {
+            return false;
+        }
+
+        return $inclusiveEnd
+            ? $timestamp->lessThanOrEqualTo($bucketEnd)
+            : $timestamp->lessThan($bucketEnd);
+    }
+
+    private function presenceSessionIsActiveAt(LivePresenceSession $session, Carbon $point, Carbon $streamEndedAt): bool
+    {
+        $joinedAt = $session->joined_at?->copy() ?? $session->created_at?->copy();
+
+        if (! $joinedAt || $joinedAt->greaterThan($point)) {
+            return false;
+        }
+
+        $leftAt = $session->left_at?->copy()
+            ?? $session->last_seen_at?->copy()?->addSeconds(self::LIVE_PRESENCE_TTL_SECONDS)
+            ?? $streamEndedAt->copy();
+
+        return $leftAt->greaterThanOrEqualTo($point);
+    }
+
+    private function formatLiveAnalyticsOffsetLabel(int $offsetSeconds): string
+    {
+        if ($offsetSeconds >= 3600) {
+            return sprintf('%dh', (int) floor($offsetSeconds / 3600));
+        }
+
+        if ($offsetSeconds >= 60) {
+            return sprintf('%dm', (int) floor($offsetSeconds / 60));
+        }
+
+        return sprintf('%ds', $offsetSeconds);
+    }
+
+    private function formatLiveEngagementActor(?User $user): array
+    {
+        return [
+            'id' => $user?->id,
+            'fullName' => $user?->name,
+            'username' => $user?->username,
+            'avatarUrl' => $user?->avatar_url,
+        ];
     }
 
     private function formatLiveSignal(LiveSignal $signal): array
