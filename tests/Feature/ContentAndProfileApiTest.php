@@ -708,6 +708,80 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.users.perPage', 3);
     }
 
+    public function test_backend_derives_video_thumbnails_when_missing_on_create_and_update(): void
+    {
+        config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);
+
+        $creator = User::factory()->create([
+            'name' => 'Thumbnail Creator',
+            'username' => 'thumbnail.creator',
+            'email' => 'thumbnail-creator@example.com',
+        ]);
+        $category = Category::create(['name' => 'Music', 'slug' => 'music']);
+
+        $originalUpload = Upload::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/original.mp4',
+            'original_name' => 'original.mp4',
+            'mime_type' => 'video/mp4',
+            'size' => 1024,
+            'processing_status' => 'completed',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/original.mp4',
+        ]);
+
+        $replacementUpload = Upload::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'disk' => 'cloudinary',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/replacement.mp4',
+            'original_name' => 'replacement.mp4',
+            'mime_type' => 'video/mp4',
+            'size' => 2048,
+            'processing_status' => 'completed',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/replacement.mp4',
+        ]);
+
+        Sanctum::actingAs($creator);
+
+        $expectedOriginalThumbnail = app(CloudinaryUploadService::class)->thumbnailUrlFor($originalUpload->path);
+
+        $createResponse = $this->postJson('/api/v1/videos', [
+            'uploadId' => $originalUpload->id,
+            'categoryId' => $category->id,
+            'type' => 'video',
+            'title' => 'Original Performance',
+            'isDraft' => false,
+        ]);
+
+        $createResponse
+            ->assertCreated()
+            ->assertJsonPath('data.video.thumbnailUrl', $expectedOriginalThumbnail);
+
+        $videoId = $createResponse->json('data.video.id');
+
+        $this->assertDatabaseHas('videos', [
+            'id' => $videoId,
+            'upload_id' => $originalUpload->id,
+            'thumbnail_url' => $expectedOriginalThumbnail,
+        ]);
+
+        $expectedReplacementThumbnail = app(CloudinaryUploadService::class)->thumbnailUrlFor($replacementUpload->path);
+
+        $this->patchJson('/api/v1/videos/'.$videoId, [
+            'uploadId' => $replacementUpload->id,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.video.thumbnailUrl', $expectedReplacementThumbnail);
+
+        $this->assertDatabaseHas('videos', [
+            'id' => $videoId,
+            'upload_id' => $replacementUpload->id,
+            'thumbnail_url' => $expectedReplacementThumbnail,
+        ]);
+    }
+
     public function test_video_uploads_must_finish_processing_before_they_can_go_live(): void
     {
         config(['services.cloudinary.url' => 'cloudinary://test-key:test-secret@demo']);

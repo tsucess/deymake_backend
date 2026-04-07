@@ -11,6 +11,7 @@ use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
+use App\Services\CloudinaryUploadService;
 use App\Support\PaginatedJson;
 use App\Support\Username;
 use App\Support\UserNotifier;
@@ -123,6 +124,13 @@ class VideoController extends Controller
         $caption = $validated['caption'] ?? null;
         $description = $validated['description'] ?? ($caption ?: null);
         $taggedUsers = $this->resolveTaggedUserIds($caption, $description, $validated['taggedUsers'] ?? []);
+        $mediaUrl = $validated['mediaUrl'] ?? $upload?->url;
+        $thumbnailUrl = $this->resolveThumbnailUrl(
+            $validated['type'],
+            $validated,
+            $upload,
+            $mediaUrl,
+        );
 
         $video = Video::create([
             'user_id' => $request->user()->id,
@@ -134,8 +142,8 @@ class VideoController extends Controller
             'description' => $description,
             'location' => $validated['location'] ?? null,
             'tagged_users' => $taggedUsers,
-            'media_url' => $validated['mediaUrl'] ?? $upload?->url,
-            'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
+            'media_url' => $mediaUrl,
+            'thumbnail_url' => $thumbnailUrl,
             'is_live' => $isLiveRequested,
             'is_draft' => $validated['isDraft'] ?? ! $isLiveRequested,
         ]);
@@ -270,6 +278,18 @@ class VideoController extends Controller
         $caption = array_key_exists('caption', $validated) ? $validated['caption'] : $video->caption;
         $description = array_key_exists('description', $validated) ? $validated['description'] : $video->description;
         $taggedUsers = $this->resolveTaggedUserIds($caption, $description, $validated['taggedUsers'] ?? []);
+        $mediaUrl = $validated['mediaUrl'] ?? $upload?->url ?? $video->media_url;
+        $thumbnailShouldRefreshFromVideo = array_key_exists('uploadId', $validated)
+            || array_key_exists('mediaUrl', $validated)
+            || array_key_exists('type', $validated);
+        $thumbnailUrl = $this->resolveThumbnailUrl(
+            $nextType,
+            $validated,
+            $upload,
+            $mediaUrl,
+            $video->thumbnail_url,
+            $thumbnailShouldRefreshFromVideo,
+        );
 
         $video->fill([
             'type' => $validated['type'] ?? $video->type,
@@ -280,8 +300,8 @@ class VideoController extends Controller
             'description' => $description,
             'location' => array_key_exists('location', $validated) ? $validated['location'] : $video->location,
             'tagged_users' => $taggedUsers,
-            'media_url' => $validated['mediaUrl'] ?? $upload?->url ?? $video->media_url,
-            'thumbnail_url' => array_key_exists('thumbnailUrl', $validated) ? $validated['thumbnailUrl'] : $video->thumbnail_url,
+            'media_url' => $mediaUrl,
+            'thumbnail_url' => $thumbnailUrl,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
         ])->save();
 
@@ -632,6 +652,52 @@ class VideoController extends Controller
         return Video::query()
             ->withApiResourceData($viewer)
             ->findOrFail($videoId);
+    }
+
+    private function resolveThumbnailUrl(
+        string $type,
+        array $validated,
+        ?Upload $upload,
+        ?string $mediaUrl,
+        ?string $existingThumbnailUrl = null,
+        bool $refreshFallback = false,
+    ): ?string {
+        if (array_key_exists('thumbnailUrl', $validated)) {
+            return $validated['thumbnailUrl'];
+        }
+
+        if ($type !== 'video') {
+            return $existingThumbnailUrl;
+        }
+
+        if (! $refreshFallback && $existingThumbnailUrl) {
+            return $existingThumbnailUrl;
+        }
+
+        return $this->deriveThumbnailUrlFromVideo($upload?->path ?? $mediaUrl) ?? $existingThumbnailUrl;
+    }
+
+    private function deriveThumbnailUrlFromVideo(?string $sourceUrl): ?string
+    {
+        if (! is_string($sourceUrl) || $sourceUrl === '') {
+            return null;
+        }
+
+        if (strtolower((string) parse_url($sourceUrl, PHP_URL_HOST)) !== 'res.cloudinary.com') {
+            return null;
+        }
+
+        try {
+            $cloudinary = app(CloudinaryUploadService::class);
+
+            if (! $cloudinary->isManagedUrl($sourceUrl)) {
+                return null;
+            }
+
+            return $cloudinary->thumbnailUrlFor($sourceUrl);
+        } catch (\RuntimeException) {
+            return null;
+        }
     }
 
     private function startLiveSession(Video $video): void

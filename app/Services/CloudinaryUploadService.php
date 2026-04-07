@@ -105,6 +105,11 @@ class CloudinaryUploadService
         return $this->transformedUrlFor($secureUrl, 'sp_auto', '.m3u8');
     }
 
+    public function thumbnailUrlFor(string $secureUrl): string
+    {
+        return $this->transformedUrlFor($secureUrl, 'so_0,f_jpg,q_auto', '.jpg');
+    }
+
     protected function resourceTypeFor(string $type): string
     {
         return $type === 'video' ? 'video' : 'image';
