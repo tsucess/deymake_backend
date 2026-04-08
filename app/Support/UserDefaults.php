@@ -12,6 +12,8 @@ class UserDefaults
                 'comments' => true,
                 'likes' => true,
                 'subscriptions' => true,
+                'inAppRealtime' => true,
+                'browserRealtime' => true,
             ],
             'language' => 'en',
             'displayPreferences' => [

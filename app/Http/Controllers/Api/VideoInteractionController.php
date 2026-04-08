@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\LiveEngagementCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\LiveLikeEvent;
@@ -35,22 +36,29 @@ class VideoInteractionController extends Controller
             ->withApiResourceData($request->user())
             ->findOrFail($video->id);
 
+        $engagement = [
+            'id' => 'like-'.$event->id,
+            'type' => 'like',
+            'body' => null,
+            'createdAt' => $event->created_at?->toISOString(),
+            'actor' => [
+                'id' => $event->user?->id,
+                'fullName' => $event->user?->name,
+                'username' => $event->user?->username,
+                'avatarUrl' => $event->user?->avatar_url,
+            ],
+        ];
+
+        LiveEngagementCreated::dispatch($video->id, $engagement, null, [
+            'liveLikes' => (int) ($video->live_like_events_count ?? 0),
+            'liveComments' => (int) ($video->live_comments_count ?? 0),
+        ]);
+
         return response()->json([
             'message' => __('messages.videos.liked'),
             'data' => [
                 'video' => new VideoResource($video),
-                'engagement' => [
-                    'id' => 'like-'.$event->id,
-                    'type' => 'like',
-                    'body' => null,
-                    'createdAt' => $event->created_at?->toISOString(),
-                    'actor' => [
-                        'id' => $event->user?->id,
-                        'fullName' => $event->user?->name,
-                        'username' => $event->user?->username,
-                        'avatarUrl' => $event->user?->avatar_url,
-                    ],
-                ],
+                'engagement' => $engagement,
             ],
         ]);
     }

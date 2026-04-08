@@ -102,4 +102,35 @@ This backend handles Google and Facebook OAuth for the React frontend.
 - Run `php artisan migrate`
 - Run `php artisan config:clear`
 
+## Realtime setup (Laravel Reverb)
+
+This API now supports realtime broadcasting for:
+
+- conversation messages
+- conversation presence and typing channel auth
+- live-room stage signals
+- live-room engagements
+- live-room audience and presence updates
+
+### Required backend env values
+
+- `BROADCAST_CONNECTION=reverb`
+- `REVERB_APP_ID=...`
+- `REVERB_APP_KEY=...`
+- `REVERB_APP_SECRET=...`
+- `REVERB_HOST=127.0.0.1`
+- `REVERB_PORT=8080`
+- `REVERB_SCHEME=http`
+
+### Local startup
+
+Run these in separate terminals:
+
+- `php artisan serve`
+- `php artisan reverb:start`
+
+After changing broadcasting or Reverb env values, also run:
+
+- `php artisan optimize:clear`
+
 "# deymake_backend" 

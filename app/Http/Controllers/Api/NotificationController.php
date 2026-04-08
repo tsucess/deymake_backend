@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\UserNotificationChanged;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserNotificationResource;
 use App\Models\UserNotification;
@@ -30,6 +31,7 @@ class NotificationController extends Controller
         $this->ensureOwner($request, $notification);
 
         $notification->forceFill(['read_at' => now()])->save();
+        event(new UserNotificationChanged($notification->user_id, 'updated', $notification->fresh()));
 
         return response()->json([
             'message' => __('messages.notifications.marked_read'),
@@ -41,10 +43,17 @@ class NotificationController extends Controller
 
     public function readAll(Request $request): JsonResponse
     {
-        UserNotification::query()
+        $notifications = UserNotification::query()
             ->where('user_id', $request->user()->id)
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->get();
+
+        $readAt = now();
+
+        $notifications->each(function (UserNotification $notification) use ($readAt): void {
+            $notification->forceFill(['read_at' => $readAt])->save();
+            event(new UserNotificationChanged($notification->user_id, 'updated', $notification->fresh()));
+        });
 
         return response()->json([
             'message' => __('messages.notifications.all_marked_read'),
@@ -55,6 +64,7 @@ class NotificationController extends Controller
     {
         $this->ensureOwner($request, $notification);
 
+        event(new UserNotificationChanged($notification->user_id, 'deleted', notificationId: $notification->id));
         $notification->delete();
 
         return response()->json([

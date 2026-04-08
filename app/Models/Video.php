@@ -120,7 +120,12 @@ class Video extends Model
                 'saves',
                 'comments',
                 'liveLikeEvents',
-                'livePresenceSessions as current_viewers_count' => fn (Builder $presenceQuery) => $presenceQuery
+            ])
+            ->addSelect([
+                'current_viewers_count' => LivePresenceSession::query()
+                    ->selectRaw('COUNT(DISTINCT user_id)')
+                    ->whereColumn('video_id', 'videos.id')
+                    ->where('role', 'audience')
                     ->whereNull('left_at')
                     ->where('last_seen_at', '>=', now()->subSeconds(30)),
             ])

@@ -2,16 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Events\LiveAudienceUpdated;
+use App\Events\LiveEngagementCreated;
+use App\Events\LivePresenceUpdated;
+use App\Events\LiveSignalCreated;
+use App\Events\UserNotificationChanged;
 use App\Models\Category;
 use App\Models\Comment;
 use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
+use App\Models\UserNotification;
 use App\Models\Video;
 use App\Services\CloudinaryUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -533,6 +540,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_reply_notifications_are_sent_to_all_prior_thread_participants(): void
     {
+        Event::fake([UserNotificationChanged::class]);
+
         $category = Category::create(['name' => 'Reply Threads', 'slug' => 'reply-threads']);
         $creator = User::factory()->create(['name' => 'Creator Responder', 'username' => 'creator.responder']);
         $originalCommenter = User::factory()->create([
@@ -586,6 +595,65 @@ class ContentAndProfileApiTest extends TestCase
             'title' => trans('messages.notifications.reply_title', [], 'fr'),
             'body' => trans('messages.notifications.reply_body', ['name' => 'Creator Responder'], 'fr'),
         ]);
+
+        Event::assertDispatched(UserNotificationChanged::class, 2);
+    }
+
+    public function test_notification_updates_and_deletes_dispatch_realtime_events(): void
+    {
+        $user = User::factory()->create();
+        $first = UserNotification::create([
+            'user_id' => $user->id,
+            'type' => 'comment',
+            'title' => 'First notification',
+            'body' => 'Unread one',
+        ]);
+        $second = UserNotification::create([
+            'user_id' => $user->id,
+            'type' => 'message',
+            'title' => 'Second notification',
+            'body' => 'Unread two',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        Event::fake([UserNotificationChanged::class]);
+
+        $this->postJson('/api/v1/notifications/'.$first->id.'/read')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.marked_read'));
+
+        Event::assertDispatched(UserNotificationChanged::class, function (UserNotificationChanged $event) use ($user, $first): bool {
+            return $event->userId === $user->id
+                && $event->action === 'updated'
+                && $event->notification?->id === $first->id
+                && $event->notification?->read_at !== null;
+        });
+
+        Event::fake([UserNotificationChanged::class]);
+
+        $this->postJson('/api/v1/notifications/read-all')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.all_marked_read'));
+
+        Event::assertDispatched(UserNotificationChanged::class, function (UserNotificationChanged $event) use ($user, $second): bool {
+            return $event->userId === $user->id
+                && $event->action === 'updated'
+                && $event->notification?->id === $second->id
+                && $event->notification?->read_at !== null;
+        });
+
+        Event::fake([UserNotificationChanged::class]);
+
+        $this->deleteJson('/api/v1/notifications/'.$second->id)
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.notifications.deleted'));
+
+        Event::assertDispatched(UserNotificationChanged::class, function (UserNotificationChanged $event) use ($user, $second): bool {
+            return $event->userId === $user->id
+                && $event->action === 'deleted'
+                && $event->notificationId === $second->id;
+        });
     }
 
     public function test_users_receive_subscription_notifications_when_another_creator_subscribes_to_them(): void
@@ -860,6 +928,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_live_signals_can_be_exchanged_between_viewer_and_creator_and_are_cleared_when_live_stops(): void
     {
+        Event::fake([LiveSignalCreated::class]);
+
         $category = Category::create(['name' => 'Live', 'slug' => 'live']);
         $creator = User::factory()->create(['name' => 'Live Creator', 'email' => 'live-owner@example.com']);
         $viewer = User::factory()->create(['name' => 'Live Viewer', 'email' => 'live-viewer@example.com']);
@@ -888,6 +958,12 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.signal.senderId', $viewer->id)
             ->assertJsonPath('data.signal.recipientId', $creator->id)
             ->assertJsonPath('data.signal.payload.sdp', 'viewer-offer-sdp');
+
+        Event::assertDispatched(LiveSignalCreated::class, function (LiveSignalCreated $event) use ($creator, $video): bool {
+            return $event->videoId === $video->id
+                && $event->recipientId === $creator->id
+                && ($event->signal['type'] ?? null) === 'offer';
+        });
 
         Sanctum::actingAs($creator);
 
@@ -1060,7 +1136,7 @@ class ContentAndProfileApiTest extends TestCase
             'role' => 'host',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.currentViewers', 1);
+            ->assertJsonPath('data.analytics.currentViewers', 0);
 
         $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
             'type' => 'cohost_left',
@@ -1093,6 +1169,22 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.session.role', 'host');
 
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'cohost_left',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'cohost_left')
+            ->assertJsonPath('data.signal.recipientId', $viewer->id);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
+
         $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
             'type' => 'join_request_accepted',
         ])
@@ -1102,6 +1194,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_live_likes_can_be_sent_multiple_times_by_host_and_audience_and_remain_visible_in_profile_feeds(): void
     {
+        Event::fake([LiveEngagementCreated::class]);
+
         $category = Category::create(['name' => 'Live', 'slug' => 'live-likes']);
         $creator = User::factory()->create(['name' => 'Live Creator', 'username' => 'live.creator', 'email' => 'live-creator-likes@example.com']);
         $viewer = User::factory()->create(['name' => 'Live Viewer', 'username' => 'live.viewer', 'email' => 'live-viewer-likes@example.com']);
@@ -1126,6 +1220,12 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.video.liveLikes', 1)
             ->assertJsonPath('data.engagement.type', 'like')
             ->assertJsonPath('data.video.currentUserState.liked', false);
+
+        Event::assertDispatched(LiveEngagementCreated::class, function (LiveEngagementCreated $event) use ($video): bool {
+            return $event->videoId === $video->id
+                && ($event->engagement['type'] ?? null) === 'like'
+                && ($event->analytics['liveLikes'] ?? null) === 1;
+        });
 
         $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
             ->assertOk()
@@ -1156,6 +1256,8 @@ class ContentAndProfileApiTest extends TestCase
 
     public function test_live_presence_and_engagements_track_peak_viewers_and_live_comments(): void
     {
+        Event::fake([LiveAudienceUpdated::class, LiveEngagementCreated::class, LivePresenceUpdated::class]);
+
         $category = Category::create(['name' => 'Live Presence', 'slug' => 'live-presence']);
         $creator = User::factory()->create(['name' => 'Presence Host', 'username' => 'presence.host', 'email' => 'presence-host@example.com']);
         $viewer = User::factory()->create(['name' => 'Presence Viewer', 'username' => 'presence.viewer', 'email' => 'presence-viewer@example.com']);
@@ -1181,12 +1283,27 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.analytics.currentViewers', 1)
             ->assertJsonPath('data.analytics.peakViewers', 1);
 
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'viewer-one-reload',
+            'role' => 'audience',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 1)
+            ->assertJsonPath('data.analytics.peakViewers', 1);
+
         $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
 
         $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
             'body' => 'This stream is amazing',
         ])
             ->assertCreated();
+
+        Event::assertDispatched(LiveEngagementCreated::class, function (LiveEngagementCreated $event) use ($video): bool {
+            return $event->videoId === $video->id
+                && ($event->engagement['type'] ?? null) === 'comment'
+                && ($event->analytics['liveComments'] ?? null) === 1
+                && ($event->comment['body'] ?? null) === 'This stream is amazing';
+        });
 
         $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
             'body' => 'Need an encore',
@@ -1200,8 +1317,8 @@ class ContentAndProfileApiTest extends TestCase
             'role' => 'host',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.currentViewers', 2)
-            ->assertJsonPath('data.analytics.peakViewers', 2);
+            ->assertJsonPath('data.analytics.currentViewers', 1)
+            ->assertJsonPath('data.analytics.peakViewers', 1);
 
         Sanctum::actingAs($viewerTwo);
 
@@ -1210,8 +1327,8 @@ class ContentAndProfileApiTest extends TestCase
             'role' => 'audience',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.currentViewers', 3)
-            ->assertJsonPath('data.analytics.peakViewers', 3);
+            ->assertJsonPath('data.analytics.currentViewers', 2)
+            ->assertJsonPath('data.analytics.peakViewers', 2);
 
         $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
         $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
@@ -1226,8 +1343,18 @@ class ContentAndProfileApiTest extends TestCase
             'sessionKey' => 'viewer-two',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.currentViewers', 2)
-            ->assertJsonPath('data.analytics.peakViewers', 3);
+            ->assertJsonPath('data.analytics.currentViewers', 1)
+            ->assertJsonPath('data.analytics.peakViewers', 2);
+
+        Event::assertDispatched(LivePresenceUpdated::class, function (LivePresenceUpdated $event) use ($video): bool {
+            return $event->videoId === $video->id
+                && ($event->analytics['peakViewers'] ?? null) === 2;
+        });
+
+        Event::assertDispatched(LiveAudienceUpdated::class, function (LiveAudienceUpdated $event) use ($video): bool {
+            return $event->videoId === $video->id
+                && count($event->audience) >= 1;
+        });
 
         Sanctum::actingAs($creator);
 
@@ -1244,7 +1371,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.summary.totals.likes', 4)
             ->assertJsonPath('data.summary.totals.comments', 3)
             ->assertJsonPath('data.summary.totals.uniqueFans', 2)
-            ->assertJsonPath('data.summary.retention.peakViewers', 3)
+            ->assertJsonPath('data.summary.retention.peakViewers', 2)
             ->assertJsonStructure([
                 'data' => [
                     'summary' => [
@@ -1258,14 +1385,14 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/videos/'.$video->id)
             ->assertOk()
-            ->assertJsonPath('data.video.currentViewers', 2)
-            ->assertJsonPath('data.video.liveAnalytics.peakViewers', 3)
+            ->assertJsonPath('data.video.currentViewers', 1)
+            ->assertJsonPath('data.video.liveAnalytics.peakViewers', 2)
             ->assertJsonPath('data.video.liveComments', 3)
             ->assertJsonPath('data.video.liveAnalytics.liveComments', 3);
 
         $this->getJson('/api/v1/me/posts')
             ->assertOk()
-            ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 3)
+            ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 2)
             ->assertJsonPath('data.videos.0.liveComments', 3);
     }
 

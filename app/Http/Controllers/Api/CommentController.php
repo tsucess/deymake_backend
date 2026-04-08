@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\LiveEngagementCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CommentResource;
 use App\Models\Comment;
@@ -63,11 +64,30 @@ class CommentController extends Controller
         );
 
         $comment = $this->loadCommentForResource($comment->id, $request->user());
+        $commentResource = (new CommentResource($comment))->resolve();
+
+        if ($video->is_live) {
+            LiveEngagementCreated::dispatch(
+                $video->id,
+                [
+                    'id' => 'comment-'.$comment->id,
+                    'type' => 'comment',
+                    'body' => $comment->body,
+                    'createdAt' => $comment->created_at?->toISOString(),
+                    'actor' => $commentResource['user'] ?? null,
+                ],
+                $commentResource,
+                [
+                    'liveLikes' => (int) $video->liveLikeEvents()->count(),
+                    'liveComments' => (int) ($video->fresh()->live_comments_count ?? 0),
+                ],
+            );
+        }
 
         return response()->json([
             'message' => __('messages.comments.created'),
             'data' => [
-                'comment' => new CommentResource($comment),
+                'comment' => $commentResource,
             ],
         ], 201);
     }

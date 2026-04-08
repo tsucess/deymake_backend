@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Events\UserNotificationChanged;
 use App\Models\User;
 use App\Models\UserNotification;
 
@@ -13,13 +14,13 @@ class UserNotifier
             return;
         }
 
-        UserNotification::create([
-            'user_id' => $recipientId,
-            'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-        ]);
+        $context = self::recipientContext($recipientId);
+
+        if (! self::notificationTypeEnabled($type, $context['preferences'])) {
+            return;
+        }
+
+        self::deliver($recipientId, $type, $title, $body, $data);
     }
 
     public static function sendTranslated(
@@ -31,39 +32,93 @@ class UserNotifier
         array $replace = [],
         array $data = [],
     ): void {
-        $locale = self::recipientLocale($recipientId);
+        if ($recipientId === $actorId) {
+            return;
+        }
 
-        self::send(
+        $context = self::recipientContext($recipientId);
+
+        if (! self::notificationTypeEnabled($type, $context['preferences'])) {
+            return;
+        }
+
+        self::deliver(
             $recipientId,
-            $actorId,
             $type,
-            trans($titleKey, $replace, $locale),
-            trans($bodyKey, $replace, $locale),
+            trans($titleKey, $replace, $context['locale']),
+            trans($bodyKey, $replace, $context['locale']),
             $data,
         );
     }
 
     public static function sendMessage(int $recipientId, int $actorId, int $conversationId, string $body): void
     {
-        $locale = self::recipientLocale($recipientId);
+        if ($recipientId === $actorId) {
+            return;
+        }
 
-        self::send(
+        $context = self::recipientContext($recipientId);
+
+        if (! self::notificationTypeEnabled('message', $context['preferences'])) {
+            return;
+        }
+
+        self::deliver(
             $recipientId,
-            $actorId,
             'message',
-            trans('messages.notifications.new_message_title', [], $locale),
+            trans('messages.notifications.new_message_title', [], $context['locale']),
             mb_strimwidth($body, 0, 120, '...'),
             ['conversationId' => $conversationId],
         );
     }
 
-    private static function recipientLocale(int $recipientId): string
+    private static function deliver(int $recipientId, string $type, string $title, string $body, array $data = []): void
+    {
+        $notification = UserNotification::create([
+            'user_id' => $recipientId,
+            'type' => $type,
+            'title' => $title,
+            'body' => $body,
+            'data' => $data,
+        ]);
+
+        event(new UserNotificationChanged($recipientId, 'created', $notification));
+    }
+
+    private static function recipientContext(int $recipientId): array
     {
         $recipient = User::query()
             ->select(['id', 'preferences'])
             ->find($recipientId);
 
-        return SupportedLocales::match(data_get($recipient?->preferences, 'language'))
-            ?? SupportedLocales::resolve(config('app.locale'));
+        $preferences = is_array($recipient?->preferences) ? $recipient->preferences : [];
+
+        return [
+            'preferences' => $preferences,
+            'locale' => SupportedLocales::match(data_get($preferences, 'language'))
+                ?? SupportedLocales::resolve(config('app.locale')),
+        ];
+    }
+
+    private static function notificationTypeEnabled(string $type, array $preferences): bool
+    {
+        $preferenceKey = self::notificationPreferenceKey($type);
+
+        if (! $preferenceKey) {
+            return true;
+        }
+
+        return data_get($preferences, "notificationSettings.{$preferenceKey}", true) !== false;
+    }
+
+    private static function notificationPreferenceKey(string $type): ?string
+    {
+        return match ($type) {
+            'message' => 'messages',
+            'comment', 'reply' => 'comments',
+            'video_like', 'video_dislike', 'comment_like', 'comment_dislike' => 'likes',
+            'subscription', 'live' => 'subscriptions',
+            default => null,
+        };
     }
 }

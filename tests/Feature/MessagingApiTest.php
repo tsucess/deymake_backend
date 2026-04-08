@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\ConversationMessageCreated;
+use App\Events\UserNotificationChanged;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -15,7 +16,7 @@ class MessagingApiTest extends TestCase
 
     public function test_authenticated_users_can_create_read_and_continue_conversations(): void
     {
-        Event::fake([ConversationMessageCreated::class]);
+        Event::fake([ConversationMessageCreated::class, UserNotificationChanged::class]);
 
         $sender = User::factory()->create(['name' => 'Sender']);
         $recipient = User::factory()->create([
@@ -112,6 +113,13 @@ class MessagingApiTest extends TestCase
             trans('messages.notifications.new_message_title', [], 'fr'),
             array_column($notifications->json('data.notifications'), 'title'),
         );
+
+        Event::assertDispatched(UserNotificationChanged::class, function (UserNotificationChanged $event) use ($recipient, $conversationId): bool {
+            return $event->userId === $recipient->id
+                && $event->action === 'created'
+                && $event->notification?->type === 'message'
+                && data_get($event->notification?->data, 'conversationId') === $conversationId;
+        });
 
         $this->getJson('/api/v1/conversations/suggested')
             ->assertOk()

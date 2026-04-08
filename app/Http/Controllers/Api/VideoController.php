@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\LiveAudienceUpdated;
+use App\Events\LivePresenceUpdated;
+use App\Events\LiveSignalCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\Comment;
@@ -514,13 +517,15 @@ class VideoController extends Controller
             $video->forceFill(['live_peak_viewers_count' => $currentViewers])->save();
         }
 
+        $analytics = $this->buildLivePresenceAnalytics($video, $currentViewers);
+
+        LivePresenceUpdated::dispatch($video->id, $analytics);
+        LiveAudienceUpdated::dispatch($video->id, $this->buildLiveAudiencePayload($video), $analytics);
+
         return response()->json([
             'message' => __('messages.videos.updated'),
             'data' => [
-                'analytics' => [
-                    'currentViewers' => $currentViewers,
-                    'peakViewers' => max($currentViewers, (int) $video->fresh()->live_peak_viewers_count),
-                ],
+                'analytics' => $analytics,
             ],
         ]);
     }
@@ -542,13 +547,15 @@ class VideoController extends Controller
                 'last_seen_at' => now(),
             ]);
 
+        $analytics = $this->buildLivePresenceAnalytics($video);
+
+        LivePresenceUpdated::dispatch($video->id, $analytics);
+        LiveAudienceUpdated::dispatch($video->id, $this->buildLiveAudiencePayload($video), $analytics);
+
         return response()->json([
             'message' => __('messages.videos.updated'),
             'data' => [
-                'analytics' => [
-                    'currentViewers' => $this->activePresenceCount($video),
-                    'peakViewers' => (int) $video->live_peak_viewers_count,
-                ],
+                'analytics' => $analytics,
             ],
         ]);
     }
@@ -568,7 +575,7 @@ class VideoController extends Controller
         $isCreator = $viewer->id === $video->user_id;
         $recipientId = $isCreator ? ($validated['recipientId'] ?? null) : $video->user_id;
         $type = $validated['type'];
-        $creatorAllowedTypes = ['answer', 'candidate', 'join_invite', 'join_request_accepted', 'join_request_rejected'];
+        $creatorAllowedTypes = ['answer', 'candidate', 'join_invite', 'join_request_accepted', 'join_request_rejected', 'cohost_left'];
         $viewerAllowedTypes = ['offer', 'candidate', 'join_request', 'join_invite_accepted', 'join_invite_rejected', 'cohost_left'];
 
         abort_if($isCreator && ! $recipientId, 422, __('messages.videos.live_signal_recipient_required'));
@@ -588,6 +595,8 @@ class VideoController extends Controller
                 'candidate' => $validated['candidate'] ?? null,
             ], static fn ($value) => $value !== null),
         ])->load(['sender', 'recipient']);
+
+        LiveSignalCreated::dispatch($video->id, (int) $recipientId, $this->formatLiveSignal($signal));
 
         return response()->json([
             'message' => __('messages.videos.live_signal_sent'),
@@ -864,14 +873,21 @@ class VideoController extends Controller
 
     private function activePresenceCount(Video $video): int
     {
-        return $this->activePresenceQuery($video)->count();
+        return (int) $this->activeAudiencePresenceQuery($video)
+            ->distinct()
+            ->count('user_id');
+    }
+
+    private function activeAudiencePresenceQuery(Video $video)
+    {
+        return $this->activePresenceQuery($video)
+            ->where('role', 'audience');
     }
 
     private function activeAudienceMembers(Video $video)
     {
-        return $this->activePresenceQuery($video)
+        return $this->activeAudiencePresenceQuery($video)
             ->with('user')
-            ->where('role', 'audience')
             ->orderByDesc('last_seen_at')
             ->orderByDesc('joined_at')
             ->get()
@@ -1058,7 +1074,8 @@ class VideoController extends Controller
 
         $presenceSessions = LivePresenceSession::query()
             ->where('video_id', $video->id)
-            ->get(['joined_at', 'last_seen_at', 'left_at', 'created_at']);
+            ->where('role', 'audience')
+            ->get(['user_id', 'joined_at', 'last_seen_at', 'left_at', 'created_at']);
 
         $timeline = collect(range(0, $bucketCount - 1))
             ->map(function (int $index) use ($startedAt, $endedAt, $bucketCount, $bucketSizeSeconds, $likeEvents, $commentEvents, $presenceSessions): array {
@@ -1080,7 +1097,12 @@ class VideoController extends Controller
 
                 $likesCount = $likeEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
                 $commentsCount = $commentEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
-                $viewersCount = $presenceSessions->filter(fn (LivePresenceSession $session) => $this->presenceSessionIsActiveAt($session, $midpoint, $endedAt))->count();
+                $viewersCount = $presenceSessions
+                    ->filter(fn (LivePresenceSession $session) => $this->presenceSessionIsActiveAt($session, $midpoint, $endedAt))
+                    ->pluck('user_id')
+                    ->filter()
+                    ->unique()
+                    ->count();
 
                 return [
                     'label' => $this->formatLiveAnalyticsOffsetLabel($startedAt->diffInSeconds($bucketStart)),
@@ -1208,6 +1230,24 @@ class VideoController extends Controller
             'actor' => $this->formatLiveEngagementActor($presence->user),
             'joinedAt' => $presence->joined_at?->toISOString(),
             'lastSeenAt' => $presence->last_seen_at?->toISOString(),
+        ];
+    }
+
+    private function buildLiveAudiencePayload(Video $video): array
+    {
+        return $this->activeAudienceMembers($video)
+            ->map(fn (LivePresenceSession $presence): array => $this->formatLiveAudienceMember($presence))
+            ->values()
+            ->all();
+    }
+
+    private function buildLivePresenceAnalytics(Video $video, ?int $currentViewers = null): array
+    {
+        $resolvedCurrentViewers = $currentViewers ?? $this->activePresenceCount($video);
+
+        return [
+            'currentViewers' => $resolvedCurrentViewers,
+            'peakViewers' => max($resolvedCurrentViewers, (int) $video->fresh()->live_peak_viewers_count),
         ];
     }
 
