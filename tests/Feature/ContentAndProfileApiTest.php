@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Comment;
+use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
@@ -989,6 +990,10 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.session.uid', 'user-'.$viewer->id)
             ->assertJsonPath('data.session.role', 'audience');
 
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
+
         Sanctum::actingAs($creator);
 
         $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
@@ -996,6 +1001,103 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.session.uid', 'user-'.$creator->id)
             ->assertJsonPath('data.session.role', 'host')
             ->assertJsonPath('data.session.token', fn (string $token) => $token !== '');
+    }
+
+    public function test_live_stage_requests_and_invites_can_grant_and_revoke_cohost_access(): void
+    {
+        config()->set('services.agora.app_id', 'test-agora-app');
+        config()->set('services.agora.app_certificate', 'test-agora-certificate');
+        config()->set('services.agora.token_ttl', 900);
+
+        $category = Category::create(['name' => 'Live', 'slug' => 'live']);
+        $creator = User::factory()->create(['name' => 'Stage Creator', 'email' => 'stage-owner@example.com']);
+        $viewer = User::factory()->create(['name' => 'Stage Viewer', 'email' => 'stage-viewer@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Approved Stage',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_request',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'join_request')
+            ->assertJsonPath('data.signal.senderId', $viewer->id)
+            ->assertJsonPath('data.signal.recipientId', $creator->id)
+            ->assertJsonPath('data.signal.sender.fullName', $viewer->name);
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->assertJsonPath('data.signals.0.type', 'join_request')
+            ->assertJsonPath('data.signals.0.sender.fullName', $viewer->name);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_accepted',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'join_request_accepted')
+            ->assertJsonPath('data.signal.recipientId', $viewer->id);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertOk()
+            ->assertJsonPath('data.session.role', 'host');
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'approved-cohost',
+            'role' => 'host',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.currentViewers', 1);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'type' => 'cohost_left',
+        ])->assertCreated();
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_invite',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'join_invite')
+            ->assertJsonPath('data.signal.recipient.fullName', $viewer->name);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_invite_accepted',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'join_invite_accepted')
+            ->assertJsonPath('data.signal.recipientId', $creator->id);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+            ->assertOk()
+            ->assertJsonPath('data.session.role', 'host');
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_request_accepted',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', trans('messages.videos.live_signal_type_not_allowed'));
     }
 
     public function test_live_likes_can_be_sent_multiple_times_by_host_and_audience_and_remain_visible_in_profile_feeds(): void
@@ -1165,6 +1267,86 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 3)
             ->assertJsonPath('data.videos.0.liveComments', 3);
+    }
+
+    public function test_live_audience_endpoint_returns_active_unique_audience_members_for_creator_only(): void
+    {
+        $category = Category::create(['name' => 'Live Audience', 'slug' => 'live-audience']);
+        $creator = User::factory()->create(['name' => 'Audience Host', 'username' => 'audience.host', 'email' => 'audience-host@example.com']);
+        $viewer = User::factory()->create(['name' => 'Audience Viewer', 'username' => 'audience.viewer', 'email' => 'audience-viewer@example.com']);
+        $viewerTwo = User::factory()->create(['name' => 'Audience Fan', 'username' => 'audience.fan', 'email' => 'audience-fan@example.com']);
+        $cohost = User::factory()->create(['name' => 'Audience Cohost', 'username' => 'audience.cohost', 'email' => 'audience-cohost@example.com']);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Audience Listing Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $viewer->id,
+            'session_key' => 'viewer-primary',
+            'role' => 'audience',
+            'joined_at' => now()->subSeconds(20),
+            'last_seen_at' => now()->subSeconds(4),
+        ]);
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $viewer->id,
+            'session_key' => 'viewer-secondary',
+            'role' => 'audience',
+            'joined_at' => now()->subSeconds(10),
+            'last_seen_at' => now()->subSeconds(2),
+        ]);
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $viewerTwo->id,
+            'session_key' => 'fan-primary',
+            'role' => 'audience',
+            'joined_at' => now()->subSeconds(12),
+            'last_seen_at' => now()->subSecond(),
+        ]);
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $cohost->id,
+            'session_key' => 'cohost-primary',
+            'role' => 'host',
+            'joined_at' => now()->subSeconds(8),
+            'last_seen_at' => now()->subSecond(),
+        ]);
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $creator->id,
+            'session_key' => 'creator-host',
+            'role' => 'host',
+            'joined_at' => now()->subSeconds(8),
+            'last_seen_at' => now()->subSecond(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/audience')
+            ->assertForbidden();
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/audience')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.videos.live_audience_retrieved'))
+            ->assertJsonCount(2, 'data.audience')
+            ->assertJsonPath('data.audience.0.actor.fullName', 'Audience Fan')
+            ->assertJsonPath('data.audience.1.actor.fullName', 'Audience Viewer')
+            ->assertJsonPath('data.audience.0.role', 'audience')
+            ->assertJsonPath('data.audience.1.actor.username', 'audience.viewer');
     }
 
     public function test_locale_headers_localize_api_messages_and_preferences_validate_supported_languages(): void

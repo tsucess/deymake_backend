@@ -33,6 +33,8 @@ class VideoController extends Controller
 
     private const LIVE_ANALYTICS_LEADERBOARD_LIMIT = 5;
 
+    private const LIVE_ACTIVE_AUDIENCE_LIMIT = 30;
+
     private const LIVE_ANALYTICS_PEAK_MOMENTS_LIMIT = 3;
 
     private const LIVE_ANALYTICS_MIN_BUCKETS = 4;
@@ -381,6 +383,11 @@ class VideoController extends Controller
         $agoraRole = $requestedRole === 'host' ? 'host' : 'audience';
 
         abort_if(! $video->is_live && ! $isCreator, 409, __('messages.videos.live_not_active'));
+        abort_if(
+            $agoraRole === 'host' && ! $this->canJoinLiveStageAsHost($video, $viewer),
+            403,
+            __('messages.videos.live_stage_access_denied')
+        );
 
         $appId = (string) config('services.agora.app_id');
         $appCertificate = (string) config('services.agora.app_certificate');
@@ -480,6 +487,11 @@ class VideoController extends Controller
 
         abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
         $this->ensureVideoIsLive($video);
+        abort_if(
+            ($validated['role'] ?? 'audience') === 'host' && ! $this->canJoinLiveStageAsHost($video, $request->user()),
+            403,
+            __('messages.videos.live_stage_access_denied')
+        );
 
         $presence = LivePresenceSession::query()->firstOrNew([
             'video_id' => $video->id,
@@ -548,31 +560,34 @@ class VideoController extends Controller
 
         $validated = $request->validate([
             'recipientId' => ['nullable', 'integer', 'exists:users,id'],
-            'type' => ['required', 'in:offer,answer,candidate'],
+            'type' => ['required', 'in:offer,answer,candidate,join_request,join_request_accepted,join_request_rejected,join_invite,join_invite_accepted,join_invite_rejected,cohost_left'],
             'sdp' => ['nullable', 'string'],
             'candidate' => ['nullable', 'array'],
         ]);
 
         $isCreator = $viewer->id === $video->user_id;
         $recipientId = $isCreator ? ($validated['recipientId'] ?? null) : $video->user_id;
+        $type = $validated['type'];
+        $creatorAllowedTypes = ['answer', 'candidate', 'join_invite', 'join_request_accepted', 'join_request_rejected'];
+        $viewerAllowedTypes = ['offer', 'candidate', 'join_request', 'join_invite_accepted', 'join_invite_rejected', 'cohost_left'];
 
         abort_if($isCreator && ! $recipientId, 422, __('messages.videos.live_signal_recipient_required'));
-        abort_if(! $isCreator && $validated['type'] === 'answer', 422, __('messages.videos.live_signal_type_not_allowed'));
-        abort_if($isCreator && $validated['type'] === 'offer', 422, __('messages.videos.live_signal_type_not_allowed'));
+        abort_if($isCreator && ! in_array($type, $creatorAllowedTypes, true), 422, __('messages.videos.live_signal_type_not_allowed'));
+        abort_if(! $isCreator && ! in_array($type, $viewerAllowedTypes, true), 422, __('messages.videos.live_signal_type_not_allowed'));
         abort_if($recipientId === $viewer->id, 422, __('messages.videos.live_signal_recipient_invalid'));
-        abort_if(in_array($validated['type'], ['offer', 'answer'], true) && ! filled($validated['sdp'] ?? null), 422, __('messages.videos.live_signal_payload_required'));
-        abort_if($validated['type'] === 'candidate' && empty($validated['candidate']), 422, __('messages.videos.live_signal_payload_required'));
+        abort_if(in_array($type, ['offer', 'answer'], true) && ! filled($validated['sdp'] ?? null), 422, __('messages.videos.live_signal_payload_required'));
+        abort_if($type === 'candidate' && empty($validated['candidate']), 422, __('messages.videos.live_signal_payload_required'));
 
         $signal = LiveSignal::query()->create([
             'video_id' => $video->id,
             'sender_id' => $viewer->id,
             'recipient_id' => $recipientId,
-            'kind' => $validated['type'],
+            'kind' => $type,
             'payload' => array_filter([
                 'sdp' => $validated['sdp'] ?? null,
                 'candidate' => $validated['candidate'] ?? null,
             ], static fn ($value) => $value !== null),
-        ]);
+        ])->load(['sender', 'recipient']);
 
         return response()->json([
             'message' => __('messages.videos.live_signal_sent'),
@@ -594,8 +609,25 @@ class VideoController extends Controller
         $after = (int) ($validated['after'] ?? 0);
 
         $signals = LiveSignal::query()
+            ->with(['sender', 'recipient'])
             ->where('video_id', $video->id)
-            ->where('recipient_id', $viewer->id)
+            ->where(function ($query) use ($viewer): void {
+                $query
+                    ->where('recipient_id', $viewer->id)
+                    ->orWhere(function ($stageQuery) use ($viewer): void {
+                        $stageQuery
+                            ->where('sender_id', $viewer->id)
+                            ->whereIn('kind', [
+                                'join_request',
+                                'join_request_accepted',
+                                'join_request_rejected',
+                                'join_invite',
+                                'join_invite_accepted',
+                                'join_invite_rejected',
+                                'cohost_left',
+                            ]);
+                    });
+            })
             ->where('id', '>', $after)
             ->orderBy('id')
             ->get();
@@ -607,6 +639,23 @@ class VideoController extends Controller
             'data' => [
                 'signals' => $signals->map(fn (LiveSignal $signal) => $this->formatLiveSignal($signal))->values(),
                 'latestSignalId' => $latestSignalId,
+            ],
+        ]);
+    }
+
+    public function liveAudience(Request $request, Video $video): JsonResponse
+    {
+        $this->ensureVideoIsLive($video);
+        abort_unless($request->user()->id === $video->user_id, 403);
+
+        $audience = $this->activeAudienceMembers($video)
+            ->map(fn (LivePresenceSession $presence): array => $this->formatLiveAudienceMember($presence))
+            ->values();
+
+        return response()->json([
+            'message' => __('messages.videos.live_audience_retrieved'),
+            'data' => [
+                'audience' => $audience,
             ],
         ]);
     }
@@ -769,13 +818,66 @@ class VideoController extends Controller
         return sprintf('live-video-%s', $video->id);
     }
 
-    private function activePresenceCount(Video $video): int
+    private function canJoinLiveStageAsHost(Video $video, User $viewer): bool
+    {
+        if ($viewer->id === $video->user_id) {
+            return true;
+        }
+
+        $latestStageSignal = LiveSignal::query()
+            ->where('video_id', $video->id)
+            ->whereIn('kind', [
+                'join_request',
+                'join_request_accepted',
+                'join_request_rejected',
+                'join_invite',
+                'join_invite_accepted',
+                'join_invite_rejected',
+                'cohost_left',
+            ])
+            ->where(function ($query) use ($video, $viewer): void {
+                $query
+                    ->where(function ($nestedQuery) use ($video, $viewer): void {
+                        $nestedQuery
+                            ->where('sender_id', $viewer->id)
+                            ->where('recipient_id', $video->user_id);
+                    })
+                    ->orWhere(function ($nestedQuery) use ($video, $viewer): void {
+                        $nestedQuery
+                            ->where('sender_id', $video->user_id)
+                            ->where('recipient_id', $viewer->id);
+                    });
+            })
+            ->latest('id')
+            ->first();
+
+        return in_array($latestStageSignal?->kind, ['join_request_accepted', 'join_invite_accepted'], true);
+    }
+
+    private function activePresenceQuery(Video $video)
     {
         return LivePresenceSession::query()
             ->where('video_id', $video->id)
             ->whereNull('left_at')
-            ->where('last_seen_at', '>=', now()->subSeconds(self::LIVE_PRESENCE_TTL_SECONDS))
-            ->count();
+            ->where('last_seen_at', '>=', now()->subSeconds(self::LIVE_PRESENCE_TTL_SECONDS));
+    }
+
+    private function activePresenceCount(Video $video): int
+    {
+        return $this->activePresenceQuery($video)->count();
+    }
+
+    private function activeAudienceMembers(Video $video)
+    {
+        return $this->activePresenceQuery($video)
+            ->with('user')
+            ->where('role', 'audience')
+            ->orderByDesc('last_seen_at')
+            ->orderByDesc('joined_at')
+            ->get()
+            ->unique('user_id')
+            ->take(self::LIVE_ACTIVE_AUDIENCE_LIMIT)
+            ->values();
     }
 
     private function liveLikeEventsQuery(Video $video)
@@ -1098,6 +1200,17 @@ class VideoController extends Controller
         ];
     }
 
+    private function formatLiveAudienceMember(LivePresenceSession $presence): array
+    {
+        return [
+            'sessionId' => $presence->id,
+            'role' => $presence->role,
+            'actor' => $this->formatLiveEngagementActor($presence->user),
+            'joinedAt' => $presence->joined_at?->toISOString(),
+            'lastSeenAt' => $presence->last_seen_at?->toISOString(),
+        ];
+    }
+
     private function formatLiveSignal(LiveSignal $signal): array
     {
         return [
@@ -1106,6 +1219,8 @@ class VideoController extends Controller
             'payload' => $signal->payload ?? [],
             'senderId' => $signal->sender_id,
             'recipientId' => $signal->recipient_id,
+            'sender' => $this->formatLiveEngagementActor($signal->sender),
+            'recipient' => $this->formatLiveEngagementActor($signal->recipient),
             'createdAt' => $signal->created_at?->toISOString(),
         ];
     }

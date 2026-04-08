@@ -151,6 +151,8 @@ return [
         'live_stopped' => 'Livestream stopped successfully.',
         'live_session_retrieved' => 'Live session retrieved successfully.',
         'live_not_active' => 'This livestream is no longer active.',
+        'live_audience_retrieved' => 'Live audience retrieved successfully.',
+        'live_stage_access_denied' => 'You need the creator to approve your request before joining this livestream.',
         'live_signal_sent' => 'Live signal sent successfully.',
         'live_signals_retrieved' => 'Live signals retrieved successfully.',
         'live_signal_recipient_required' => 'A recipient is required for this live signal.',
