@@ -456,11 +456,21 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/v1/me/preferences')
             ->assertOk()
-            ->assertJsonPath('data.preferences.language', 'en');
+            ->assertJsonPath('data.preferences.language', 'en')
+            ->assertJsonPath('data.preferences.notificationSettings.inAppRealtime', true)
+            ->assertJsonPath('data.preferences.notificationSettings.browserRealtime', true);
 
-        $this->patchJson('/api/v1/me/preferences', ['language' => 'fr'])
+        $this->patchJson('/api/v1/me/preferences', [
+            'language' => 'fr',
+            'notificationSettings' => [
+                'inAppRealtime' => false,
+                'browserRealtime' => false,
+            ],
+        ])
             ->assertOk()
-            ->assertJsonPath('data.preferences.language', 'fr');
+            ->assertJsonPath('data.preferences.language', 'fr')
+            ->assertJsonPath('data.preferences.notificationSettings.inAppRealtime', false)
+            ->assertJsonPath('data.preferences.notificationSettings.browserRealtime', false);
 
         Sanctum::actingAs($creator);
 
@@ -1493,10 +1503,12 @@ class ContentAndProfileApiTest extends TestCase
         $this->withHeaders(['X-Locale' => 'ha'])
             ->patchJson('/api/v1/me/preferences', [
                 'displayPreferences' => ['theme' => 'dark'],
+                'notificationSettings' => ['browserRealtime' => false],
             ])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.preferences.updated', [], 'ha'))
-            ->assertJsonPath('data.preferences.displayPreferences.theme', 'dark');
+            ->assertJsonPath('data.preferences.displayPreferences.theme', 'dark')
+            ->assertJsonPath('data.preferences.notificationSettings.browserRealtime', false);
 
         $this->withHeaders(['X-Locale' => 'en'])
             ->patchJson('/api/v1/me/preferences', ['language' => 'invalid-locale'])

@@ -51,6 +51,21 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         $webhookId = $webhookResponse->json('data.webhook.id');
 
+        $this->getJson('/api/v1/developer')
+            ->assertOk()
+            ->assertJsonPath('data.developer.availableEvents.0', 'membership.created')
+            ->assertJsonPath('data.developer.availableEvents.1', 'membership.cancelled')
+            ->assertJsonPath('data.developer.availableEvents.2', 'membership.plan.updated')
+            ->assertJsonPath('data.developer.apiKeys.0.name', 'Creator SDK')
+            ->assertJsonPath('data.developer.apiKeys.0.abilities.0', 'memberships:read')
+            ->assertJsonPath('data.developer.webhooks.0.name', 'Membership events')
+            ->assertJsonPath('data.developer.webhooks.0.targetUrl', 'https://example.com/hooks/memberships')
+            ->assertJsonPath('data.developer.webhooks.0.events.0', 'membership.created')
+            ->assertJsonPath('data.developer.webhooks.0.hasSecret', true)
+            ->assertJsonPath('data.developer.summary.apiKeysCount', 1)
+            ->assertJsonPath('data.developer.summary.webhooksCount', 1)
+            ->assertJsonPath('data.developer.summary.activeWebhooksCount', 1);
+
         $this->patchJson('/api/v1/developer/webhooks/'.$webhookId, [
             'name' => 'Membership updates',
             'isActive' => false,
@@ -157,7 +172,11 @@ class DeveloperAndMembershipApiTest extends TestCase
         $this->getJson('/api/v1/memberships/mine')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.mine_retrieved'))
-            ->assertJsonPath('data.memberships.0.id', $membershipId);
+            ->assertJsonPath('data.memberships.0.id', $membershipId)
+            ->assertJsonPath('data.memberships.0.plan.name', 'Gold Circle')
+            ->assertJsonPath('data.memberships.0.creator.fullName', 'Creator Prime')
+            ->assertJsonPath('data.memberships.0.priceAmount', 1500)
+            ->assertJsonPath('data.memberships.0.billingPeriod', 'monthly');
 
         $this->assertDatabaseHas('user_notifications', [
             'user_id' => $creator->id,
@@ -175,7 +194,9 @@ class DeveloperAndMembershipApiTest extends TestCase
         $this->getJson('/api/v1/memberships/creator')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.creator_dashboard_retrieved'))
-            ->assertJsonPath('data.memberships.0.status', 'cancelled');
+            ->assertJsonPath('data.memberships.0.status', 'cancelled')
+            ->assertJsonPath('data.memberships.0.member.fullName', 'Member Zero')
+            ->assertJsonPath('data.memberships.0.plan.name', 'Gold Circle');
 
         $this->deleteJson('/api/v1/memberships/plans/'.$planId)
             ->assertOk()
