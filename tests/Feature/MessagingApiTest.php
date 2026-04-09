@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Events\ConversationMessageCreated;
 use App\Events\UserNotificationChanged;
+use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -167,5 +169,49 @@ class MessagingApiTest extends TestCase
             ->json('data.conversations.0.status');
 
         $this->assertStringStartsWith(trans('messages.conversations.sent_prefix', [], 'es').' ', $status);
+    }
+
+    public function test_conversation_presence_uses_recent_activity_instead_of_sticky_online_flag(): void
+    {
+        Carbon::setTestNow('2026-04-09 12:00:00');
+        config()->set('auth.presence_window', 300);
+
+        $sender = User::factory()->create(['name' => 'Sender']);
+        $recentlyActiveRecipient = User::factory()->create([
+            'name' => 'Recently Active',
+            'is_online' => false,
+            'last_active_at' => now()->subMinutes(3),
+        ]);
+        $staleRecipient = User::factory()->create([
+            'name' => 'Stale Presence',
+            'is_online' => true,
+            'last_active_at' => now()->subMinutes(20),
+        ]);
+
+        $staleConversation = Conversation::create();
+        $staleConversation->participants()->attach([
+            $sender->id => ['last_read_at' => now()],
+            $staleRecipient->id => ['last_read_at' => null],
+        ]);
+
+        $activeConversation = Conversation::create();
+        $activeConversation->participants()->attach([
+            $sender->id => ['last_read_at' => now()],
+            $recentlyActiveRecipient->id => ['last_read_at' => null],
+        ]);
+
+        Sanctum::actingAs($sender);
+
+        $conversations = collect($this->getJson('/api/v1/conversations')
+            ->assertOk()
+            ->json('data.conversations'))
+            ->keyBy(fn (array $conversation) => $conversation['participant']['fullName']);
+
+        $this->assertTrue($conversations['Recently Active']['participant']['isOnline']);
+        $this->assertSame(trans('messages.conversations.active_status'), $conversations['Recently Active']['status']);
+        $this->assertFalse($conversations['Stale Presence']['participant']['isOnline']);
+        $this->assertSame(trans('messages.conversations.no_messages_yet'), $conversations['Stale Presence']['status']);
+
+        Carbon::setTestNow();
     }
 }

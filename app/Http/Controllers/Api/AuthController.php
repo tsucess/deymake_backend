@@ -74,7 +74,10 @@ class AuthController extends Controller
             ], 403);
         }
 
-        $user->forceFill(['is_online' => true])->save();
+        $user->forceFill([
+            'is_online' => true,
+            'last_active_at' => now(),
+        ])->save();
 
         return $this->authenticatedResponse($user, __('messages.auth.login_success'));
     }
@@ -124,6 +127,7 @@ class AuthController extends Controller
         $user->forceFill([
             'email_verified_at' => now(),
             'is_online' => true,
+            'last_active_at' => now(),
         ])->save();
 
         DB::table('email_verification_codes')->where('email', $validated['email'])->delete();
@@ -451,6 +455,7 @@ class AuthController extends Controller
                 'avatar_url' => $profile['avatar_url'] ?? null,
                 'preferences' => UserDefaults::preferences(),
                 'is_online' => true,
+                'last_active_at' => now(),
                 'provider' => $provider,
                 'provider_id' => $profile['id'],
             ]);
@@ -460,6 +465,7 @@ class AuthController extends Controller
             'name' => $profile['name'] ?: $user->name,
             'avatar_url' => $profile['avatar_url'] ?: $user->avatar_url,
             'is_online' => true,
+            'last_active_at' => now(),
             'email_verified_at' => $user->email_verified_at ?? now(),
         ];
 

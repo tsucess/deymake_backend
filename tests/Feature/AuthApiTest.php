@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Notifications\SendEmailVerificationCode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -125,6 +126,32 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.auth.logout_success'));
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_authenticated_requests_record_last_user_activity_from_header(): void
+    {
+        Carbon::setTestNow('2026-04-09 12:00:00');
+
+        $user = User::factory()->create([
+            'is_online' => false,
+            'last_active_at' => null,
+        ]);
+        $token = $user->createToken('test-token')->plainTextToken;
+        $activityAt = now()->subMinutes(2)->toIso8601String();
+
+        $this->withHeaders([
+            'Authorization' => 'Bearer '.$token,
+            'X-User-Activity-At' => $activityAt,
+        ])->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.user.isOnline', true);
+
+        $freshUser = $user->fresh();
+
+        $this->assertTrue($freshUser->is_online);
+        $this->assertTrue($freshUser->last_active_at?->equalTo(Carbon::parse($activityAt)));
+
+        Carbon::setTestNow();
     }
 
     public function test_auth_endpoints_honor_locale_headers_for_messages(): void

@@ -114,4 +114,16 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Presence Window
+    |--------------------------------------------------------------------------
+    |
+    | This defines how recently a user must have interacted with the app to be
+    | shown as active in presence-aware surfaces like the inbox.
+    |
+    */
+
+    'presence_window' => (int) env('AUTH_PRESENCE_WINDOW_SECONDS', 300),
+
 ];

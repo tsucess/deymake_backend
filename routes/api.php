@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VideoController;
 use App\Http\Controllers\Api\VideoInteractionController;
 use App\Http\Controllers\Api\WaitlistController;
+use App\Http\Middleware\RecordUserActivity;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
@@ -69,7 +70,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/legal/terms', [InfoController::class, 'terms']);
     });
 
-    Route::middleware(['auth:sanctum', SetLocale::class])->group(function (): void {
+    Route::middleware(['auth:sanctum', RecordUserActivity::class, SetLocale::class])->group(function (): void {
         Route::prefix('auth')->group(function (): void {
             Route::get('/me', [AuthController::class, 'me']);
             Route::post('/logout', [AuthController::class, 'logout']);

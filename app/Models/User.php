@@ -34,6 +34,7 @@ class User extends Authenticatable
         'bio',
         'preferences',
         'is_online',
+        'last_active_at',
         'provider',
         'provider_id',
     ];
@@ -60,6 +61,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'preferences' => 'array',
             'is_online' => 'boolean',
+            'last_active_at' => 'datetime',
         ];
     }
 
@@ -148,5 +150,14 @@ class User extends Authenticatable
                     'subscribers as subscribed_by_current_user' => fn (Builder $subscribersQuery) => $subscribersQuery->whereKey($viewer->id),
                 ]);
             });
+    }
+
+    public function isActiveNow(): bool
+    {
+        if (! $this->last_active_at) {
+            return false;
+        }
+
+        return $this->last_active_at->gte(now()->subSeconds(max(1, (int) config('auth.presence_window', 300))));
     }
 }
