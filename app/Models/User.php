@@ -7,6 +7,7 @@ use App\Support\Username;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -35,6 +36,7 @@ class User extends Authenticatable
         'preferences',
         'is_online',
         'last_active_at',
+        'is_admin',
         'provider',
         'provider_id',
     ];
@@ -62,6 +64,7 @@ class User extends Authenticatable
             'preferences' => 'array',
             'is_online' => 'boolean',
             'last_active_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
     }
 
@@ -120,6 +123,26 @@ class User extends Authenticatable
         return $this->hasMany(CreatorPlan::class, 'creator_id');
     }
 
+    public function hostedChallenges(): HasMany
+    {
+        return $this->hasMany(Challenge::class, 'host_id');
+    }
+
+    public function challengeSubmissions(): HasMany
+    {
+        return $this->hasMany(ChallengeSubmission::class);
+    }
+
+    public function videoReports(): HasMany
+    {
+        return $this->hasMany(VideoReport::class);
+    }
+
+    public function reviewedVideoReports(): HasMany
+    {
+        return $this->hasMany(VideoReport::class, 'reviewed_by');
+    }
+
     public function memberships(): HasMany
     {
         return $this->hasMany(Membership::class, 'member_id');
@@ -128,6 +151,46 @@ class User extends Authenticatable
     public function managedMemberships(): HasMany
     {
         return $this->hasMany(Membership::class, 'creator_id');
+    }
+
+    public function payoutAccount(): HasOne
+    {
+        return $this->hasOne(PayoutAccount::class);
+    }
+
+    public function payoutRequests(): HasMany
+    {
+        return $this->hasMany(PayoutRequest::class);
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(WalletTransaction::class);
+    }
+
+    public function reviewedPayoutRequests(): HasMany
+    {
+        return $this->hasMany(PayoutRequest::class, 'reviewed_by');
+    }
+
+    public function sentCollaborationInvites(): HasMany
+    {
+        return $this->hasMany(CollaborationInvite::class, 'inviter_id');
+    }
+
+    public function receivedCollaborationInvites(): HasMany
+    {
+        return $this->hasMany(CollaborationInvite::class, 'invitee_id');
+    }
+
+    public function createdCollaborationDeliverables(): HasMany
+    {
+        return $this->hasMany(CollaborationDeliverable::class, 'created_by');
+    }
+
+    public function reviewedCollaborationDeliverables(): HasMany
+    {
+        return $this->hasMany(CollaborationDeliverable::class, 'reviewed_by');
     }
 
     public function webhooks(): HasMany
@@ -159,5 +222,10 @@ class User extends Authenticatable
         }
 
         return $this->last_active_at->gte(now()->subSeconds(max(1, (int) config('auth.presence_window', 300))));
+    }
+
+    public function isAdmin(): bool
+    {
+        return (bool) $this->is_admin;
     }
 }

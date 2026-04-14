@@ -8,6 +8,7 @@ use App\Http\Resources\MembershipResource;
 use App\Models\CreatorPlan;
 use App\Models\Membership;
 use App\Models\User;
+use App\Services\WalletLedgerService;
 use App\Support\DeveloperWebhookDispatcher;
 use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
@@ -153,7 +154,7 @@ class MembershipController extends Controller
         ]);
     }
 
-    public function subscribe(Request $request, CreatorPlan $plan): JsonResponse
+    public function subscribe(Request $request, CreatorPlan $plan, WalletLedgerService $walletLedgerService): JsonResponse
     {
         abort_if($plan->creator_id === $request->user()->id, 422, __('messages.memberships.self_not_allowed'));
         abort_if(! $plan->is_active, 422, __('messages.memberships.plan_inactive'));
@@ -198,6 +199,8 @@ class MembershipController extends Controller
             'memberId' => $request->user()->id,
             'status' => $membership->status,
         ]);
+
+        $walletLedgerService->recordMembershipCredit($membership);
 
         return response()->json([
             'message' => __('messages.memberships.created'),

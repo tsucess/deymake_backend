@@ -18,6 +18,12 @@ class DeveloperController extends Controller
         'membership.created',
         'membership.cancelled',
         'membership.plan.updated',
+        'payout.request.created',
+        'payout.request.updated',
+        'collaboration.invite.created',
+        'collaboration.invite.updated',
+        'collaboration.deliverable.created',
+        'collaboration.deliverable.updated',
     ];
 
     public function overview(Request $request): JsonResponse

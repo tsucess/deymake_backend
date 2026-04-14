@@ -10,6 +10,7 @@ class VideoResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = auth('sanctum')->user() ?? $request->user();
         $originalMediaUrl = $this->upload?->path ?: $this->media_url;
         $liveLikes = (int) ($this->live_like_events_count ?? 0);
         $likes = (int) ($this->likes_count ?? 0) + $liveLikes;
@@ -72,6 +73,14 @@ class VideoResource extends JsonResource
                 'saved' => (bool) ($this->saved_by_current_user ?? false),
                 'subscribed' => (bool) ($this->user?->subscribed_by_current_user ?? false),
             ],
+            'moderation' => $this->when(
+                $viewer && ($viewer->id === $this->user_id || $viewer->isAdmin()),
+                fn () => [
+                    'status' => $this->moderation_status,
+                    'notes' => $this->moderation_notes,
+                    'moderatedAt' => $this->moderated_at?->toISOString(),
+                ]
+            ),
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Video extends Model
 {
@@ -27,6 +28,10 @@ class Video extends Model
         'thumbnail_url',
         'is_live',
         'is_draft',
+        'moderation_status',
+        'moderated_by',
+        'moderated_at',
+        'moderation_notes',
         'live_started_at',
         'live_ended_at',
         'live_notified_at',
@@ -42,6 +47,7 @@ class Video extends Model
             'tagged_users' => 'array',
             'is_live' => 'boolean',
             'is_draft' => 'boolean',
+            'moderated_at' => 'datetime',
             'live_started_at' => 'datetime',
             'live_ended_at' => 'datetime',
             'live_notified_at' => 'datetime',
@@ -83,6 +89,31 @@ class Video extends Model
         return $this->hasMany(LivePresenceSession::class);
     }
 
+    public function challengeSubmissions(): HasMany
+    {
+        return $this->hasMany(ChallengeSubmission::class);
+    }
+
+    public function collaborationInvites(): HasMany
+    {
+        return $this->hasMany(CollaborationInvite::class, 'source_video_id');
+    }
+
+    public function collaborationDeliverables(): HasMany
+    {
+        return $this->hasMany(CollaborationDeliverable::class, 'draft_video_id');
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(VideoReport::class);
+    }
+
+    public function moderationCase(): MorphOne
+    {
+        return $this->morphOne(ContentModerationCase::class, 'moderatable');
+    }
+
     public function likes(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'video_interactions')
@@ -118,7 +149,7 @@ class Video extends Model
                 'likes',
                 'dislikes',
                 'saves',
-                'comments',
+                'comments as comments_count' => fn (Builder $commentsQuery) => $commentsQuery->where('moderation_status', 'visible'),
                 'liveLikeEvents',
             ])
             ->addSelect([
@@ -136,5 +167,25 @@ class Video extends Model
                     'saves as saved_by_current_user' => fn (Builder $savesQuery) => $savesQuery->whereKey($viewer->id),
                 ]);
             });
+    }
+
+    public function scopeDiscoverable(Builder $query): Builder
+    {
+        return $query
+            ->where('is_draft', false)
+            ->where('moderation_status', 'visible');
+    }
+
+    public function isVisibleTo(?User $viewer): bool
+    {
+        if ($viewer?->isAdmin()) {
+            return true;
+        }
+
+        if ($viewer && $viewer->id === $this->user_id) {
+            return true;
+        }
+
+        return ! $this->is_draft && $this->moderation_status === 'visible';
     }
 }

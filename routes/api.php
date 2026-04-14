@@ -1,14 +1,23 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminPayoutController;
+use App\Http\Controllers\Api\AiAssistantController;
+use App\Http\Controllers\Api\ChallengeController;
 use App\Http\Controllers\Api\CommentController;
+use App\Http\Controllers\Api\CollaborationController;
+use App\Http\Controllers\Api\CollaborationDeliverableController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\CreatorAnalyticsController;
+use App\Http\Controllers\Api\ContentModerationController;
 use App\Http\Controllers\Api\DeveloperController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InfoController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\MembershipController;
+use App\Http\Controllers\Api\MonetizationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SearchController;
@@ -58,6 +67,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/users/{user}/plans', [MembershipController::class, 'creatorPlans']);
 
         Route::get('/leaderboard', [LeaderboardController::class, 'index']);
+
+        Route::get('/challenges', [ChallengeController::class, 'index']);
+        Route::get('/challenges/{challenge}', [ChallengeController::class, 'show']);
+        Route::get('/challenges/{challenge}/submissions', [ChallengeController::class, 'submissions']);
 
         Route::get('/search/suggestions', [SearchController::class, 'suggestions']);
         Route::get('/search/videos', [SearchController::class, 'videos']);
@@ -116,7 +129,11 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('me')->group(function (): void {
             Route::get('/profile', [ProfileController::class, 'show']);
             Route::patch('/profile', [ProfileController::class, 'update']);
+            Route::get('/challenges', [ChallengeController::class, 'myChallenges']);
+            Route::get('/challenge-submissions', [ChallengeController::class, 'mySubmissions']);
             Route::get('/subscribers', [ProfileController::class, 'subscribers']);
+            Route::get('/analytics', [CreatorAnalyticsController::class, 'dashboard']);
+            Route::get('/analytics/videos/{video}', [CreatorAnalyticsController::class, 'showVideo']);
             Route::get('/posts', [ProfileController::class, 'posts']);
             Route::get('/liked', [ProfileController::class, 'liked']);
             Route::get('/saved', [ProfileController::class, 'saved']);
@@ -143,6 +160,49 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('/plans/{plan}', [MembershipController::class, 'destroyPlan']);
             Route::post('/plans/{plan}/subscribe', [MembershipController::class, 'subscribe']);
             Route::post('/{membership}/cancel', [MembershipController::class, 'cancel']);
+        });
+
+        Route::prefix('monetization')->group(function (): void {
+            Route::get('/summary', [MonetizationController::class, 'summary']);
+            Route::get('/payout-account', [MonetizationController::class, 'payoutAccount']);
+            Route::put('/payout-account', [MonetizationController::class, 'upsertPayoutAccount']);
+            Route::get('/payouts', [MonetizationController::class, 'payouts']);
+            Route::post('/payouts', [MonetizationController::class, 'requestPayout']);
+            Route::get('/transactions', [MonetizationController::class, 'transactions']);
+        });
+
+        Route::prefix('collaborations')->group(function (): void {
+            Route::get('/invites', [CollaborationController::class, 'index']);
+            Route::post('/invites', [CollaborationController::class, 'store']);
+            Route::patch('/invites/{collaborationInvite}', [CollaborationController::class, 'update']);
+            Route::get('/invites/{collaborationInvite}/deliverables', [CollaborationDeliverableController::class, 'index']);
+            Route::post('/invites/{collaborationInvite}/deliverables', [CollaborationDeliverableController::class, 'store']);
+            Route::patch('/deliverables/{collaborationDeliverable}', [CollaborationDeliverableController::class, 'update']);
+        });
+
+        Route::post('/challenges', [ChallengeController::class, 'store']);
+        Route::patch('/challenges/{challenge}', [ChallengeController::class, 'update']);
+        Route::delete('/challenges/{challenge}', [ChallengeController::class, 'destroy']);
+        Route::post('/challenges/{challenge}/publish', [ChallengeController::class, 'publish']);
+        Route::post('/challenges/{challenge}/submissions', [ChallengeController::class, 'storeSubmission']);
+        Route::get('/challenges/{challenge}/submissions/mine', [ChallengeController::class, 'mySubmissionsForChallenge']);
+        Route::post('/challenge-submissions/{submission}/withdraw', [ChallengeController::class, 'withdrawSubmission']);
+        Route::prefix('ai')->group(function (): void {
+            Route::post('/captions', [AiAssistantController::class, 'captions']);
+            Route::post('/ideas', [AiAssistantController::class, 'ideas']);
+        });
+
+        Route::middleware('admin')->prefix('admin')->group(function (): void {
+            Route::get('/dashboard', [AdminDashboardController::class, 'dashboard']);
+            Route::get('/reports/videos', [AdminDashboardController::class, 'videoReports']);
+            Route::patch('/reports/videos/{videoReport}', [AdminDashboardController::class, 'updateVideoReport']);
+            Route::get('/payout-requests', [AdminPayoutController::class, 'index']);
+            Route::patch('/payout-requests/{payoutRequest}', [AdminPayoutController::class, 'update']);
+            Route::get('/moderation/cases', [ContentModerationController::class, 'index']);
+            Route::get('/moderation/cases/{contentModerationCase}', [ContentModerationController::class, 'show']);
+            Route::patch('/moderation/cases/{contentModerationCase}', [ContentModerationController::class, 'update']);
+            Route::post('/moderation/videos/{video}/rescan', [ContentModerationController::class, 'rescanVideo']);
+            Route::post('/moderation/comments/{comment}/rescan', [ContentModerationController::class, 'rescanComment']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);

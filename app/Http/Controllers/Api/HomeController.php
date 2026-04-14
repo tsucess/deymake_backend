@@ -21,7 +21,7 @@ class HomeController extends Controller
 
         $trending = Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->orderByDesc('views_count')
             ->latest()
             ->limit(12)
@@ -29,7 +29,7 @@ class HomeController extends Controller
 
         $liveStreams = Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->where('is_live', true)
             ->orderByDesc('live_started_at')
             ->latest()

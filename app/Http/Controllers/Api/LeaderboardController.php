@@ -19,7 +19,7 @@ class LeaderboardController extends Controller
         $scoredUsers = User::query()
             ->withProfileAggregates()
             ->with(['videos' => function ($query) use ($since): void {
-                $query->where('is_draft', false);
+                $query->discoverable();
 
                 if ($since) {
                     $query->where('created_at', '>=', $since);

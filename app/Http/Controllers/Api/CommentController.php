@@ -8,6 +8,7 @@ use App\Http\Resources\CommentResource;
 use App\Models\Comment;
 use App\Models\User;
 use App\Models\Video;
+use App\Services\ContentModerationService;
 use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class CommentController extends Controller
 
         $comments = Comment::query()
             ->withApiResourceData($viewer)
+            ->visibleTo($viewer)
             ->where('video_id', $video->id)
             ->whereNull('parent_id')
             ->latest()
@@ -35,7 +37,7 @@ class CommentController extends Controller
         ]);
     }
 
-    public function store(Request $request, Video $video): JsonResponse
+    public function store(Request $request, Video $video, ContentModerationService $moderationService): JsonResponse
     {
         $this->ensureVideoVisible($request, $video);
 
@@ -48,6 +50,8 @@ class CommentController extends Controller
             'user_id' => $request->user()->id,
             'body' => $validated['body'],
         ]);
+
+        $moderationService->scanComment($comment);
 
         if ($video->is_live) {
             $video->increment('live_comments_count');
@@ -98,7 +102,7 @@ class CommentController extends Controller
         $this->ensureVideoVisible($request, $comment->video);
         $viewer = auth('sanctum')->user() ?? $request->user();
 
-        $replies = $comment->replies()->withApiResourceData($viewer)->latest()->get();
+        $replies = $comment->replies()->withApiResourceData($viewer)->visibleTo($viewer)->latest()->get();
 
         return response()->json([
             'message' => __('messages.comments.replies_retrieved'),
@@ -108,7 +112,7 @@ class CommentController extends Controller
         ]);
     }
 
-    public function storeReply(Request $request, Comment $comment): JsonResponse
+    public function storeReply(Request $request, Comment $comment, ContentModerationService $moderationService): JsonResponse
     {
         $comment->loadMissing('video');
         $this->ensureVideoVisible($request, $comment->video);
@@ -123,6 +127,8 @@ class CommentController extends Controller
             'parent_id' => $comment->id,
             'body' => $validated['body'],
         ]);
+
+        $moderationService->scanComment($reply);
 
         if ($comment->video?->is_live) {
             $comment->video->increment('live_comments_count');
@@ -140,7 +146,7 @@ class CommentController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Comment $comment): JsonResponse
+    public function update(Request $request, Comment $comment, ContentModerationService $moderationService): JsonResponse
     {
         abort_if($comment->user_id !== $request->user()->id, 403);
 
@@ -149,6 +155,7 @@ class CommentController extends Controller
         ]);
 
         $comment->forceFill(['body' => $validated['body']])->save();
+        $moderationService->scanComment($comment);
         $comment = $this->loadCommentForResource($comment->id, $request->user());
 
         return response()->json([
@@ -250,7 +257,7 @@ class CommentController extends Controller
     {
         $viewer = auth('sanctum')->user() ?? $request->user();
 
-        if ($video->is_draft && (! $viewer || $viewer->id !== $video->user_id)) {
+        if (! $video->isVisibleTo($viewer)) {
             abort(404);
         }
     }
@@ -259,6 +266,7 @@ class CommentController extends Controller
     {
         return Comment::query()
             ->withApiResourceData($viewer)
+            ->visibleTo($viewer)
             ->findOrFail($commentId);
     }
 

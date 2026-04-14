@@ -150,7 +150,7 @@ class SearchController extends Controller
     {
         return Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->when($query !== '', function ($builder) use ($query): void {
                 $builder->where(function ($nested) use ($query): void {
                     $nested->where('title', 'like', '%'.$query.'%')

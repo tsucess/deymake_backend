@@ -14,7 +14,9 @@ use App\Models\LiveSignal;
 use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\VideoReport;
 use App\Services\CloudinaryUploadService;
+use App\Services\ContentModerationService;
 use App\Support\PaginatedJson;
 use App\Support\Username;
 use App\Support\UserNotifier;
@@ -50,7 +52,7 @@ class VideoController extends Controller
 
         $videos = PaginatedJson::paginate(Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->when($request->filled('category'), function ($query) use ($request): void {
                 $category = $request->string('category')->toString();
 
@@ -73,7 +75,7 @@ class VideoController extends Controller
 
         $videos = PaginatedJson::paginate(Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->orderByDesc('views_count')
             ->latest(), $request);
 
@@ -86,7 +88,7 @@ class VideoController extends Controller
 
         $videos = PaginatedJson::paginate(Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->where('is_live', true)
             ->orderByDesc('live_started_at')
             ->latest(), $request);
@@ -94,7 +96,7 @@ class VideoController extends Controller
         return $this->videoResponse($request, __('messages.videos.live_retrieved'), $videos);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, ContentModerationService $moderationService): JsonResponse
     {
         $validated = $request->validate([
             'type' => ['required', 'in:image,gif,video'],
@@ -157,6 +159,8 @@ class VideoController extends Controller
             $this->startLiveSession($video);
         }
 
+        $moderationService->scanVideo($video);
+
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
@@ -171,7 +175,7 @@ class VideoController extends Controller
     {
         $viewer = auth('sanctum')->user() ?? $request->user();
 
-        if ($video->is_draft && (! $viewer || $viewer->id !== $video->user_id)) {
+        if (! $video->isVisibleTo($viewer)) {
             abort(404);
         }
 
@@ -191,7 +195,7 @@ class VideoController extends Controller
 
         $related = PaginatedJson::paginate(Video::query()
             ->withApiResourceData($viewer)
-            ->where('is_draft', false)
+            ->discoverable()
             ->where('id', '!=', $video->id)
             ->where(function ($query) use ($video): void {
                 $query->where('user_id', $video->user_id);
@@ -222,28 +226,29 @@ class VideoController extends Controller
         ]);
     }
 
-    public function report(Request $request, Video $video): JsonResponse
+    public function report(Request $request, Video $video, ContentModerationService $moderationService): JsonResponse
     {
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:255'],
             'details' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        DB::table('video_reports')->insert([
+        $report = VideoReport::query()->create([
             'video_id' => $video->id,
             'user_id' => $request->user()->id,
             'reason' => $validated['reason'] ?? null,
             'details' => $validated['details'] ?? null,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'status' => 'pending',
         ]);
+
+        $moderationService->registerVideoReport($report);
 
         return response()->json([
             'message' => __('messages.videos.reported'),
         ], 201);
     }
 
-    public function update(Request $request, Video $video): JsonResponse
+    public function update(Request $request, Video $video, ContentModerationService $moderationService): JsonResponse
     {
         abort_if($video->user_id !== $request->user()->id, 403);
 
@@ -318,6 +323,8 @@ class VideoController extends Controller
             $this->stopLiveSession($video);
         }
 
+        $moderationService->scanVideo($video);
+
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
@@ -328,11 +335,12 @@ class VideoController extends Controller
         ]);
     }
 
-    public function publish(Request $request, Video $video): JsonResponse
+    public function publish(Request $request, Video $video, ContentModerationService $moderationService): JsonResponse
     {
         abort_if($video->user_id !== $request->user()->id, 403);
 
         $video->forceFill(['is_draft' => false])->save();
+        $moderationService->scanVideo($video);
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([

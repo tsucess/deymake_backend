@@ -34,7 +34,7 @@ class UserController extends Controller
         $videos = PaginatedJson::paginate(Video::query()
             ->withApiResourceData($viewer)
             ->where('user_id', $user->id)
-            ->where('is_draft', false)
+            ->discoverable()
             ->latest(), $request);
 
         return $this->videoResponse($request, __('messages.users.posts_retrieved'), $videos);

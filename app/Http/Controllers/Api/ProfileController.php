@@ -86,7 +86,7 @@ class ProfileController extends Controller
         return $this->videoResponse($request, __('messages.feeds.liked_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
-            ->where('is_draft', false)
+            ->discoverable()
             ->latest(), $request));
     }
 
@@ -102,7 +102,7 @@ class ProfileController extends Controller
         return $this->videoResponse($request, __('messages.feeds.saved_retrieved'), PaginatedJson::paginate(Video::query()
             ->withApiResourceData($request->user())
             ->whereIn('id', $videoIds)
-            ->where('is_draft', false)
+            ->discoverable()
             ->latest(), $request));
     }
 
