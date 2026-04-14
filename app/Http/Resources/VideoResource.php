@@ -13,6 +13,8 @@ class VideoResource extends JsonResource
         $viewer = auth('sanctum')->user() ?? $request->user();
         $originalMediaUrl = $this->upload?->path ?: $this->media_url;
         $liveLikes = (int) ($this->live_like_events_count ?? 0);
+        $liveTipsCount = (int) ($this->live_tips_count ?? 0);
+        $liveTipsAmount = (int) ($this->live_tips_amount ?? 0);
         $likes = (int) ($this->likes_count ?? 0) + $liveLikes;
         $currentViewers = (int) ($this->is_live ? ($this->current_viewers_count ?? 0) : 0);
         $mediaUrl = $this->type === 'video'
@@ -63,6 +65,8 @@ class VideoResource extends JsonResource
                 'peakViewers' => (int) ($this->live_peak_viewers_count ?? 0),
                 'liveLikes' => $liveLikes,
                 'liveComments' => (int) ($this->live_comments_count ?? 0),
+                'liveTipsCount' => $liveTipsCount,
+                'liveTipsAmount' => $liveTipsAmount,
             ],
             'author' => new ProfileResource($this->whenLoaded('user')),
             'creator' => new ProfileResource($this->whenLoaded('user')),

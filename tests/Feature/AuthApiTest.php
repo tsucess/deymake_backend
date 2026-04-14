@@ -79,6 +79,25 @@ class AuthApiTest extends TestCase
         $response->assertJsonPath('data.user.username', $user->username);
     }
 
+    public function test_suspended_user_cannot_login(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'suspended@example.com',
+            'username' => 'suspended.user',
+            'password' => 'Password1',
+            'account_status' => 'suspended',
+            'suspended_at' => now(),
+        ]);
+
+        $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'Password1',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.auth.account_suspended'))
+            ->assertJsonPath('errors.account.0', trans('messages.auth.account_suspended_detail'));
+    }
+
     public function test_unverified_user_login_requires_email_verification(): void
     {
         Notification::fake();

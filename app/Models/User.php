@@ -30,6 +30,9 @@ class User extends Authenticatable
         'username',
         'email',
         'email_verified_at',
+        'creator_verification_status',
+        'creator_verified_at',
+        'creator_verification_notes',
         'password',
         'avatar_url',
         'bio',
@@ -37,6 +40,10 @@ class User extends Authenticatable
         'is_online',
         'last_active_at',
         'is_admin',
+        'account_status',
+        'account_status_notes',
+        'suspended_at',
+        'suspended_by',
         'provider',
         'provider_id',
     ];
@@ -60,11 +67,13 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'creator_verified_at' => 'datetime',
             'password' => 'hashed',
             'preferences' => 'array',
             'is_online' => 'boolean',
             'last_active_at' => 'datetime',
             'is_admin' => 'boolean',
+            'suspended_at' => 'datetime',
         ];
     }
 
@@ -227,5 +236,15 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return (bool) $this->is_admin;
+    }
+
+    public function accountStatus(): string
+    {
+        return $this->isSuspended() ? 'suspended' : ((string) ($this->account_status ?: 'active'));
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->account_status === 'suspended' || $this->suspended_at !== null;
     }
 }

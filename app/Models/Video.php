@@ -89,6 +89,11 @@ class Video extends Model
         return $this->hasMany(LivePresenceSession::class);
     }
 
+    public function fanTips(): HasMany
+    {
+        return $this->hasMany(FanTip::class);
+    }
+
     public function challengeSubmissions(): HasMany
     {
         return $this->hasMany(ChallengeSubmission::class);
@@ -151,6 +156,7 @@ class Video extends Model
                 'saves',
                 'comments as comments_count' => fn (Builder $commentsQuery) => $commentsQuery->where('moderation_status', 'visible'),
                 'liveLikeEvents',
+                'fanTips as live_tips_count' => fn (Builder $tipsQuery) => $tipsQuery->where('status', 'posted'),
             ])
             ->addSelect([
                 'current_viewers_count' => LivePresenceSession::query()
@@ -159,6 +165,10 @@ class Video extends Model
                     ->where('role', 'audience')
                     ->whereNull('left_at')
                     ->where('last_seen_at', '>=', now()->subSeconds(30)),
+                'live_tips_amount' => FanTip::query()
+                    ->selectRaw('COALESCE(SUM(amount), 0)')
+                    ->whereColumn('video_id', 'videos.id')
+                    ->where('status', 'posted'),
             ])
             ->when($viewer, function (Builder $videoQuery) use ($viewer): void {
                 $videoQuery->withExists([

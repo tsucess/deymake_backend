@@ -6,26 +6,55 @@ use App\Models\Membership;
 use App\Models\PayoutRequest;
 use App\Models\User;
 use App\Models\WalletTransaction;
+use Illuminate\Support\Carbon;
 
 class WalletLedgerService
 {
     public function recordMembershipCredit(Membership $membership): WalletTransaction
     {
-        return WalletTransaction::query()->create([
-            'user_id' => $membership->creator_id,
-            'membership_id' => $membership->id,
-            'type' => 'membership_credit',
-            'direction' => 'credit',
-            'status' => 'posted',
-            'amount' => (int) $membership->price_amount,
-            'currency' => $membership->currency,
-            'description' => 'Membership revenue received.',
-            'metadata' => [
+        return $this->recordCredit(
+            $membership->creator_id,
+            'membership_credit',
+            (int) $membership->price_amount,
+            $membership->currency,
+            'Membership revenue received.',
+            [
                 'memberId' => $membership->member_id,
                 'planId' => $membership->creator_plan_id,
                 'billingPeriod' => $membership->billing_period,
             ],
-            'occurred_at' => $membership->started_at ?? now(),
+            $membership->started_at,
+            $membership->id,
+        );
+    }
+
+    /**
+     * @param  User|int  $creator
+     * @param  array<string, mixed>|null  $metadata
+     */
+    public function recordCredit(
+        User|int $creator,
+        string $type,
+        int $amount,
+        string $currency,
+        ?string $description = null,
+        ?array $metadata = null,
+        ?Carbon $occurredAt = null,
+        ?int $membershipId = null,
+        ?int $payoutRequestId = null,
+    ): WalletTransaction {
+        return WalletTransaction::query()->create([
+            'user_id' => $creator instanceof User ? $creator->id : $creator,
+            'membership_id' => $membershipId,
+            'payout_request_id' => $payoutRequestId,
+            'type' => $type,
+            'direction' => 'credit',
+            'status' => 'posted',
+            'amount' => max(0, $amount),
+            'currency' => strtoupper($currency),
+            'description' => $description,
+            'metadata' => $metadata,
+            'occurred_at' => $occurredAt ?? now(),
         ]);
     }
 

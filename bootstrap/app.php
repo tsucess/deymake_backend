@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\RecordUserActivity;
 use Illuminate\Foundation\Application;
@@ -15,11 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withBroadcasting(
         __DIR__.'/../routes/channels.php',
-        ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', RecordUserActivity::class]],
+        ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', EnsureActiveAccount::class, RecordUserActivity::class]],
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'admin' => EnsureAdmin::class,
+            'active.account' => EnsureActiveAccount::class,
             'record.user.activity' => RecordUserActivity::class,
         ]);
     })

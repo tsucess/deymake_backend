@@ -8,6 +8,7 @@ use App\Events\LiveSignalCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\Comment;
+use App\Models\FanTip;
 use App\Models\LiveLikeEvent;
 use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
@@ -469,8 +470,16 @@ class VideoController extends Controller
                 'actor' => $this->formatLiveEngagementActor($comment->user),
             ]);
 
+        $tipEvents = $this->liveFanTipsQuery($video)
+            ->with('fan')
+            ->latest('tipped_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (FanTip $tip): array => $this->formatLiveTipEngagement($tip, ! $isCreator));
+
         $engagements = $likeEvents
             ->concat($commentEvents)
+            ->concat($tipEvents)
             ->sortByDesc('createdAt')
             ->take($limit)
             ->values();
@@ -920,6 +929,15 @@ class VideoController extends Controller
             ->when($video->live_ended_at, fn ($query) => $query->where('created_at', '<=', $video->live_ended_at));
     }
 
+    private function liveFanTipsQuery(Video $video)
+    {
+        return FanTip::query()
+            ->where('video_id', $video->id)
+            ->where('status', 'posted')
+            ->when($video->live_started_at, fn ($query) => $query->where('tipped_at', '>=', $video->live_started_at))
+            ->when($video->live_ended_at, fn ($query) => $query->where('tipped_at', '<=', $video->live_ended_at));
+    }
+
     private function buildLiveEngagementSummary(Video $video): array
     {
         [$startedAt, $endedAt] = $this->resolveLiveAnalyticsWindow($video);
@@ -938,8 +956,16 @@ class VideoController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $tipCounts = $this->liveFanTipsQuery($video)
+            ->select('fan_id', DB::raw('COUNT(*) as tips_count'), DB::raw('SUM(amount) as tips_amount'), DB::raw('MAX(tipped_at) as last_tipped_at'))
+            ->whereNotNull('fan_id')
+            ->groupBy('fan_id')
+            ->get()
+            ->keyBy('fan_id');
+
         $userIds = $likeCounts->keys()
             ->merge($commentCounts->keys())
+            ->merge($tipCounts->keys())
             ->filter()
             ->unique()
             ->values();
@@ -950,7 +976,7 @@ class VideoController extends Controller
             ->keyBy('id');
 
         $topFans = $userIds
-            ->map(function ($userId) use ($users, $likeCounts, $commentCounts): ?array {
+            ->map(function ($userId) use ($users, $likeCounts, $commentCounts, $tipCounts): ?array {
                 $user = $users->get($userId);
 
                 if (! $user) {
@@ -959,16 +985,21 @@ class VideoController extends Controller
 
                 $likesCount = (int) ($likeCounts->get($userId)?->likes_count ?? 0);
                 $commentsCount = (int) ($commentCounts->get($userId)?->comments_count ?? 0);
+                $tipsCount = (int) ($tipCounts->get($userId)?->tips_count ?? 0);
+                $tipsAmount = (int) ($tipCounts->get($userId)?->tips_amount ?? 0);
                 $lastEngagedAt = max(
                     (string) ($likeCounts->get($userId)?->last_liked_at ?? ''),
-                    (string) ($commentCounts->get($userId)?->last_commented_at ?? '')
+                    (string) ($commentCounts->get($userId)?->last_commented_at ?? ''),
+                    (string) ($tipCounts->get($userId)?->last_tipped_at ?? '')
                 );
 
                 return [
                     'actor' => $this->formatLiveEngagementActor($user),
                     'likesCount' => $likesCount,
                     'commentsCount' => $commentsCount,
-                    'engagementCount' => $likesCount + $commentsCount,
+                    'tipsCount' => $tipsCount,
+                    'tipsAmount' => $tipsAmount,
+                    'engagementCount' => $likesCount + $commentsCount + $tipsCount,
                     'lastEngagedAt' => $lastEngagedAt !== '' ? Carbon::parse($lastEngagedAt)->toISOString() : null,
                 ];
             })
@@ -976,11 +1007,13 @@ class VideoController extends Controller
             ->sort(function (array $left, array $right): int {
                 return [
                     $right['engagementCount'],
+                    $right['tipsAmount'],
                     $right['likesCount'],
                     $right['commentsCount'],
                     $right['lastEngagedAt'] ?? '',
                 ] <=> [
                     $left['engagementCount'],
+                    $left['tipsAmount'],
                     $left['likesCount'],
                     $left['commentsCount'],
                     $left['lastEngagedAt'] ?? '',
@@ -1043,15 +1076,48 @@ class VideoController extends Controller
             ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
             ->values();
 
+        $topGifters = $tipCounts
+            ->map(function ($row, $userId) use ($users): ?array {
+                $user = $users->get($userId);
+
+                if (! $user) {
+                    return null;
+                }
+
+                return [
+                    'actor' => $this->formatLiveEngagementActor($user),
+                    'tipsCount' => (int) ($row->tips_count ?? 0),
+                    'tipsAmount' => (int) ($row->tips_amount ?? 0),
+                    'lastTippedAt' => $row->last_tipped_at ? Carbon::parse((string) $row->last_tipped_at)->toISOString() : null,
+                ];
+            })
+            ->filter()
+            ->sort(function (array $left, array $right): int {
+                return [
+                    $right['tipsAmount'],
+                    $right['tipsCount'],
+                    $right['lastTippedAt'] ?? '',
+                ] <=> [
+                    $left['tipsAmount'],
+                    $left['tipsCount'],
+                    $left['lastTippedAt'] ?? '',
+                ];
+            })
+            ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
+            ->values();
+
         [$timeline, $viewerTrend, $peakMoments, $retention] = $this->buildLiveAnalyticsTimeline($video, $startedAt, $endedAt);
 
         $totalLikes = (int) $likeCounts->sum('likes_count');
         $totalComments = (int) $commentCounts->sum('comments_count');
+        $totalTips = (int) $tipCounts->sum('tips_count');
+        $totalTipsAmount = (int) $tipCounts->sum('tips_amount');
 
         return [
             'topFans' => $topFans,
             'topCommenters' => $topCommenters,
             'topLikers' => $topLikers,
+            'topGifters' => $topGifters,
             'timeline' => $timeline,
             'viewerTrend' => $viewerTrend,
             'peakMoments' => $peakMoments,
@@ -1059,7 +1125,9 @@ class VideoController extends Controller
             'totals' => [
                 'likes' => $totalLikes,
                 'comments' => $totalComments,
-                'engagements' => $totalLikes + $totalComments,
+                'tips' => $totalTips,
+                'tipsAmount' => $totalTipsAmount,
+                'engagements' => $totalLikes + $totalComments + $totalTips,
                 'uniqueFans' => $users->count(),
             ],
         ];
@@ -1080,13 +1148,16 @@ class VideoController extends Controller
         $commentEvents = $this->liveCommentsQuery($video)
             ->get(['created_at']);
 
+        $tipEvents = $this->liveFanTipsQuery($video)
+            ->get(['created_at', 'amount']);
+
         $presenceSessions = LivePresenceSession::query()
             ->where('video_id', $video->id)
             ->where('role', 'audience')
             ->get(['user_id', 'joined_at', 'last_seen_at', 'left_at', 'created_at']);
 
         $timeline = collect(range(0, $bucketCount - 1))
-            ->map(function (int $index) use ($startedAt, $endedAt, $bucketCount, $bucketSizeSeconds, $likeEvents, $commentEvents, $presenceSessions): array {
+            ->map(function (int $index) use ($startedAt, $endedAt, $bucketCount, $bucketSizeSeconds, $likeEvents, $commentEvents, $tipEvents, $presenceSessions): array {
                 $bucketStart = $startedAt->copy()->addSeconds($index * $bucketSizeSeconds);
                 $bucketEnd = $index === $bucketCount - 1
                     ? $endedAt->copy()
@@ -1105,6 +1176,9 @@ class VideoController extends Controller
 
                 $likesCount = $likeEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
                 $commentsCount = $commentEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd))->count();
+                $tipsInBucket = $tipEvents->filter(fn ($event) => $this->eventFallsWithinBucket($event->created_at, $bucketStart, $bucketEnd, $inclusiveEnd));
+                $tipsCount = $tipsInBucket->count();
+                $tipsAmount = (int) $tipsInBucket->sum('amount');
                 $viewersCount = $presenceSessions
                     ->filter(fn (LivePresenceSession $session) => $this->presenceSessionIsActiveAt($session, $midpoint, $endedAt))
                     ->pluck('user_id')
@@ -1119,7 +1193,9 @@ class VideoController extends Controller
                     'midpointAt' => $midpoint->toISOString(),
                     'likesCount' => $likesCount,
                     'commentsCount' => $commentsCount,
-                    'engagementCount' => $likesCount + $commentsCount,
+                    'tipsCount' => $tipsCount,
+                    'tipsAmount' => $tipsAmount,
+                    'engagementCount' => $likesCount + $commentsCount + $tipsCount,
                     'viewersCount' => $viewersCount,
                 ];
             })
@@ -1227,6 +1303,27 @@ class VideoController extends Controller
             'fullName' => $user?->name,
             'username' => $user?->username,
             'avatarUrl' => $user?->avatar_url,
+        ];
+    }
+
+    private function formatLiveTipEngagement(FanTip $tip, bool $maskPrivateActor = false): array
+    {
+        return [
+            'id' => 'tip-'.$tip->id,
+            'type' => 'tip',
+            'body' => $tip->message,
+            'createdAt' => $tip->tipped_at?->toISOString() ?? $tip->created_at?->toISOString(),
+            'actor' => $maskPrivateActor && $tip->is_private
+                ? ['id' => null, 'fullName' => 'Anonymous fan', 'username' => null, 'avatarUrl' => null]
+                : $this->formatLiveEngagementActor($tip->fan),
+            'metadata' => [
+                'amount' => (int) $tip->amount,
+                'currency' => $tip->currency,
+                'giftName' => data_get($tip->metadata, 'giftName'),
+                'giftType' => data_get($tip->metadata, 'giftType'),
+                'giftCount' => (int) data_get($tip->metadata, 'giftCount', 1),
+                'isPrivate' => (bool) $tip->is_private,
+            ],
         ];
     }
 

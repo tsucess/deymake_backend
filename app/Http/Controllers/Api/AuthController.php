@@ -68,6 +68,10 @@ class AuthController extends Controller
             ], 422);
         }
 
+        if ($user->isSuspended()) {
+            return $this->suspendedAccountResponse();
+        }
+
         if (! $user->email_verified_at) {
             return response()->json([
                 'message' => __('messages.auth.verification_required'),
@@ -90,6 +94,10 @@ class AuthController extends Controller
         ]);
 
         $user = User::query()->where('email', $validated['email'])->firstOrFail();
+
+        if ($user->isSuspended()) {
+            return $this->suspendedAccountResponse();
+        }
 
         if ($user->email_verified_at) {
             return response()->json([
@@ -294,6 +302,11 @@ class AuthController extends Controller
             $token = $this->exchangeOauthCodeForAccessToken($provider, $code);
             $profile = $this->fetchOauthProfile($provider, $token);
             $user = $this->resolveOauthUser($provider, $profile);
+
+            if ($user->isSuspended()) {
+                return $this->oauthErrorResponse($request, $provider, __('messages.auth.account_suspended'), 403);
+            }
+
             $authToken = $user->createToken('auth_token')->plainTextToken;
 
             return redirect()->away($this->buildFrontendCallbackUrl($provider, [
@@ -562,6 +575,16 @@ class AuthController extends Controller
                 ],
             ],
         ], $status);
+    }
+
+    private function suspendedAccountResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => __('messages.auth.account_suspended'),
+            'errors' => [
+                'account' => [__('messages.auth.account_suspended_detail')],
+            ],
+        ], 403);
     }
 
     private function issueVerificationCode(User $user): void

@@ -169,4 +169,103 @@ class AdminDashboardApiTest extends TestCase
             'resolution_notes' => 'Escalated for moderation review',
         ]);
     }
+
+    public function test_admin_can_search_review_and_suspend_users_through_admin_management_api(): void
+    {
+        $admin = User::factory()->admin()->create([
+            'name' => 'Admin Manager',
+            'username' => 'admin.manager',
+            'email' => 'admin-manager@example.com',
+        ]);
+        $creator = User::factory()->create([
+            'name' => 'Stream Creator',
+            'username' => 'stream.creator',
+            'email' => 'stream-creator@example.com',
+            'last_active_at' => now()->subMinutes(5),
+        ]);
+        User::factory()->create([
+            'name' => 'Audience Fan',
+            'username' => 'audience.fan',
+            'email' => 'audience-fan@example.com',
+        ]);
+
+        Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Creator Clip',
+            'caption' => 'Admin review me',
+            'media_url' => 'https://cdn.example.com/creator.mp4',
+            'is_draft' => false,
+            'is_live' => false,
+        ]);
+
+        $adminToken = $admin->createToken('admin-test')->plainTextToken;
+        $creator->createToken('creator-test')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$adminToken)
+            ->getJson('/api/v1/admin/users?q=stream&role=creator')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.users_retrieved'))
+            ->assertJsonPath('data.users.0.id', $creator->id)
+            ->assertJsonPath('data.users.0.accountStatus', 'active')
+            ->assertJsonPath('data.users.0.stats.videosCount', 1)
+            ->assertJsonPath('meta.summary.totalUsers', 3)
+            ->assertJsonPath('meta.summary.creatorUsers', 1);
+
+        $this->withHeader('Authorization', 'Bearer '.$adminToken)
+            ->getJson('/api/v1/admin/users/'.$creator->id)
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_retrieved'))
+            ->assertJsonPath('data.user.id', $creator->id)
+            ->assertJsonPath('data.user.stats.publishedVideosCount', 1);
+
+        $this->withHeader('Authorization', 'Bearer '.$adminToken)
+            ->patchJson('/api/v1/admin/users/'.$creator->id, [
+                'accountStatus' => 'suspended',
+                'accountStatusNotes' => 'Repeated impersonation reports.',
+                'clearSessions' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_updated'))
+            ->assertJsonPath('data.user.accountStatus', 'suspended')
+            ->assertJsonPath('data.user.isSuspended', true)
+            ->assertJsonPath('data.user.accountStatusNotes', 'Repeated impersonation reports.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $creator->id,
+            'account_status' => 'suspended',
+            'account_status_notes' => 'Repeated impersonation reports.',
+            'suspended_by' => $admin->id,
+        ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_type' => $creator->getMorphClass(),
+            'tokenable_id' => $creator->id,
+        ]);
+
+        Sanctum::actingAs($creator->fresh());
+
+        $this
+            ->getJson('/api/v1/auth/me')
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.auth.account_suspended'));
+
+        Sanctum::actingAs($admin->fresh());
+
+        $this
+            ->patchJson('/api/v1/admin/users/'.$admin->id, [
+                'isAdmin' => false,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', trans('messages.admin.user_self_protection'));
+
+        $this
+            ->patchJson('/api/v1/admin/users/'.$creator->id, [
+                'accountStatus' => 'active',
+                'accountStatusNotes' => 'Suspension lifted after review.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.user.accountStatus', 'active')
+            ->assertJsonPath('data.user.isSuspended', false);
+    }
 }

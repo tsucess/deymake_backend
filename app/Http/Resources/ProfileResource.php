@@ -16,6 +16,8 @@ class ProfileResource extends JsonResource
             'bio' => $this->bio,
             'avatarUrl' => $this->avatar_url,
             'isOnline' => $this->isActiveNow(),
+            'isVerifiedCreator' => $this->creator_verification_status === 'approved',
+            'creatorVerificationStatus' => $this->creator_verification_status ?: 'unsubmitted',
             'subscriberCount' => (int) ($this->subscribers_count ?? 0),
             'isDeveloper' => (int) ($this->tokens_count ?? 0) > 0 || (int) ($this->webhooks_count ?? 0) > 0,
             'hasActivePlans' => (int) ($this->active_creator_plans_count ?? 0) > 0,

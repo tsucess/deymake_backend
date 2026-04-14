@@ -1406,6 +1406,94 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.videos.0.liveComments', 3);
     }
 
+    public function test_live_fan_tips_are_recorded_broadcast_and_counted_in_live_engagement_analytics(): void
+    {
+        Event::fake([LiveEngagementCreated::class]);
+
+        $category = Category::create(['name' => 'Live Gifts', 'slug' => 'live-gifts']);
+        $creator = User::factory()->create([
+            'name' => 'Gift Host',
+            'username' => 'gift.host',
+            'email' => 'gift-host@example.com',
+        ]);
+        $viewer = User::factory()->create([
+            'name' => 'Rose Fan',
+            'username' => 'rose.fan',
+            'email' => 'rose-fan@example.com',
+        ]);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Giftable Live',
+            'caption' => 'Send gifts in real time',
+            'media_url' => 'https://cdn.example.com/live-gifts.mp4',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now()->subMinutes(4),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/live/tips', [
+            'amount' => 1200,
+            'currency' => 'NGN',
+            'message' => 'Rose rain for the host!',
+            'giftName' => 'Rose',
+            'giftType' => 'rose',
+            'giftCount' => 3,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('message', trans('messages.fan_tips.live_created'))
+            ->assertJsonPath('data.tip.amount', 1200)
+            ->assertJsonPath('data.tip.video.id', $video->id)
+            ->assertJsonPath('data.engagement.type', 'tip')
+            ->assertJsonPath('data.engagement.metadata.giftName', 'Rose')
+            ->assertJsonPath('data.video.liveAnalytics.liveTipsCount', 1)
+            ->assertJsonPath('data.video.liveAnalytics.liveTipsAmount', 1200);
+
+        Event::assertDispatched(LiveEngagementCreated::class, function (LiveEngagementCreated $event) use ($video, $viewer): bool {
+            return $event->videoId === $video->id
+                && ($event->engagement['type'] ?? null) === 'tip'
+                && ($event->engagement['actor']['id'] ?? null) === $viewer->id
+                && ($event->analytics['liveTips'] ?? null) === 1
+                && ($event->analytics['liveTipsAmount'] ?? null) === 1200;
+        });
+
+        Sanctum::actingAs($creator);
+
+        $this->getJson('/api/v1/videos/'.$video->id.'/live/engagements?includeSummary=1')
+            ->assertOk()
+            ->assertJsonFragment(['type' => 'tip'])
+            ->assertJsonPath('data.summary.topGifters.0.actor.fullName', 'Rose Fan')
+            ->assertJsonPath('data.summary.topGifters.0.tipsCount', 1)
+            ->assertJsonPath('data.summary.topGifters.0.tipsAmount', 1200)
+            ->assertJsonPath('data.summary.topFans.0.actor.fullName', 'Rose Fan')
+            ->assertJsonPath('data.summary.topFans.0.tipsCount', 1)
+            ->assertJsonPath('data.summary.totals.tips', 1)
+            ->assertJsonPath('data.summary.totals.tipsAmount', 1200);
+
+        $this->getJson('/api/v1/monetization/summary')
+            ->assertOk()
+            ->assertJsonPath('data.summary.earnings.grossRevenue', 1200)
+            ->assertJsonPath('data.summary.earnings.availableBalance', 1200);
+
+        $this->assertDatabaseHas('fan_tips', [
+            'creator_id' => $creator->id,
+            'fan_id' => $viewer->id,
+            'video_id' => $video->id,
+            'amount' => 1200,
+            'status' => 'posted',
+        ]);
+
+        $this->assertDatabaseHas('wallet_transactions', [
+            'user_id' => $creator->id,
+            'type' => 'fan_tip_credit',
+            'amount' => 1200,
+        ]);
+    }
+
     public function test_live_audience_endpoint_returns_active_unique_audience_members_for_creator_only(): void
     {
         $category = Category::create(['name' => 'Live Audience', 'slug' => 'live-audience']);
