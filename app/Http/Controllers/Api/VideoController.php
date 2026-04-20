@@ -704,7 +704,7 @@ class VideoController extends Controller
     private function buildFrontendVideoUrl(Video $video): string
     {
         $baseUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
-        $path = ($video->is_live ? '/live/' : '/video/').$video->id;
+        $path = ($video->is_live ? '/live/' : '/video/').($video->public_id ?: $video->id);
 
         return $baseUrl.$path;
     }

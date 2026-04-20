@@ -9,10 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Str;
 
 class Video extends Model
 {
     use HasFactory;
+
+    protected const PUBLIC_ID_LENGTH = 12;
 
     protected $fillable = [
         'user_id',
@@ -52,6 +55,39 @@ class Video extends Model
             'live_ended_at' => 'datetime',
             'live_notified_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $video): void {
+            if (filled($video->public_id)) {
+                return;
+            }
+
+            $video->public_id = static::generateUniquePublicId();
+        });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field !== null && $field !== $this->getRouteKeyName()) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $resolvedValue = (string) $value;
+
+        return static::query()
+            ->where('public_id', $resolvedValue)
+            ->when(
+                ctype_digit($resolvedValue),
+                fn (Builder $query) => $query->orWhere($this->getQualifiedKeyName(), (int) $resolvedValue)
+            )
+            ->first();
     }
 
     public function user(): BelongsTo
@@ -197,5 +233,14 @@ class Video extends Model
         }
 
         return ! $this->is_draft && $this->moderation_status === 'visible';
+    }
+
+    protected static function generateUniquePublicId(): string
+    {
+        do {
+            $publicId = Str::lower(Str::random(self::PUBLIC_ID_LENGTH));
+        } while (static::query()->where('public_id', $publicId)->exists());
+
+        return $publicId;
     }
 }

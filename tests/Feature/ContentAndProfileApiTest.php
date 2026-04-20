@@ -107,6 +107,14 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.video.currentUserState.liked', false)
             ->assertJsonPath('data.video.currentUserState.subscribed', false);
 
+        $this->assertIsString($mainVideo->public_id);
+        $this->assertNotSame('', $mainVideo->public_id);
+
+        $this->getJson('/api/v1/videos/'.$mainVideo->public_id)
+            ->assertOk()
+            ->assertJsonPath('data.video.id', $mainVideo->id)
+            ->assertJsonPath('data.video.publicId', $mainVideo->public_id);
+
         $this->getJson('/api/v1/videos/'.$mainVideo->id.'/related')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.related_retrieved'))
@@ -277,7 +285,8 @@ class ContentAndProfileApiTest extends TestCase
         $videoResponse
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.videos.created'))
-            ->assertJsonPath('data.video.taggedUsers', $expectedTaggedUsers);
+            ->assertJsonPath('data.video.taggedUsers', $expectedTaggedUsers)
+            ->assertJsonPath('data.video.publicId', fn ($value) => is_string($value) && $value !== '');
         $videoId = $videoResponse->json('data.video.id');
         $this->assertSame($expectedTaggedUsers, Video::findOrFail($videoId)->tagged_users);
 
@@ -330,10 +339,14 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.videos.0.id', $liveVideoId)
             ->assertJsonPath('meta.videos.total', 1);
 
-        $this->postJson('/api/v1/videos/'.$liveVideoId.'/share')
+        $liveVideoPublicId = $liveVideoResponse->json('data.video.publicId');
+        $this->assertIsString($liveVideoPublicId);
+        $this->assertNotSame('', $liveVideoPublicId);
+
+        $this->postJson('/api/v1/videos/'.$liveVideoPublicId.'/share')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.share_recorded'))
-            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/live/'.$liveVideoId);
+            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/live/'.$liveVideoPublicId);
 
         $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')
             ->assertOk()
@@ -1650,10 +1663,10 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->postJson('/api/v1/videos/'.$video->public_id.'/share')
             ->assertOk()
             ->assertJsonPath('data.shares', 1)
-            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/video/'.$video->id);
+            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/video/'.$video->public_id);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
