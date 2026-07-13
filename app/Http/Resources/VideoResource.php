@@ -55,6 +55,12 @@ class VideoResource extends JsonResource
             'dislikes' => (int) ($this->dislikes_count ?? 0),
             'saves' => (int) ($this->saves_count ?? 0),
             'shares' => (int) $this->shares_count,
+            'reposts' => (int) ($this->reposts_count ?? 0),
+            'audioTrack' => [
+                'title' => $this->audio_track_title,
+                'artist' => $this->audio_track_artist,
+                'coverUrl' => $this->audio_track_cover_url,
+            ],
             'commentsCount' => (int) ($this->comments_count ?? 0),
             'liveComments' => (int) ($this->live_comments_count ?? 0),
             'isLive' => (bool) $this->is_live,

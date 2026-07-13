@@ -40,6 +40,10 @@ class Video extends Model
         'live_notified_at',
         'views_count',
         'shares_count',
+        'reposts_count',
+        'audio_track_title',
+        'audio_track_artist',
+        'audio_track_cover_url',
         'live_comments_count',
         'live_peak_viewers_count',
     ];
