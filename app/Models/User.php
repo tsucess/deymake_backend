@@ -30,6 +30,10 @@ class User extends Authenticatable
         'username',
         'email',
         'email_verified_at',
+        'phone',
+        'country_code',
+        'phone_verified_at',
+        'date_of_birth',
         'creator_verification_status',
         'creator_verified_at',
         'creator_verification_notes',
@@ -67,6 +71,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'date_of_birth' => 'date',
             'creator_verified_at' => 'datetime',
             'password' => 'hashed',
             'preferences' => 'array',

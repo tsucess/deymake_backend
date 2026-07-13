@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Notifications\SendEmailVerificationCode;
+use App\Notifications\SendPasswordResetLink;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ class AuthExtensionsApiTest extends TestCase
 
     public function test_user_can_request_and_complete_password_reset(): void
     {
+        Notification::fake();
+
         $user = User::factory()->create([
             'email' => 'reset@example.com',
             'password' => 'OldPassword1',
@@ -26,9 +29,23 @@ class AuthExtensionsApiTest extends TestCase
             'email' => $user->email,
         ]);
 
-        $forgot->assertOk()->assertJsonPath('data.email', $user->email);
+        $forgot->assertOk()
+            ->assertJsonPath('data.email', $user->email)
+            ->assertJsonMissingPath('data.resetToken');
 
-        $token = $forgot->json('data.resetToken');
+        $token = null;
+
+        Notification::assertSentTo(
+            $user,
+            SendPasswordResetLink::class,
+            function ($notification) use (&$token) {
+                $token = $notification->token;
+
+                return true;
+            }
+        );
+
+        $this->assertNotNull($token);
 
         $this->postJson('/api/v1/auth/reset-password', [
             'email' => $user->email,
@@ -40,6 +57,21 @@ class AuthExtensionsApiTest extends TestCase
             'identifier' => $user->email,
             'password' => 'NewPassword1',
         ])->assertOk()->assertJsonPath('message', trans('messages.auth.login_success'));
+    }
+
+    public function test_forgot_password_returns_generic_response_for_unknown_email(): void
+    {
+        Notification::fake();
+
+        $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => 'nobody@example.com',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.auth.password_reset_link_sent'))
+            ->assertJsonPath('data.email', 'nobody@example.com')
+            ->assertJsonMissingPath('data.resetToken');
+
+        Notification::assertNothingSent();
     }
 
     public function test_unverified_user_can_verify_email_with_a_four_digit_code_and_receive_a_token(): void

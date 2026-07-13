@@ -12,7 +12,8 @@
         "laravel/reverb": "^1.10",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
-        "taylanunutmaz/agora-token-builder": "^1.1"
+        "taylanunutmaz/agora-token-builder": "^1.1",
+        "twilio/sdk": "^8.11"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

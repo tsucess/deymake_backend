@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Contracts\SmsSender;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\RegisterWithPhoneRequest;
+use App\Http\Requests\Auth\SendPhoneCodeRequest;
+use App\Http\Requests\Auth\VerifyPhoneCodeRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Notifications\SendEmailVerificationCode;
+use App\Notifications\SendPasswordResetLink;
 use App\Support\Username;
 use App\Support\UserDefaults;
 use Carbon\Carbon;
@@ -20,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -32,9 +38,17 @@ class AuthController extends Controller
 
     private const VERIFICATION_CODE_TTL_MINUTES = 10;
 
+    private const LOGIN_MAX_ATTEMPTS = 6;
+
+    private const LOGIN_DECAY_SECONDS = 60;
+
+    private const PHONE_LOGIN_MAX_ATTEMPTS = 5;
+
+    private const PHONE_LOGIN_DECAY_SECONDS = 60;
+
     public function register(RegisterRequest $request): JsonResponse
     {
-        $user = User::create([
+        $attributes = [
             'name' => $request->string('fullName')->toString(),
             'username' => Username::normalize(
                 $request->string('username')->toString(),
@@ -44,26 +58,94 @@ class AuthController extends Controller
             'password' => $request->string('password')->toString(),
             'preferences' => UserDefaults::preferences(),
             'is_online' => false,
-        ]);
+        ];
+
+        if ($request->filled('dateOfBirth')) {
+            $attributes['date_of_birth'] = $request->date('dateOfBirth');
+        }
+
+        $user = User::create($attributes);
 
         $this->issueVerificationCode($user);
 
         return $this->verificationRequiredResponse($user, __('messages.auth.verification_code_sent'), 201);
     }
 
-    public function login(LoginRequest $request): JsonResponse
+    public function sendPhoneCode(SendPhoneCodeRequest $request, SmsSender $sms): JsonResponse
     {
-        $identifier = trim($request->string('identifier')->toString());
+        $phone = $request->string('phone')->toString();
 
-        $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
-            ? User::query()->where('email', $identifier)->first()
-            : User::query()->where('username', Username::normalize($identifier))->first();
+        $this->issuePhoneCode($phone, 'signup', $sms, 'messages.auth.phone_code_sms_message');
 
-        if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
+        return response()->json([
+            'message' => __('messages.auth.phone_code_sent'),
+            'data' => [
+                'phone' => $phone,
+                'expiresInMinutes' => self::VERIFICATION_CODE_TTL_MINUTES,
+            ],
+        ]);
+    }
+
+    public function sendPhoneLoginCode(SendPhoneCodeRequest $request, SmsSender $sms): JsonResponse
+    {
+        $phone = $request->string('phone')->toString();
+        $ipKey = 'phone-login:ip:'.$request->ip();
+        $phoneKey = 'phone-login:phone:'.$phone;
+
+        if ($response = $this->rateLimitedResponse($ipKey, self::PHONE_LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+        if ($response = $this->rateLimitedResponse($phoneKey, self::PHONE_LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+
+        RateLimiter::hit($ipKey, self::PHONE_LOGIN_DECAY_SECONDS);
+        RateLimiter::hit($phoneKey, self::PHONE_LOGIN_DECAY_SECONDS);
+
+        $user = User::query()->where('phone', $phone)->first();
+
+        if ($user) {
+            if ($user->isSuspended()) {
+                return $this->suspendedAccountResponse();
+            }
+
+            $this->issuePhoneCode($phone, 'login', $sms, 'messages.auth.phone_login_code_sms_message');
+        }
+
+        return response()->json([
+            'message' => __('messages.auth.phone_login_code_sent'),
+            'data' => [
+                'phone' => $phone,
+                'expiresInMinutes' => self::VERIFICATION_CODE_TTL_MINUTES,
+            ],
+        ]);
+    }
+
+    public function loginWithPhone(VerifyPhoneCodeRequest $request): JsonResponse
+    {
+        $phone = $request->string('phone')->toString();
+        $code = $request->string('code')->toString();
+        $ipKey = 'phone-login-verify:ip:'.$request->ip();
+        $phoneKey = 'phone-login-verify:phone:'.$phone;
+
+        if ($response = $this->rateLimitedResponse($ipKey, self::LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+        if ($response = $this->rateLimitedResponse($phoneKey, self::LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+
+        $user = User::query()->where('phone', $phone)->first();
+
+        if (! $user || ! $this->phoneCodeIsValid($phone, $code, 'login')) {
+            RateLimiter::hit($ipKey, self::LOGIN_DECAY_SECONDS);
+            RateLimiter::hit($phoneKey, self::LOGIN_DECAY_SECONDS);
+
             return response()->json([
-                'message' => __('messages.auth.invalid_credentials'),
+                'message' => __('messages.auth.phone_login_code_invalid'),
                 'errors' => [
-                    'identifier' => [__('messages.auth.invalid_credentials_detail')],
+                    'code' => [__('messages.auth.phone_login_code_invalid')],
+                    'reason' => ['invalid_code'],
                 ],
             ], 422);
         }
@@ -72,11 +154,178 @@ class AuthController extends Controller
             return $this->suspendedAccountResponse();
         }
 
-        if (! $user->email_verified_at) {
+        RateLimiter::clear($ipKey);
+        RateLimiter::clear($phoneKey);
+
+        DB::table('phone_verification_codes')
+            ->where('phone', $phone)
+            ->where('purpose', 'login')
+            ->delete();
+
+        $user->forceFill([
+            'phone_verified_at' => $user->phone_verified_at ?? now(),
+            'is_online' => true,
+            'last_active_at' => now(),
+        ])->save();
+
+        return $this->authenticatedResponse($user, __('messages.auth.login_success'));
+    }
+
+    public function verifyPhoneCode(VerifyPhoneCodeRequest $request): JsonResponse
+    {
+        $phone = $request->string('phone')->toString();
+        $code = $request->string('code')->toString();
+
+        if (! $this->phoneCodeIsValid($phone, $code, 'signup')) {
+            return response()->json([
+                'message' => __('messages.auth.phone_code_invalid'),
+                'errors' => [
+                    'code' => [__('messages.auth.phone_code_invalid')],
+                ],
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => __('messages.auth.phone_verified'),
+            'data' => [
+                'phone' => $phone,
+                'verified' => true,
+            ],
+        ]);
+    }
+
+    public function registerWithPhone(RegisterWithPhoneRequest $request): JsonResponse
+    {
+        $phone = $request->string('phone')->toString();
+        $code = $request->string('code')->toString();
+
+        if (! $this->phoneCodeIsValid($phone, $code, 'signup')) {
+            return response()->json([
+                'message' => __('messages.auth.phone_code_invalid'),
+                'errors' => [
+                    'code' => [__('messages.auth.phone_code_invalid')],
+                ],
+            ], 422);
+        }
+
+        $attributes = [
+            'name' => $request->string('fullName')->toString(),
+            'username' => Username::normalize(
+                $request->string('username')->toString(),
+                'user',
+            ),
+            'phone' => $phone,
+            'country_code' => $request->filled('countryCode') ? $request->string('countryCode')->toString() : null,
+            'phone_verified_at' => now(),
+            'password' => $request->string('password')->toString(),
+            'preferences' => UserDefaults::preferences(),
+            'is_online' => true,
+            'last_active_at' => now(),
+        ];
+
+        if ($request->filled('dateOfBirth')) {
+            $attributes['date_of_birth'] = $request->date('dateOfBirth');
+        }
+
+        $user = User::create($attributes);
+
+        DB::table('phone_verification_codes')
+            ->where('phone', $phone)
+            ->where('purpose', 'signup')
+            ->delete();
+
+        return $this->authenticatedResponse($user, __('messages.auth.registered'), 201);
+    }
+
+    private function issuePhoneCode(string $phone, string $purpose, SmsSender $sms, string $messageKey): void
+    {
+        $code = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+
+        DB::table('phone_verification_codes')->updateOrInsert(
+            ['phone' => $phone, 'purpose' => $purpose],
+            [
+                'code' => $code,
+                'expires_at' => now()->addMinutes(self::VERIFICATION_CODE_TTL_MINUTES),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        $sms->send($phone, __($messageKey, [
+            'code' => $code,
+            'minutes' => self::VERIFICATION_CODE_TTL_MINUTES,
+        ]));
+    }
+
+    private function phoneCodeIsValid(string $phone, string $code, string $purpose): bool
+    {
+        $verification = DB::table('phone_verification_codes')
+            ->where('phone', $phone)
+            ->where('purpose', $purpose)
+            ->first();
+
+        if (! $verification || ! hash_equals((string) $verification->code, $code)) {
+            return false;
+        }
+
+        if (Carbon::parse($verification->expires_at)->isPast()) {
+            DB::table('phone_verification_codes')
+                ->where('phone', $phone)
+                ->where('purpose', $purpose)
+                ->delete();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $identifier = trim($request->string('identifier')->toString());
+        $ipKey = 'login:ip:'.$request->ip();
+        $identifierKey = 'login:id:'.Str::lower($identifier);
+
+        if ($response = $this->rateLimitedResponse($ipKey, self::LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+        if ($response = $this->rateLimitedResponse($identifierKey, self::LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+
+        $user = $this->findLoginCandidate($identifier);
+
+        if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
+            RateLimiter::hit($ipKey, self::LOGIN_DECAY_SECONDS);
+            RateLimiter::hit($identifierKey, self::LOGIN_DECAY_SECONDS);
+
+            return response()->json([
+                'message' => __('messages.auth.invalid_credentials'),
+                'errors' => [
+                    'identifier' => [__('messages.auth.invalid_credentials_detail')],
+                    'reason' => ['invalid_credentials'],
+                ],
+            ], 422);
+        }
+
+        if ($user->isSuspended()) {
+            return $this->suspendedAccountResponse();
+        }
+
+        if (! $user->email_verified_at && ! $user->phone_verified_at) {
             return response()->json([
                 'message' => __('messages.auth.verification_required'),
+                'errors' => [
+                    'reason' => ['email_not_verified'],
+                    'email' => [$user->email],
+                ],
             ], 403);
         }
+
+        RateLimiter::clear($ipKey);
+        RateLimiter::clear($identifierKey);
+
+        DB::table('email_verification_codes')->where('email', $user->email)->delete();
 
         $user->forceFill([
             'is_online' => true,
@@ -84,6 +333,40 @@ class AuthController extends Controller
         ])->save();
 
         return $this->authenticatedResponse($user, __('messages.auth.login_success'));
+    }
+
+    private function findLoginCandidate(string $identifier): ?User
+    {
+        if ($identifier === '') {
+            return null;
+        }
+
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            return User::query()->where('email', $identifier)->first();
+        }
+
+        if (preg_match('/^\+?[0-9]{7,20}$/', $identifier)) {
+            return User::query()->where('phone', $identifier)->first();
+        }
+
+        return User::query()->where('username', Username::normalize($identifier))->first();
+    }
+
+    private function rateLimitedResponse(string $key, int $maxAttempts): ?JsonResponse
+    {
+        if (! RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            return null;
+        }
+
+        $seconds = RateLimiter::availableIn($key);
+
+        return response()->json([
+            'message' => __('messages.auth.too_many_attempts', ['seconds' => $seconds]),
+            'errors' => [
+                'reason' => ['too_many_attempts'],
+                'retryAfter' => [$seconds],
+            ],
+        ], 429)->header('Retry-After', (string) $seconds);
     }
 
     public function verifyEmailCode(Request $request): JsonResponse
@@ -201,24 +484,43 @@ class AuthController extends Controller
     public function forgotPassword(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email', Rule::exists('users', 'email')],
+            'email' => ['required', 'email'],
         ]);
 
-        $token = Str::random(64);
+        $ipKey = 'forgot-password:ip:'.$request->ip();
+        $emailKey = 'forgot-password:email:'.Str::lower($validated['email']);
 
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $validated['email']],
-            [
-                'token' => Hash::make($token),
-                'created_at' => now(),
-            ]
-        );
+        if ($response = $this->rateLimitedResponse($ipKey, self::PHONE_LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+        if ($response = $this->rateLimitedResponse($emailKey, self::PHONE_LOGIN_MAX_ATTEMPTS)) {
+            return $response;
+        }
+
+        RateLimiter::hit($ipKey, self::PHONE_LOGIN_DECAY_SECONDS);
+        RateLimiter::hit($emailKey, self::PHONE_LOGIN_DECAY_SECONDS);
+
+        $user = User::query()->where('email', $validated['email'])->first();
+
+        if ($user && ! $user->isSuspended()) {
+            $token = Str::random(64);
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $validated['email']],
+                [
+                    'token' => Hash::make($token),
+                    'created_at' => now(),
+                ]
+            );
+
+            Notification::locale(app()->getLocale())
+                ->send($user, new SendPasswordResetLink($token, $validated['email'], 60));
+        }
 
         return response()->json([
-            'message' => __('messages.auth.password_reset_token_generated'),
+            'message' => __('messages.auth.password_reset_link_sent'),
             'data' => [
                 'email' => $validated['email'],
-                'resetToken' => $token,
                 'expiresInMinutes' => 60,
             ],
         ]);
@@ -227,24 +529,28 @@ class AuthController extends Controller
     public function resetPassword(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email', Rule::exists('users', 'email')],
+            'email' => ['required', 'email'],
             'token' => ['required', 'string'],
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
         ]);
 
-        $reset = DB::table('password_reset_tokens')->where('email', $validated['email'])->first();
+        $user = User::query()->where('email', $validated['email'])->first();
+        $reset = $user
+            ? DB::table('password_reset_tokens')->where('email', $validated['email'])->first()
+            : null;
 
-        if (! $reset || now()->diffInMinutes($reset->created_at) > 60 || ! Hash::check($validated['token'], $reset->token)) {
+        if (! $user || ! $reset || now()->diffInMinutes($reset->created_at) > 60 || ! Hash::check($validated['token'], $reset->token)) {
             return response()->json([
                 'message' => __('messages.auth.reset_token_invalid'),
                 'errors' => [
                     'token' => [__('messages.auth.reset_token_invalid_detail')],
+                    'reason' => ['invalid_reset_token'],
                 ],
             ], 422);
         }
 
-        $user = User::query()->where('email', $validated['email'])->firstOrFail();
         $user->forceFill(['password' => $validated['password']])->save();
+        $user->tokens()->delete();
 
         DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
 
@@ -304,6 +610,8 @@ class AuthController extends Controller
             $user = $this->resolveOauthUser($provider, $profile);
 
             if ($user->isSuspended()) {
+                $user->tokens()->delete();
+
                 return $this->oauthErrorResponse($request, $provider, __('messages.auth.account_suspended'), 403);
             }
 
@@ -583,6 +891,7 @@ class AuthController extends Controller
             'message' => __('messages.auth.account_suspended'),
             'errors' => [
                 'account' => [__('messages.auth.account_suspended_detail')],
+                'reason' => ['account_suspended'],
             ],
         ], 403);
     }

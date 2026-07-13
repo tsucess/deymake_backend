@@ -47,6 +47,11 @@ Route::prefix('v1')->group(function (): void {
 
         Route::prefix('auth')->group(function (): void {
             Route::post('/register', [AuthController::class, 'register']);
+            Route::post('/register-with-phone', [AuthController::class, 'registerWithPhone']);
+            Route::post('/send-phone-code', [AuthController::class, 'sendPhoneCode']);
+            Route::post('/verify-phone-code', [AuthController::class, 'verifyPhoneCode']);
+            Route::post('/send-phone-login-code', [AuthController::class, 'sendPhoneLoginCode']);
+            Route::post('/login-with-phone', [AuthController::class, 'loginWithPhone']);
             Route::post('/login', [AuthController::class, 'login']);
             Route::post('/verify-email-code', [AuthController::class, 'verifyEmailCode']);
             Route::post('/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
