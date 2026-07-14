@@ -78,11 +78,14 @@ class VideoResource extends JsonResource
             'author' => new ProfileResource($this->whenLoaded('user')),
             'creator' => new ProfileResource($this->whenLoaded('user')),
             'category' => $this->category ? new CategoryResource($this->category) : null,
+            'isOwner' => (bool) ($viewer && $viewer->id === $this->user_id),
             'currentUserState' => [
                 'liked' => (bool) ($this->liked_by_current_user ?? false),
                 'disliked' => (bool) ($this->disliked_by_current_user ?? false),
                 'saved' => (bool) ($this->saved_by_current_user ?? false),
+                'reposted' => (bool) ($this->reposted_by_current_user ?? false),
                 'subscribed' => (bool) ($this->user?->subscribed_by_current_user ?? false),
+                'isOwner' => (bool) ($viewer && $viewer->id === $this->user_id),
             ],
             'moderation' => $this->when(
                 $viewer && ($viewer->id === $this->user_id || $viewer->isAdmin()),

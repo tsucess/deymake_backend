@@ -88,6 +88,18 @@ class VideoInteractionController extends Controller
         return $this->toggleVideoInteraction($request, $video, 'save', false);
     }
 
+    public function repost(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->user_id === $request->user()->id, 422, __('messages.videos.self_repost_not_allowed'));
+
+        return $this->toggleVideoInteraction($request, $video, 'repost', true);
+    }
+
+    public function unrepost(Request $request, Video $video): JsonResponse
+    {
+        return $this->toggleVideoInteraction($request, $video, 'repost', false);
+    }
+
     public function subscribe(Request $request, User $creator): JsonResponse
     {
         abort_if($creator->is($request->user()), 422, __('messages.subscriptions.self_not_allowed'));
@@ -156,6 +168,8 @@ class VideoInteractionController extends Controller
             ->where('type', $type);
 
         if ($active) {
+            $existing = $query->exists();
+
             DB::table('video_interactions')->updateOrInsert(
                 [
                     'video_id' => $video->id,
@@ -184,7 +198,11 @@ class VideoInteractionController extends Controller
                     ->delete();
             }
 
-            if (in_array($type, ['like', 'dislike'], true)) {
+            if ($type === 'repost' && ! $existing) {
+                $video->increment('reposts_count');
+            }
+
+            if (in_array($type, ['like', 'dislike', 'repost'], true)) {
                 UserNotifier::sendTranslated(
                     $video->user_id,
                     $request->user()->id,
@@ -193,7 +211,11 @@ class VideoInteractionController extends Controller
                 );
             }
         } else {
-            $query->delete();
+            $deleted = $query->delete();
+
+            if ($type === 'repost' && $deleted > 0) {
+                $video->decrement('reposts_count');
+            }
         }
 
         $video = Video::query()
@@ -217,6 +239,8 @@ class VideoInteractionController extends Controller
             ['dislike', false] => 'messages.videos.dislike_removed',
             ['save', true] => 'messages.videos.saved',
             ['save', false] => 'messages.videos.save_removed',
+            ['repost', true] => 'messages.videos.reposted',
+            ['repost', false] => 'messages.videos.repost_removed',
         };
     }
 
@@ -225,6 +249,7 @@ class VideoInteractionController extends Controller
         [$titleKey, $bodyKey] = match ($type) {
             'like' => ['video_like_title', 'video_like_body'],
             'dislike' => ['video_dislike_title', 'video_dislike_body'],
+            'repost' => ['video_repost_title', 'video_repost_body'],
         };
 
         return [

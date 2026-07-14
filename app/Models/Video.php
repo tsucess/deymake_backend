@@ -180,6 +180,13 @@ class Video extends Model
             ->withTimestamps();
     }
 
+    public function reposts(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'video_interactions')
+            ->wherePivot('type', '=', 'repost')
+            ->withTimestamps();
+    }
+
     public function scopeWithApiResourceData(Builder $query, ?User $viewer = null): Builder
     {
         return $query
@@ -215,6 +222,7 @@ class Video extends Model
                     'likes as liked_by_current_user' => fn (Builder $likesQuery) => $likesQuery->whereKey($viewer->id),
                     'dislikes as disliked_by_current_user' => fn (Builder $dislikesQuery) => $dislikesQuery->whereKey($viewer->id),
                     'saves as saved_by_current_user' => fn (Builder $savesQuery) => $savesQuery->whereKey($viewer->id),
+                    'reposts as reposted_by_current_user' => fn (Builder $repostsQuery) => $repostsQuery->whereKey($viewer->id),
                 ]);
             });
     }

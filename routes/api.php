@@ -138,6 +138,8 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/videos/{video}/dislike', [VideoInteractionController::class, 'undislike']);
         Route::post('/videos/{video}/save', [VideoInteractionController::class, 'save']);
         Route::delete('/videos/{video}/save', [VideoInteractionController::class, 'unsave']);
+Route::post('/videos/{video}/repost', [VideoInteractionController::class, 'repost']);
+Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unrepost']);
 
         Route::post('/creators/{creator}/subscribe', [VideoInteractionController::class, 'subscribe']);
         Route::delete('/creators/{creator}/subscribe', [VideoInteractionController::class, 'unsubscribe']);

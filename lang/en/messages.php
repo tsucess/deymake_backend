@@ -187,6 +187,8 @@ return [
         'video_like_body' => ':name liked your video.',
         'video_dislike_title' => 'Dislike on your video',
         'video_dislike_body' => ':name disliked your video.',
+        'video_repost_title' => 'Repost of your video',
+        'video_repost_body' => ':name reposted your video.',
         'creator_verification_title' => 'Creator verification update',
         'creator_verification_body' => 'Your creator verification request is now :status.',
         'fan_tip_title' => 'New fan tip',
@@ -265,6 +267,9 @@ return [
         'dislike_removed' => 'Video dislike removed successfully.',
         'saved' => 'Video saved successfully.',
         'save_removed' => 'Video removed from saved items successfully.',
+        'reposted' => 'Video reposted successfully.',
+        'repost_removed' => 'Repost removed successfully.',
+        'self_repost_not_allowed' => 'You cannot repost your own video.',
     ],
     'subscriptions' => [
         'created' => 'Creator subscribed successfully.',
