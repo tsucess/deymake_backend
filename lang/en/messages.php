@@ -276,6 +276,20 @@ return [
         'removed' => 'Creator unsubscribed successfully.',
         'self_not_allowed' => 'You cannot subscribe to yourself.',
     ],
+    'connections' => [
+        'feed_retrieved' => 'Connections feed retrieved successfully.',
+    ],
+    'creators' => [
+        'suggestions_retrieved' => 'Creator suggestions retrieved successfully.',
+    ],
+    'stories' => [
+        'feed_retrieved' => 'Stories retrieved successfully.',
+        'created' => 'Story created successfully.',
+        'viewed' => 'Story view recorded successfully.',
+        'deleted' => 'Story deleted successfully.',
+        'expired' => 'This story has expired.',
+        'not_owner' => 'You can only delete your own stories.',
+    ],
     'memberships' => [
         'plans_retrieved' => 'Membership plans retrieved successfully.',
         'creator_dashboard_retrieved' => 'Creator memberships retrieved successfully.',

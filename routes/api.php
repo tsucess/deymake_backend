@@ -10,10 +10,13 @@ use App\Http\Controllers\Api\ChallengeController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\CollaborationController;
 use App\Http\Controllers\Api\CollaborationDeliverableController;
+use App\Http\Controllers\Api\ConnectionsController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\CreatorAcademyController;
+use App\Http\Controllers\Api\CreatorSuggestionController;
 use App\Http\Controllers\Api\CreatorVerificationController;
 use App\Http\Controllers\Api\CreatorAnalyticsController;
+use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\ContentModerationController;
 use App\Http\Controllers\Api\BrandCampaignController;
 use App\Http\Controllers\Api\DeveloperController;
@@ -144,6 +147,14 @@ Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unr
         Route::post('/creators/{creator}/subscribe', [VideoInteractionController::class, 'subscribe']);
         Route::delete('/creators/{creator}/subscribe', [VideoInteractionController::class, 'unsubscribe']);
         Route::post('/creators/{creator}/tips', [FanTipController::class, 'store']);
+        Route::get('/creators/suggestions', [CreatorSuggestionController::class, 'suggestions']);
+
+        Route::get('/connections/feed', [ConnectionsController::class, 'feed']);
+
+        Route::get('/stories/feed', [StoryController::class, 'feed']);
+        Route::post('/stories', [StoryController::class, 'store']);
+        Route::post('/stories/{story}/view', [StoryController::class, 'view']);
+        Route::delete('/stories/{story}', [StoryController::class, 'destroy']);
 
         Route::post('/videos/{video}/comments', [CommentController::class, 'store']);
         Route::post('/comments/{comment}/replies', [CommentController::class, 'storeReply']);
