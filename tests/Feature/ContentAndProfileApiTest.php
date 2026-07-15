@@ -437,8 +437,14 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated')
             ->assertJsonPath('data.profile.username', 'viewer.updated')
+            ->assertJsonPath('data.profile.bio', 'Updated bio')
             ->assertJsonPath('data.profile.subscriberCount', 0)
             ->assertJsonPath('data.profile.currentUserState.subscribed', false);
+
+        $this->getJson('/api/v1/me/profile')
+            ->assertOk()
+            ->assertJsonPath('data.profile.bio', 'Updated bio')
+            ->assertJsonPath('data.profile.fullName', 'Viewer Updated');
 
         $this->getJson('/api/v1/me/posts?per_page=1&page=2')
             ->assertOk()

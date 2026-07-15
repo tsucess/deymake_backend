@@ -216,13 +216,27 @@ class User extends Authenticatable
     public function scopeWithProfileAggregates(Builder $query, ?self $viewer = null): Builder
     {
         return $query
+            ->select($query->getModel()->getTable().'.*')
             ->withCount('subscribers')
             ->withCount([
+                'subscribedCreators as following_count',
+                'videos as videos_count' => fn (Builder $videosQuery) => $videosQuery
+                    ->where('is_draft', false)
+                    ->where('moderation_status', 'visible'),
                 'creatorPlans',
                 'creatorPlans as active_creator_plans_count' => fn (Builder $plansQuery) => $plansQuery->where('is_active', true),
                 'webhooks',
                 'tokens',
             ])
+            ->selectSub(function ($subQuery): void {
+                $subQuery->from('video_interactions')
+                    ->join('videos', 'videos.id', '=', 'video_interactions.video_id')
+                    ->whereColumn('videos.user_id', 'users.id')
+                    ->where('videos.is_draft', false)
+                    ->where('videos.moderation_status', 'visible')
+                    ->where('video_interactions.type', 'like')
+                    ->selectRaw('count(*)');
+            }, 'total_likes')
             ->when($viewer, function (Builder $builder) use ($viewer): void {
                 $builder->withExists([
                     'subscribers as subscribed_by_current_user' => fn (Builder $subscribersQuery) => $subscribersQuery->whereKey($viewer->id),
