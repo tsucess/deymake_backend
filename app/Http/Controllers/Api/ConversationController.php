@@ -136,13 +136,26 @@ class ConversationController extends Controller
         $this->ensureParticipant($request, $conversation);
 
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:2000'],
+            'body' => ['nullable', 'string', 'max:2000', 'required_without:attachmentUrl'],
+            'attachmentUrl' => ['nullable', 'string', 'url', 'max:2048', 'required_without:body'],
+            'attachmentType' => ['nullable', 'string', 'in:image,gif,video,file'],
+            'attachmentName' => ['nullable', 'string', 'max:255'],
+            'attachmentMime' => ['nullable', 'string', 'max:191'],
+            'attachmentSize' => ['nullable', 'integer', 'min:0'],
         ]);
+
+        $body = trim((string) ($validated['body'] ?? ''));
+        $attachmentUrl = $validated['attachmentUrl'] ?? null;
 
         $message = Message::create([
             'conversation_id' => $conversation->id,
             'user_id' => $request->user()->id,
-            'body' => $validated['body'],
+            'body' => $body,
+            'attachment_url' => $attachmentUrl,
+            'attachment_type' => $attachmentUrl ? ($validated['attachmentType'] ?? 'file') : null,
+            'attachment_name' => $attachmentUrl ? ($validated['attachmentName'] ?? null) : null,
+            'attachment_mime' => $attachmentUrl ? ($validated['attachmentMime'] ?? null) : null,
+            'attachment_size' => $attachmentUrl ? ($validated['attachmentSize'] ?? null) : null,
         ]);
 
         $conversation->touch();
@@ -154,8 +167,10 @@ class ConversationController extends Controller
             ->where('users.id', '!=', $request->user()->id)
             ->pluck('users.id');
 
+        $notificationPreview = $body !== '' ? $body : __('messages.conversations.attachment_preview');
+
         foreach ($recipientIds as $recipientId) {
-            UserNotifier::sendMessage((int) $recipientId, $request->user()->id, $conversation->id, $validated['body']);
+            UserNotifier::sendMessage((int) $recipientId, $request->user()->id, $conversation->id, $notificationPreview);
         }
 
         $message->load(['user' => fn ($query) => $query->withProfileAggregates()]);

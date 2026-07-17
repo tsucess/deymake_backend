@@ -14,6 +14,15 @@ class Message extends Model
         'conversation_id',
         'user_id',
         'body',
+        'attachment_url',
+        'attachment_type',
+        'attachment_name',
+        'attachment_mime',
+        'attachment_size',
+    ];
+
+    protected $casts = [
+        'attachment_size' => 'integer',
     ];
 
     public function conversation(): BelongsTo

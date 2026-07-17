@@ -412,6 +412,7 @@ return [
         'active_status' => 'Active now',
         'no_messages_yet' => 'No messages yet',
         'sent_prefix' => 'Sent',
+        'attachment_preview' => 'Sent an attachment',
     ],
     'validation' => ['language_supported' => 'Please choose a supported app language.'],
 ];
