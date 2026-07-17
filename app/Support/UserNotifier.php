@@ -118,6 +118,7 @@ class UserNotifier
             'comment', 'reply' => 'comments',
             'video_like', 'video_dislike', 'comment_like', 'comment_dislike' => 'likes',
             'subscription', 'live' => 'subscriptions',
+            'mention' => 'mentions',
             default => null,
         };
     }

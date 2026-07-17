@@ -1692,4 +1692,72 @@ class ContentAndProfileApiTest extends TestCase
             'shares_count' => 2,
         ]);
     }
+
+    public function test_at_mentions_in_comments_and_videos_create_mention_notifications(): void
+    {
+        Event::fake([UserNotificationChanged::class]);
+
+        $creator = User::factory()->create(['name' => 'Creator', 'username' => 'creator.mentions', 'email' => 'creator.mentions@example.com']);
+        $viewer = User::factory()->create(['name' => 'Viewer', 'username' => 'viewer.mentions', 'email' => 'viewer.mentions@example.com']);
+        $mentioned = User::factory()->create(['name' => 'Mentioned', 'username' => 'mentioned.user', 'email' => 'mentioned@example.com']);
+        $optedOut = User::factory()->create([
+            'name' => 'Silent',
+            'username' => 'silent.user',
+            'email' => 'silent@example.com',
+            'preferences' => ['notificationSettings' => ['mentions' => false]],
+        ]);
+
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Test',
+            'media_url' => 'https://cdn.example.com/v.mp4',
+            'thumbnail_url' => 'https://cdn.example.com/v.jpg',
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'Hey @mentioned.user great post, cc @silent.user and @creator.mentions',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $mentioned->id,
+            'type' => 'mention',
+            'title' => 'You were mentioned in a comment',
+        ]);
+        $this->assertDatabaseMissing('user_notifications', [
+            'user_id' => $optedOut->id,
+            'type' => 'mention',
+        ]);
+        $this->assertDatabaseMissing('user_notifications', [
+            'user_id' => $creator->id,
+            'type' => 'mention',
+        ]);
+        $this->assertDatabaseMissing('user_notifications', [
+            'user_id' => $viewer->id,
+            'type' => 'mention',
+        ]);
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/v1/videos', [
+            'type' => 'video',
+            'title' => 'Shoutout',
+            'caption' => 'Big up @mentioned.user for the collab',
+            'mediaUrl' => 'https://cdn.example.com/v2.mp4',
+            'thumbnailUrl' => 'https://cdn.example.com/v2.jpg',
+        ])->assertCreated();
+
+        $this->assertSame(2, UserNotification::query()
+            ->where('user_id', $mentioned->id)
+            ->where('type', 'mention')
+            ->count());
+
+        $this->assertDatabaseHas('user_notifications', [
+            'user_id' => $mentioned->id,
+            'type' => 'mention',
+            'title' => 'You were mentioned in a post',
+        ]);
+    }
 }

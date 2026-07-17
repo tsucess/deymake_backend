@@ -9,6 +9,7 @@ use App\Models\Comment;
 use App\Models\User;
 use App\Models\Video;
 use App\Services\ContentModerationService;
+use App\Support\Username;
 use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,15 @@ class CommentController extends Controller
             'messages.notifications.comment_body',
             ['name' => $request->user()->name],
             ['videoId' => $video->id, 'commentId' => $comment->id]
+        );
+
+        $this->sendMentionNotifications(
+            $comment->body,
+            $request->user(),
+            'messages.notifications.mention_comment_title',
+            'messages.notifications.mention_comment_body',
+            ['videoId' => $video->id, 'commentId' => $comment->id],
+            [(int) $video->user_id],
         );
 
         $comment = $this->loadCommentForResource($comment->id, $request->user());
@@ -135,6 +145,15 @@ class CommentController extends Controller
         }
 
         $this->sendReplyNotifications($comment, $request->user(), $reply);
+
+        $this->sendMentionNotifications(
+            $reply->body,
+            $request->user(),
+            'messages.notifications.mention_comment_title',
+            'messages.notifications.mention_comment_body',
+            ['videoId' => $comment->video_id, 'commentId' => $comment->id, 'replyId' => $reply->id],
+            $this->replyNotificationRecipients($comment),
+        );
 
         $reply = $this->loadCommentForResource($reply->id, $request->user());
 
@@ -297,6 +316,41 @@ class CommentController extends Controller
         }
 
         return array_values(array_unique(array_filter($recipientIds)));
+    }
+
+    private function sendMentionNotifications(
+        ?string $body,
+        User $actor,
+        string $titleKey,
+        string $bodyKey,
+        array $data,
+        array $excludedRecipientIds = [],
+    ): void {
+        $handles = Username::extractMentionHandles($body);
+
+        if ($handles === []) {
+            return;
+        }
+
+        $excluded = array_map('intval', array_merge($excludedRecipientIds, [(int) $actor->id]));
+
+        $mentionedIds = User::query()
+            ->whereIn('username', $handles)
+            ->whereNotIn('id', $excluded)
+            ->pluck('id')
+            ->all();
+
+        foreach ($mentionedIds as $recipientId) {
+            UserNotifier::sendTranslated(
+                (int) $recipientId,
+                $actor->id,
+                'mention',
+                $titleKey,
+                $bodyKey,
+                ['name' => $actor->name],
+                $data,
+            );
+        }
     }
 
     private function interactionMessageKey(string $type, bool $active): string

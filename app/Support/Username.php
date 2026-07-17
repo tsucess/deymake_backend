@@ -88,6 +88,29 @@ class Username
         return array_values(array_unique($handles));
     }
 
+    public static function extractMentionHandles(?string ...$texts): array
+    {
+        $handles = [];
+
+        foreach ($texts as $text) {
+            if (! is_string($text) || trim($text) === '') {
+                continue;
+            }
+
+            preg_match_all(self::MENTION_REGEX, $text, $matches, PREG_SET_ORDER);
+
+            foreach ($matches as $match) {
+                if (($match['type'] ?? null) !== '@') {
+                    continue;
+                }
+
+                $handles[] = self::normalize($match['handle']);
+            }
+        }
+
+        return array_values(array_unique($handles));
+    }
+
     private static function normalizeBase(string $value): string
     {
         $normalized = Str::lower($value);

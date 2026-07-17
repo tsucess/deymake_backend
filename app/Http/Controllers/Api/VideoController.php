@@ -162,6 +162,8 @@ class VideoController extends Controller
 
         $moderationService->scanVideo($video);
 
+        $this->notifyMentionedUsers($video, $request->user(), $taggedUsers);
+
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
@@ -1410,6 +1412,26 @@ class VideoController extends Controller
         sort($resolvedUserIds);
 
         return $resolvedUserIds;
+    }
+
+    private function notifyMentionedUsers(Video $video, User $actor, array $taggedUserIds): void
+    {
+        $recipients = array_filter(
+            array_map('intval', $taggedUserIds),
+            static fn (int $id): bool => $id !== 0 && $id !== (int) $actor->id,
+        );
+
+        foreach (array_values(array_unique($recipients)) as $recipientId) {
+            UserNotifier::sendTranslated(
+                $recipientId,
+                (int) $actor->id,
+                'mention',
+                'messages.notifications.mention_video_title',
+                'messages.notifications.mention_video_body',
+                ['name' => $actor->name],
+                ['videoId' => $video->id],
+            );
+        }
     }
 
     private function shouldRecordEngagement(Request $request, Video $video, string $metric, int $ttlMinutes): bool
