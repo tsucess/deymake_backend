@@ -2,12 +2,25 @@
 
 use App\Models\Upload;
 use App\Services\CloudinaryUploadService;
+use App\Services\ExploreHashtagService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('explore:rebuild-hashtags {--days=14 : Rolling window in days to rebuild}', function () {
+    $service = app(ExploreHashtagService::class);
+    $days = (int) $this->option('days');
+    $rows = $service->rebuild($days > 0 ? $days : 14);
+    $this->components->info("Rebuilt {$rows} hashtag daily bucket rows.");
+
+    return 0;
+})->purpose('Precompute hashtag daily counts for the Explore trending list');
+
+Schedule::command('explore:rebuild-hashtags')->hourly()->withoutOverlapping();
 
 Artisan::command('uploads:backfill-video-processed-urls {--write : Persist changes instead of running in dry-run mode}', function () {
     $service = app(CloudinaryUploadService::class);

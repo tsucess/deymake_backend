@@ -7,6 +7,7 @@ use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
+use App\Models\Category;
 use App\Models\Comment;
 use App\Models\FanTip;
 use App\Models\LiveLikeEvent;
@@ -109,6 +110,8 @@ class VideoController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'taggedUsers' => ['nullable', 'array'],
             'taggedUsers.*' => ['integer', 'exists:users,id'],
+            'hashtags' => ['nullable', 'array', 'max:30'],
+            'hashtags.*' => ['string', 'max:60'],
             'mediaUrl' => ['nullable', 'string', 'max:2048'],
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
@@ -140,9 +143,14 @@ class VideoController extends Controller
             $mediaUrl,
         );
 
+        $hashtags = array_key_exists('hashtags', $validated) && is_array($validated['hashtags'])
+            ? $this->normalizeHashtagList($validated['hashtags'])
+            : Category::extractHashtags($description ?? $caption);
+        $categoryId = $validated['categoryId'] ?? Category::resolveFromHashtags($description ?? $caption);
+
         $video = Video::create([
             'user_id' => $request->user()->id,
-            'category_id' => $validated['categoryId'] ?? null,
+            'category_id' => $categoryId,
             'upload_id' => $upload?->id,
             'type' => $validated['type'],
             'title' => $validated['title'] ?? null,
@@ -150,6 +158,7 @@ class VideoController extends Controller
             'description' => $description,
             'location' => $validated['location'] ?? null,
             'tagged_users' => $taggedUsers,
+            'hashtags' => $hashtags,
             'media_url' => $mediaUrl,
             'thumbnail_url' => $thumbnailUrl,
             'is_live' => $isLiveRequested,
@@ -265,6 +274,8 @@ class VideoController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
             'taggedUsers' => ['nullable', 'array'],
             'taggedUsers.*' => ['integer', 'exists:users,id'],
+            'hashtags' => ['sometimes', 'nullable', 'array', 'max:30'],
+            'hashtags.*' => ['string', 'max:60'],
             'mediaUrl' => ['nullable', 'string', 'max:2048'],
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
@@ -304,15 +315,34 @@ class VideoController extends Controller
             $thumbnailShouldRefreshFromVideo,
         );
 
+        $categoryId = $video->category_id;
+
+        if (array_key_exists('categoryId', $validated)) {
+            $categoryId = $validated['categoryId'];
+        } elseif (array_key_exists('description', $validated) && $video->category_id === null) {
+            $categoryId = Category::resolveFromHashtags($description ?? $caption);
+        }
+
+        if (array_key_exists('hashtags', $validated)) {
+            $hashtags = is_array($validated['hashtags'])
+                ? $this->normalizeHashtagList($validated['hashtags'])
+                : [];
+        } elseif (array_key_exists('description', $validated) || array_key_exists('caption', $validated)) {
+            $hashtags = Category::extractHashtags($description ?? $caption);
+        } else {
+            $hashtags = $video->hashtags ?? [];
+        }
+
         $video->fill([
             'type' => $validated['type'] ?? $video->type,
-            'category_id' => $validated['categoryId'] ?? $video->category_id,
+            'category_id' => $categoryId,
             'upload_id' => $upload?->id,
             'title' => $validated['title'] ?? $video->title,
             'caption' => $caption,
             'description' => $description,
             'location' => array_key_exists('location', $validated) ? $validated['location'] : $video->location,
             'tagged_users' => $taggedUsers,
+            'hashtags' => $hashtags,
             'media_url' => $mediaUrl,
             'thumbnail_url' => $thumbnailUrl,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
@@ -1391,6 +1421,31 @@ class VideoController extends Controller
                 ['creatorId' => $video->user_id, 'videoId' => $video->id],
             );
         }
+    }
+
+    private function normalizeHashtagList(array $hashtags): array
+    {
+        $normalized = [];
+
+        foreach ($hashtags as $tag) {
+            if (! is_string($tag)) {
+                continue;
+            }
+
+            $trimmed = ltrim(trim($tag), '#');
+
+            if ($trimmed === '' || ! preg_match('/^[\p{L}\p{N}_]{2,50}$/u', $trimmed)) {
+                continue;
+            }
+
+            $lower = mb_strtolower($trimmed);
+
+            if (! in_array($lower, $normalized, true)) {
+                $normalized[] = $lower;
+            }
+        }
+
+        return $normalized;
     }
 
     private function resolveTaggedUserIds(?string $caption, ?string $description, array $taggedUsers = []): array

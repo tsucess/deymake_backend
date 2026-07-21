@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\CollaborationController;
 use App\Http\Controllers\Api\CollaborationDeliverableController;
 use App\Http\Controllers\Api\ConnectionsController;
+use App\Http\Controllers\Api\MutualsController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\CreatorAcademyController;
 use App\Http\Controllers\Api\CreatorSuggestionController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Api\StoryController;
 use App\Http\Controllers\Api\ContentModerationController;
 use App\Http\Controllers\Api\BrandCampaignController;
 use App\Http\Controllers\Api\DeveloperController;
+use App\Http\Controllers\Api\ExploreController;
 use App\Http\Controllers\Api\FanTipController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\HomeController;
@@ -68,6 +70,9 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/home', [HomeController::class, 'index']);
         Route::get('/categories', [HomeController::class, 'categories']);
+
+        Route::get('/explore', [ExploreController::class, 'index']);
+        Route::get('/explore/videos', [ExploreController::class, 'videos']);
 
         Route::get('/videos/trending', [VideoController::class, 'trending']);
         Route::get('/videos/live', [VideoController::class, 'live']);
@@ -150,6 +155,7 @@ Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unr
         Route::get('/creators/suggestions', [CreatorSuggestionController::class, 'suggestions']);
 
         Route::get('/connections/feed', [ConnectionsController::class, 'feed']);
+        Route::get('/mutuals/feed', [MutualsController::class, 'feed']);
 
         Route::get('/stories/feed', [StoryController::class, 'feed']);
         Route::post('/stories', [StoryController::class, 'store']);

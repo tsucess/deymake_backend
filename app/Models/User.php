@@ -133,6 +133,20 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function mutuals(): BelongsToMany
+    {
+        $viewerId = $this->id;
+
+        return $this->belongsToMany(self::class, 'subscriptions', 'user_id', 'creator_id')
+            ->whereExists(function ($query) use ($viewerId) {
+                $query->select('id')
+                    ->from('subscriptions as reverse')
+                    ->whereColumn('reverse.user_id', 'users.id')
+                    ->where('reverse.creator_id', $viewerId);
+            })
+            ->withTimestamps();
+    }
+
     public function creatorPlans(): HasMany
     {
         return $this->hasMany(CreatorPlan::class, 'creator_id');

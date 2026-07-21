@@ -27,6 +27,7 @@ class Video extends Model
         'description',
         'location',
         'tagged_users',
+        'hashtags',
         'media_url',
         'thumbnail_url',
         'is_live',
@@ -52,6 +53,7 @@ class Video extends Model
     {
         return [
             'tagged_users' => 'array',
+            'hashtags' => 'array',
             'is_live' => 'boolean',
             'is_draft' => 'boolean',
             'moderated_at' => 'datetime',

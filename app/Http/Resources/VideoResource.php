@@ -39,6 +39,7 @@ class VideoResource extends JsonResource
             'description' => $this->description,
             'location' => $this->location,
             'taggedUsers' => $this->tagged_users ?? [],
+            'hashtags' => $this->hashtags ?? [],
             'mediaUrl' => $mediaUrl,
             'originalMediaUrl' => $originalMediaUrl,
             'processedMediaUrl' => $this->upload?->processed_url,

@@ -59,6 +59,10 @@ return [
     'health' => ['healthy' => 'DeyMake API is healthy.'],
     'home' => ['retrieved' => 'Homepage data retrieved successfully.'],
     'categories' => ['retrieved' => 'Categories retrieved successfully.'],
+    'explore' => [
+        'retrieved' => 'Explore data retrieved successfully.',
+        'videos_retrieved' => 'Explore videos retrieved successfully.',
+    ],
     'info' => [
         'help_retrieved' => 'Help information retrieved successfully.',
         'help_title' => 'Help Center',
@@ -282,6 +286,9 @@ return [
     ],
     'connections' => [
         'feed_retrieved' => 'Connections feed retrieved successfully.',
+    ],
+    'mutuals' => [
+        'feed_retrieved' => 'Mutuals feed retrieved successfully.',
     ],
     'creators' => [
         'suggestions_retrieved' => 'Creator suggestions retrieved successfully.',
