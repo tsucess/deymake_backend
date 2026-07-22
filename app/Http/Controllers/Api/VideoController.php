@@ -384,6 +384,17 @@ class VideoController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, Video $video): JsonResponse
+    {
+        abort_if($video->user_id !== $request->user()->id, 403);
+
+        $video->delete();
+
+        return response()->json([
+            'message' => __('messages.videos.deleted'),
+        ]);
+    }
+
     public function startLive(Request $request, Video $video): JsonResponse
     {
         abort_if($video->user_id !== $request->user()->id, 403);

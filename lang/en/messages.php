@@ -253,6 +253,7 @@ return [
         'reported' => 'Video reported successfully.',
         'updated' => 'Video updated successfully.',
         'published' => 'Video published successfully.',
+        'deleted' => 'Video deleted successfully.',
         'live_started' => 'Livestream started successfully.',
         'live_stopped' => 'Livestream stopped successfully.',
         'live_session_retrieved' => 'Live session retrieved successfully.',

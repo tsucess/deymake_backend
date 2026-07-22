@@ -22,6 +22,8 @@ Artisan::command('explore:rebuild-hashtags {--days=14 : Rolling window in days t
 
 Schedule::command('explore:rebuild-hashtags')->hourly()->withoutOverlapping();
 
+Schedule::command('videos:backfill-hashtags')->dailyAt('03:15')->withoutOverlapping();
+
 Artisan::command('uploads:backfill-video-processed-urls {--write : Persist changes instead of running in dry-run mode}', function () {
     $service = app(CloudinaryUploadService::class);
     $write = (bool) $this->option('write');

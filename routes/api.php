@@ -126,6 +126,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('/videos', [VideoController::class, 'store']);
         Route::patch('/videos/{video}', [VideoController::class, 'update']);
+        Route::delete('/videos/{video}', [VideoController::class, 'destroy']);
         Route::post('/videos/{video}/publish', [VideoController::class, 'publish']);
         Route::get('/videos/{video}/live/session', [VideoController::class, 'liveSession']);
         Route::post('/videos/{video}/live/start', [VideoController::class, 'startLive']);
