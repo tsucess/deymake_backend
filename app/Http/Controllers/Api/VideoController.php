@@ -135,6 +135,8 @@ class VideoController extends Controller
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
             'isDraft' => ['sometimes', 'boolean'],
+            'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
+            'allowGifts' => ['sometimes', 'boolean'],
         ]);
 
         $isLiveRequested = (bool) ($validated['isLive'] ?? false);
@@ -182,6 +184,8 @@ class VideoController extends Controller
             'thumbnail_url' => $thumbnailUrl,
             'is_live' => $isLiveRequested,
             'is_draft' => $validated['isDraft'] ?? ! $isLiveRequested,
+            'visibility' => $validated['visibility'] ?? 'everyone',
+            'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : true,
         ]);
 
         if ($isLiveRequested) {
@@ -299,6 +303,8 @@ class VideoController extends Controller
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
             'isDraft' => ['sometimes', 'boolean'],
+            'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
+            'allowGifts' => ['sometimes', 'boolean'],
         ]);
 
         $requestedLive = array_key_exists('isLive', $validated) ? (bool) $validated['isLive'] : null;
@@ -365,6 +371,8 @@ class VideoController extends Controller
             'media_url' => $mediaUrl,
             'thumbnail_url' => $thumbnailUrl,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
+            'visibility' => $validated['visibility'] ?? $video->visibility,
+            'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : $video->allow_gifts,
         ])->save();
 
         if ($requestedLive === true) {

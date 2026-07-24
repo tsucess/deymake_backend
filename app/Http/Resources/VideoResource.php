@@ -66,6 +66,8 @@ class VideoResource extends JsonResource
             'liveComments' => (int) ($this->live_comments_count ?? 0),
             'isLive' => (bool) $this->is_live,
             'isDraft' => (bool) $this->is_draft,
+            'visibility' => $this->visibility ?? 'everyone',
+            'allowGifts' => (bool) ($this->allow_gifts ?? true),
             'liveStartedAt' => $this->live_started_at?->toISOString(),
             'liveEndedAt' => $this->live_ended_at?->toISOString(),
             'liveAnalytics' => [
