@@ -128,6 +128,8 @@ return [
         'user_self_protection' => 'You cannot suspend yourself or remove your own admin access.',
         'video_reports_retrieved' => 'Video reports retrieved successfully.',
         'video_report_updated' => 'Video report updated successfully.',
+        'live_streams_retrieved' => 'Admin live streams retrieved successfully.',
+        'live_stream_stopped' => 'Live stream stopped successfully.',
     ],
     'ai' => [
         'captions_generated' => 'AI caption suggestions generated successfully.',

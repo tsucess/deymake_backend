@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminLiveStreamController;
 use App\Http\Controllers\Api\AdminPayoutController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AiAssistantController;
@@ -301,6 +302,8 @@ Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unr
             Route::post('/moderation/comments/{comment}/rescan', [ContentModerationController::class, 'rescanComment']);
             Route::get('/creator-verification-requests', [CreatorVerificationController::class, 'indexAdmin']);
             Route::patch('/creator-verification-requests/{creatorVerificationRequest}', [CreatorVerificationController::class, 'updateAdmin']);
+            Route::get('/live-streams', [AdminLiveStreamController::class, 'index']);
+            Route::post('/live-streams/{video}/stop', [AdminLiveStreamController::class, 'stop']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);
