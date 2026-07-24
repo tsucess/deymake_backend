@@ -8,6 +8,16 @@ use App\Http\Resources\WaitlistEntryResource;
 use App\Models\WaitlistEntry;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Waitlist controller.
+ *
+ * Captures pre-launch signups from the marketing landing page.
+ *
+ * Routes: POST /waitlist.
+ * Frontend consumers: pages/LandingPage.jsx.
+ * Related: WaitlistEntry model.
+ * See PROJECT_OVERVIEW.md §3.28 for the full data-flow map.
+ */
 class WaitlistController extends Controller
 {
     public function store(StoreWaitlistRequest $request): JsonResponse

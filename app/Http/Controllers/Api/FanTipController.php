@@ -16,6 +16,22 @@ use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Fan-tipping controller.
+ *
+ * Records monetary tips from fans to creators, both outside a live stream
+ * (creator-scoped) and inside one (video-scoped). Each tip posts a
+ * FanTip row and routes the funds through WalletLedgerService for
+ * double-entry crediting.
+ *
+ * Routes: POST /creators/{creator}/tips, POST /videos/{video}/live/tips,
+ * GET /tips/{sent,received}.
+ * Frontend consumers: components/Live/LiveGift.jsx (via api.sendLiveTip),
+ * plus profile/creator-dashboard tipping surfaces.
+ * Related: FanTip, WalletTransaction models; FanTipResource;
+ * WalletLedgerService.
+ * See PROJECT_OVERVIEW.md §3.12 for the full data-flow map.
+ */
 class FanTipController extends Controller
 {
     public function store(Request $request, User $creator, WalletLedgerService $walletLedgerService): JsonResponse

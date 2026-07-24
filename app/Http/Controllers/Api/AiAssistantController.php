@@ -11,6 +11,17 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * AI assistant controller.
+ *
+ * Lightweight LLM helpers for creators: caption generation and content
+ * ideas. Delegates prompt shaping to LiteAiPromptService.
+ *
+ * Routes: POST /ai/captions, POST /ai/ideas.
+ * Frontend consumers: pages/Workspace.jsx via api.generateAiCaptions/Ideas.
+ * Related: LiteAiPromptService.
+ * See PROJECT_OVERVIEW.md §3.18 for the full data-flow map.
+ */
 class AiAssistantController extends Controller
 {
     public function captions(

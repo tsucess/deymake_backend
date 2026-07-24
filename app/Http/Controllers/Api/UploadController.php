@@ -13,6 +13,19 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
 
+/**
+ * Upload controller.
+ *
+ * Entry point for moving user media into the platform. Small files stream
+ * through /uploads; large files request a signed Cloudinary policy from
+ * /uploads/presign and upload direct-to-Cloudinary, then hand back the URL.
+ *
+ * Routes: POST /uploads, POST /uploads/presign.
+ * Frontend consumers: utils/upload.js (chunking + orchestration),
+ * pages/Create.jsx, LivePreview.jsx, story creation.
+ * Related: Upload model, UploadResource, CloudinaryUploadService.
+ * See PROJECT_OVERVIEW.md §3.6 for the full data-flow map.
+ */
 class UploadController extends Controller
 {
     public function store(Request $request, CloudinaryUploadService $cloudinaryUploadService): JsonResponse

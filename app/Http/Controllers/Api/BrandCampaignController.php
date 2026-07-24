@@ -14,6 +14,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Brand campaign controller.
+ *
+ * Brand-facing side of sponsorships: create/update campaigns and view
+ * creator-match suggestions for each campaign.
+ *
+ * Routes: GET/POST /brand/campaigns, PATCH /brand/campaigns/{brandCampaign},
+ * GET /brand/campaigns/{brandCampaign}/matches.
+ * Frontend consumers: components/CreatorDashboard/CreateCampaign.jsx.
+ * Related: BrandCampaign model, SponsorshipController (creator side).
+ * See PROJECT_OVERVIEW.md §3.16 for the full data-flow map.
+ */
 class BrandCampaignController extends Controller
 {
     public function index(Request $request): JsonResponse

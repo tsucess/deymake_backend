@@ -14,6 +14,19 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Content moderation controller.
+ *
+ * Admin-facing moderation queues and case actions. Reports arrive via
+ * VideoInteractionController@report and CommentController; the scoring
+ * engine lives in ContentModerationService.
+ *
+ * Routes: admin moderation queue + case actions in routes/api.php.
+ * Frontend consumers: Admin/Pages/Reports.jsx,
+ * Admin/Components/ContentModeration/*.
+ * Related: ContentModerationCase model, ContentModerationService.
+ * See PROJECT_OVERVIEW.md §3.25 for the full data-flow map.
+ */
 class ContentModerationController extends Controller
 {
     public function index(Request $request): JsonResponse

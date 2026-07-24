@@ -20,6 +20,17 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Admin dashboard controller.
+ *
+ * Platform overview numbers for operators: totals, growth deltas, recent
+ * activity feeds.
+ *
+ * Routes: under the admin prefix in routes/api.php.
+ * Frontend consumers: Admin/Pages/Dashboard.jsx.
+ * Related: AdminUserManagementController, AdminPayoutController.
+ * See PROJECT_OVERVIEW.md §3.27 for the full data-flow map.
+ */
 class AdminDashboardController extends Controller
 {
     public function dashboard(Request $request): JsonResponse

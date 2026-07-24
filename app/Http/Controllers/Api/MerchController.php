@@ -16,6 +16,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Merch (creator storefront) controller.
+ *
+ * Products and orders for creator storefronts.
+ *
+ * Routes: under /merch/* and GET /users/{user}/merch.
+ * Frontend consumers: pages/UserProfile.jsx, CreatorDashboard.jsx.
+ * Related: MerchProduct, MerchOrder models.
+ * See PROJECT_OVERVIEW.md §3.19 for the full data-flow map.
+ */
 class MerchController extends Controller
 {
     public function creatorProducts(Request $request, User $user): JsonResponse

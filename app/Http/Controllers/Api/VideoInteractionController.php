@@ -13,6 +13,21 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Video interaction controller.
+ *
+ * Handles engagement actions on videos and creators: like/unlike, save,
+ * share, report, and creator subscribe/unsubscribe (the "Connect" toggle
+ * in the UI). Also emits the in-live like event used by WatchLive.
+ *
+ * Routes: POST /videos/{video}/{like,unlike,save,share,report},
+ * POST /videos/{video}/live/like,
+ * POST/DELETE /creators/{creator}/subscribe.
+ * Frontend consumers: components/Video/*, LiveChat.jsx, WatchLiveVideo.jsx,
+ * UserProfile.jsx via api.likeVideo/api.subscribeToCreator/etc.
+ * Related: Video, User, LiveLikeEvent models; VideoResource.
+ * See PROJECT_OVERVIEW.md §3.4 and §3.5 for the full data-flow map.
+ */
 class VideoInteractionController extends Controller
 {
     public function like(Request $request, Video $video): JsonResponse

@@ -17,6 +17,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Revenue-share controller.
+ *
+ * Splits video/live earnings between multiple contributors via signed
+ * agreements plus a settlement history.
+ *
+ * Routes: GET/POST /revenue-shares, PATCH /revenue-shares/{agreement},
+ * POST /revenue-shares/{agreement}/settlements.
+ * Frontend consumers: pages/CreatorDashboard.jsx (revenue-share tab).
+ * Related: RevenueShareAgreement, RevenueShareSettlement models.
+ * See PROJECT_OVERVIEW.md §3.17 for the full data-flow map.
+ */
 class RevenueShareController extends Controller
 {
     public function index(Request $request): JsonResponse

@@ -17,6 +17,21 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Challenges controller.
+ *
+ * Time-bound creator competitions: brief CRUD, publish flow,
+ * submission/withdraw, and per-user challenge/submission listings.
+ *
+ * Routes: GET/POST/PATCH/DELETE /challenges[/{challenge}],
+ * POST /challenges/{challenge}/{publish,submissions},
+ * GET /challenges/{challenge}/submissions[/mine],
+ * POST /challenge-submissions/{submission}/withdraw,
+ * GET /me/challenges, GET /me/challenge-submissions.
+ * Frontend consumers: pages/Challenges.jsx, ChallengeEntries.jsx.
+ * Related: Challenge, ChallengeSubmission models.
+ * See PROJECT_OVERVIEW.md §3.14 for the full data-flow map.
+ */
 class ChallengeController extends Controller
 {
     public function index(Request $request): JsonResponse

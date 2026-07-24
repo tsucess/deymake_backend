@@ -1,3 +1,12 @@
+# DeyMake — Laravel Backend
+
+> **Start here:** [PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md) — full architectural map of the DeyMake platform (28 feature areas, controllers, routes, models, resources, and their frontend consumers).
+
+For the underlying framework docs, see the Laravel section below.
+
+---
+
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
@@ -133,4 +142,4 @@ After changing broadcasting or Reverb env values, also run:
 
 - `php artisan optimize:clear`
 
-"# deymake_backend" 
+"# deymake_backend"

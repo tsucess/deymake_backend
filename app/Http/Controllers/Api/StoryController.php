@@ -10,6 +10,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Stories controller.
+ *
+ * Ephemeral vertical clips shown on the home-feed rail. Handles feed,
+ * create, view-count increment, and delete.
+ *
+ * Routes: GET /stories/feed, POST /stories, POST /stories/{story}/view,
+ * DELETE /stories/{story}.
+ * Frontend consumers: components/Homepage/* (story rail).
+ * Related: Story model, StoryResource.
+ * See PROJECT_OVERVIEW.md §3.11 for the full data-flow map.
+ */
 class StoryController extends Controller
 {
     public function feed(Request $request): JsonResponse

@@ -13,6 +13,19 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Creator academy controller.
+ *
+ * Structured courses and lessons for creators; enrollment and per-lesson
+ * completion tracking.
+ *
+ * Routes: GET /academy/courses[/{academyCourse}],
+ * POST /academy/courses/{academyCourse}/enroll,
+ * POST /academy/lessons/{academyLesson}/complete, GET /academy/me.
+ * Related: AcademyCourse, AcademyLesson, AcademyEnrollment,
+ * AcademyLessonCompletion models.
+ * See PROJECT_OVERVIEW.md §3.20 for the full data-flow map.
+ */
 class CreatorAcademyController extends Controller
 {
     public function index(Request $request): JsonResponse

@@ -18,6 +18,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * Explore / discovery controller.
+ *
+ * Powers the Explore screen: Trending hashtags, Rising creators
+ * (engagement-based), and Top videos (engagement-based), plus category
+ * filtering. All lists are cached for a short window.
+ *
+ * Routes: GET /explore, /explore/{trending,rising,top,hashtags,categories}.
+ * Frontend consumers: pages/ExplorePage.jsx via api.getExplore*() methods.
+ * Related: ExploreHashtagService, ExploreRisingCreatorService.
+ * See PROJECT_OVERVIEW.md §3.3 for the full data-flow map.
+ */
 class ExploreController extends Controller
 {
     protected const TOP_VIDEO_LIMIT = 12;

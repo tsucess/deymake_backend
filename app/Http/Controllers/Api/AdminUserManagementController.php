@@ -12,6 +12,16 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Admin user management controller.
+ *
+ * Admin actions on users: list, suspend, restore, role changes.
+ *
+ * Routes: under the admin users prefix in routes/api.php.
+ * Frontend consumers: Admin/Pages/Users.jsx, SuspendedAccount.jsx.
+ * Related: User model, AdminUserResource.
+ * See PROJECT_OVERVIEW.md §3.27 for the full data-flow map.
+ */
 class AdminUserManagementController extends Controller
 {
     public function index(Request $request): JsonResponse

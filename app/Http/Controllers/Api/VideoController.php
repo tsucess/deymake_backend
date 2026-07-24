@@ -30,6 +30,25 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use TaylanUnutmaz\AgoraTokenBuilder\RtcTokenBuilder;
 
+/**
+ * Video + live-stream controller.
+ *
+ * Covers the entire video lifecycle: create/update/publish/delete for
+ * short-form videos, plus the live-stream session flow — start, stop,
+ * Agora RTC token issuance, audience presence, engagement feeds (chat +
+ * tips + likes), signals, and post-live analytics summaries.
+ *
+ * Routes: POST/GET/PATCH/DELETE /videos, GET /videos/live,
+ * POST /videos/{video}/live/{start,stop}, GET /videos/{video}/live/session,
+ * GET /videos/{video}/live/engagements, POST /videos/{video}/live/presence,
+ * POST /videos/{video}/live/signals, and more (see routes/api.php).
+ * Frontend consumers: pages/Create.jsx, VideoDetails.jsx, LivePreview.jsx,
+ * LiveNew.jsx, WatchLive.jsx, LivePage.jsx; components/Live/*.
+ * Related: Video, LiveLikeEvent, LivePresenceSession, LiveSignal models;
+ * VideoResource, FanTipResource, CommentResource;
+ * ContentModerationService, CloudinaryUploadService.
+ * See PROJECT_OVERVIEW.md §3.4 and §3.5 for the full data-flow map.
+ */
 class VideoController extends Controller
 {
     private const VIEW_DEDUP_MINUTES = 1440;

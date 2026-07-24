@@ -9,6 +9,19 @@ use App\Models\UserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Notifications controller.
+ *
+ * In-app notification list and read/delete actions for the authenticated
+ * user.
+ *
+ * Routes: list / mark-read / mark-all-read / delete under the
+ * notifications prefix in routes/api.php.
+ * Frontend consumers: pages/Notifications.jsx, Layout/NotificationButton.jsx,
+ * Layout/RealtimeNotificationPopup.jsx (uses services/realtime.js polling).
+ * Related: UserNotification model, UserNotificationResource.
+ * See PROJECT_OVERVIEW.md §3.22 for the full data-flow map.
+ */
 class NotificationController extends Controller
 {
     public function index(Request $request): JsonResponse

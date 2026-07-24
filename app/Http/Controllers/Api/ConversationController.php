@@ -15,6 +15,19 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Support\UserNotifier;
 
+/**
+ * Direct-messaging controller.
+ *
+ * Manages 1-on-1 and group conversations, message send/read, and
+ * attachment/reference resolution via ConversationLinkService.
+ *
+ * Routes: under the `conversations` prefix in routes/api.php
+ * (list, send, mark read, etc.).
+ * Frontend consumers: pages/Messages.jsx.
+ * Related: Conversation, Message models; ConversationResource,
+ * MessageResource; ConversationLinkService.
+ * See PROJECT_OVERVIEW.md §3.10 for the full data-flow map.
+ */
 class ConversationController extends Controller
 {
     public function index(Request $request): JsonResponse

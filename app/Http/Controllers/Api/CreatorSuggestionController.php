@@ -10,6 +10,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Creator suggestions controller.
+ *
+ * "You might follow" style recommendations for the current viewer.
+ *
+ * Routes: GET /creators/suggestions.
+ * Frontend consumers: home rail and profile pages via
+ * api.getCreatorSuggestions.
+ * See PROJECT_OVERVIEW.md §3.8 for the full data-flow map.
+ */
 class CreatorSuggestionController extends Controller
 {
     public function suggestions(Request $request): JsonResponse

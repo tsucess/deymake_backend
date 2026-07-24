@@ -15,6 +15,20 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Comments controller.
+ *
+ * Threaded comment CRUD used by both short-form video pages and the
+ * live-room chat feed. Supports likes/dislikes, replies (parent_id),
+ * mentions parsing, and moderation delete.
+ *
+ * Routes: GET/POST /videos/{video}/comments, GET /comments/{comment}/replies,
+ * PATCH/DELETE /comments/{comment}, POST /comments/{comment}/{like,dislike}.
+ * Frontend consumers: components/Comments/*, LiveChat.jsx,
+ * pages/VideoDetails.jsx, PostDetail.jsx via api.getComments/postComment/etc.
+ * Related: Comment model, CommentResource, utils/mentions.js (frontend).
+ * See PROJECT_OVERVIEW.md §3.7 for the full data-flow map.
+ */
 class CommentController extends Controller
 {
     public function index(Request $request, Video $video): JsonResponse

@@ -15,6 +15,16 @@ use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Collaboration deliverables controller.
+ *
+ * Tracks work items ("deliverables") inside an accepted collaboration.
+ *
+ * Routes: under /deliverables/* in routes/api.php.
+ * Frontend consumers: pages/CreatorDashboard.jsx (collaborations tab).
+ * Related: CollaborationDeliverable model.
+ * See PROJECT_OVERVIEW.md §3.21 for the full data-flow map.
+ */
 class CollaborationDeliverableController extends Controller
 {
     public function index(Request $request, CollaborationInvite $collaborationInvite): JsonResponse

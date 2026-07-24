@@ -9,6 +9,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
+/**
+ * Leaderboard controller.
+ *
+ * Ranked creators/videos for the public leaderboard.
+ *
+ * Routes: GET /leaderboard.
+ * Frontend consumers: pages/Leaderboard.jsx via api.getLeaderboard.
+ * See PROJECT_OVERVIEW.md §3.23 for the full data-flow map.
+ */
 class LeaderboardController extends Controller
 {
     public function index(Request $request): JsonResponse

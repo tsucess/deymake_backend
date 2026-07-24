@@ -12,6 +12,18 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Laravel\Sanctum\PersonalAccessToken;
 
+/**
+ * Developer settings controller.
+ *
+ * Personal API tokens + outbound webhooks (new-video, live, etc.). Lets
+ * power users script against their own account.
+ *
+ * Routes: GET /developer, /developer/api-keys, /developer/webhooks,
+ * plus POST/PATCH/DELETE and rotate-secret.
+ * Frontend consumers: pages/Settings.jsx (developer tab).
+ * Related: UserWebhook model, ApiKeyResource, UserWebhookResource.
+ * See PROJECT_OVERVIEW.md §3.26 for the full data-flow map.
+ */
 class DeveloperController extends Controller
 {
     private const WEBHOOK_EVENTS = [

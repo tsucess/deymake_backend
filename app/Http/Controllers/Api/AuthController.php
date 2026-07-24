@@ -32,6 +32,20 @@ use Illuminate\Validation\Rules\Password;
 use RuntimeException;
 use Throwable;
 
+/**
+ * Authentication controller.
+ *
+ * Handles the full auth surface: registration (email + phone), login,
+ * email/phone verification codes, password reset, and the current-user
+ * (me) endpoint. Issues Sanctum tokens for subsequent API calls.
+ *
+ * Routes: POST /auth/register, /auth/login, /auth/logout, /auth/verify-*,
+ * /auth/password/*, GET /me (see routes/api.php).
+ * Frontend consumers: pages/Login.jsx, SignUp.jsx, VerifyEmail.jsx,
+ * ForgotPassword.jsx; context/AuthContext.jsx orchestrates the session.
+ * Related: User model, UserResource, SmsSender contract.
+ * See PROJECT_OVERVIEW.md §3.1 for the full data-flow map.
+ */
 class AuthController extends Controller
 {
     private const OAUTH_PROVIDERS = ['google', 'facebook'];

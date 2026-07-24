@@ -12,6 +12,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Offline upload queue controller.
+ *
+ * Persists partially completed uploads so a client can resume after a
+ * network drop. Companion to UploadController.
+ *
+ * Routes: GET/POST /uploads/offline-queue,
+ * PATCH /uploads/offline-queue/{offlineUploadItem}.
+ * Frontend consumers: utils/upload.js.
+ * Related: OfflineUploadItem model.
+ * See PROJECT_OVERVIEW.md §3.6 for the full data-flow map.
+ */
 class OfflineUploadQueueController extends Controller
 {
     public function index(Request $request): JsonResponse

@@ -9,6 +9,15 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Connections feed controller.
+ *
+ * Returns the "people you follow" feed used by the Connections page.
+ *
+ * Routes: GET /connections/feed.
+ * Frontend consumers: pages/Connections.jsx via api.getConnectionsFeed().
+ * See PROJECT_OVERVIEW.md §3.10 for the full data-flow map.
+ */
 class ConnectionsController extends Controller
 {
     public function feed(Request $request): JsonResponse

@@ -13,6 +13,17 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Creator verification controller.
+ *
+ * User-facing side of the "verified creator" application flow;
+ * admin review happens in the admin module.
+ *
+ * Routes: GET /creator-verification, POST /creator-verification.
+ * Frontend consumers: pages/Settings.jsx (verification section).
+ * Related: CreatorVerificationRequest model.
+ * See PROJECT_OVERVIEW.md §3.24 for the full data-flow map.
+ */
 class CreatorVerificationController extends Controller
 {
     public function show(Request $request): JsonResponse

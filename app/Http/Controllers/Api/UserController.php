@@ -12,6 +12,18 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * User (public profile) controller.
+ *
+ * Serves the public-facing profile view for any user by id/username,
+ * plus that user's posts and search endpoint. Personal (self) settings
+ * live in ProfileController.
+ *
+ * Routes: GET /users/{user}, GET /users/{user}/posts, GET /users/search.
+ * Frontend consumers: pages/UserProfile.jsx, SearchResults.jsx.
+ * Related: User, Video models; UserResource, VideoResource.
+ * See PROJECT_OVERVIEW.md §3.8 for the full data-flow map.
+ */
 class UserController extends Controller
 {
     public function show(Request $request, User $user): JsonResponse

@@ -5,6 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Static info-pages controller.
+ *
+ * Serves help, privacy, and terms payloads to the frontend info screens.
+ *
+ * Routes: GET /help, GET /legal/privacy, GET /legal/terms.
+ * See PROJECT_OVERVIEW.md §3.28 for the full data-flow map.
+ */
 class InfoController extends Controller
 {
     public function help(): JsonResponse

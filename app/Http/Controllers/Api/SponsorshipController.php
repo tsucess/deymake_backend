@@ -14,6 +14,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Sponsorship proposal controller.
+ *
+ * Creator-facing side of sponsorships: pitch proposals against brand
+ * campaigns and manage their status.
+ *
+ * Routes: GET/POST /sponsorships/proposals,
+ * PATCH /sponsorships/proposals/{sponsorshipProposal}.
+ * Frontend consumers: pages/CreatorDashboard.jsx (sponsorships tab).
+ * Related: SponsorshipProposal model, BrandCampaignController (brand side).
+ * See PROJECT_OVERVIEW.md §3.16 for the full data-flow map.
+ */
 class SponsorshipController extends Controller
 {
     public function index(Request $request): JsonResponse

@@ -17,6 +17,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
+/**
+ * Self-profile controller.
+ *
+ * Manages the authenticated user's own profile, subscribers list,
+ * personal collections (posts, liked, saved, drafts), and preferences.
+ *
+ * Routes: GET/PATCH /me/profile, GET /me/subscribers,
+ * GET /me/{posts,liked,saved,drafts,preferences}, PATCH /me/preferences.
+ * Frontend consumers: pages/Profile.jsx, ProfileSubscribers.jsx,
+ * Settings.jsx; context/AuthContext.jsx refreshes user on updates.
+ * Related: User, Video models; ProfileResource, VideoResource.
+ * See PROJECT_OVERVIEW.md §3.8 for the full data-flow map.
+ */
 class ProfileController extends Controller
 {
     public function show(Request $request): JsonResponse

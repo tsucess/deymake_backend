@@ -15,6 +15,19 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+/**
+ * Memberships controller.
+ *
+ * Creator subscription tiers ("plans") and fan memberships against them.
+ * Creators CRUD their plans; fans subscribe, view own memberships, cancel.
+ *
+ * Routes: GET /memberships/{creator,mine}, POST/PATCH/DELETE
+ * /memberships/plans[/{plan}], POST /memberships/plans/{plan}/subscribe,
+ * POST /memberships/{membership}/cancel, GET /users/{user}/plans.
+ * Frontend consumers: pages/CreatorDashboard.jsx, UserProfile.jsx.
+ * Related: CreatorPlan, Membership models.
+ * See PROJECT_OVERVIEW.md §3.13 for the full data-flow map.
+ */
 class MembershipController extends Controller
 {
     private const BILLING_PERIODS = ['weekly', 'monthly', 'yearly'];

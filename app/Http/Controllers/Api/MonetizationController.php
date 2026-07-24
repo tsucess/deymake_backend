@@ -19,6 +19,19 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Monetization controller.
+ *
+ * Creator-facing monetization surface: earnings summary, payout account
+ * setup, payout requests, and the wallet transactions ledger.
+ *
+ * Routes: GET /monetization/{summary,payout-account,payouts,transactions},
+ * PUT /monetization/payout-account, POST /monetization/payouts.
+ * Frontend consumers: pages/CoinWallet.jsx, CreatorDashboard.jsx.
+ * Related: WalletTransaction, PayoutAccount, PayoutRequest models;
+ * MonetizationService, WalletLedgerService.
+ * See PROJECT_OVERVIEW.md §3.12 for the full data-flow map.
+ */
 class MonetizationController extends Controller
 {
     public function summary(Request $request, MonetizationService $monetizationService): JsonResponse

@@ -10,6 +10,17 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Talent discovery controller.
+ *
+ * Brand-facing creator search with filtering + scoring. Powered by
+ * TalentDiscoveryService.
+ *
+ * Routes: GET /talent/discovery.
+ * Frontend consumers: brand tools via api.getTalentDiscovery.
+ * Related: TalentDiscoveryService, TalentDiscoveryResource.
+ * See PROJECT_OVERVIEW.md §3.23 for the full data-flow map.
+ */
 class TalentDiscoveryController extends Controller
 {
     public function index(Request $request, TalentDiscoveryService $talentDiscoveryService): JsonResponse

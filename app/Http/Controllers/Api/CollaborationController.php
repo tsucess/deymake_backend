@@ -15,6 +15,17 @@ use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Collaboration invites controller.
+ *
+ * Multi-creator project invite flow: create, list, and update status of
+ * invites. Deliverable tracking lives in CollaborationDeliverableController.
+ *
+ * Routes: under /collaborations/* in routes/api.php.
+ * Frontend consumers: pages/CreatorDashboard.jsx (collaborations tab).
+ * Related: CollaborationInvite model.
+ * See PROJECT_OVERVIEW.md §3.21 for the full data-flow map.
+ */
 class CollaborationController extends Controller
 {
     public function index(Request $request): JsonResponse

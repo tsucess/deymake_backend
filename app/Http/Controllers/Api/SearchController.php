@@ -14,6 +14,18 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Global search controller.
+ *
+ * Cross-entity search across videos, creators, categories, and hashtags,
+ * plus type-ahead suggestions for the topbar search input.
+ *
+ * Routes: GET /search, /search/{suggestions,videos,creators,categories}.
+ * Frontend consumers: pages/SearchResults.jsx; topbar search input via
+ * api.getSearchSuggestions/searchGlobal/searchVideos/searchCreators.
+ * Related: Video, User, Category models.
+ * See PROJECT_OVERVIEW.md §3.9 for the full data-flow map.
+ */
 class SearchController extends Controller
 {
     public function global(Request $request): JsonResponse

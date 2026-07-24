@@ -11,6 +11,17 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Home feed controller.
+ *
+ * Serves the authenticated Home screen: trending videos, category rails,
+ * and live-stream previews returned in a single payload.
+ *
+ * Routes: GET /home (see routes/api.php).
+ * Frontend consumers: pages/HomePageNew.jsx via api.getHome().
+ * Related: Video, Category models; VideoResource, CategoryResource.
+ * See PROJECT_OVERVIEW.md §3.2 for the full data-flow map.
+ */
 class HomeController extends Controller
 {
     public function index(Request $request): JsonResponse

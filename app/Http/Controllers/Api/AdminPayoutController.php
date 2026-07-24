@@ -14,6 +14,17 @@ use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Admin payout controller.
+ *
+ * Review, approve, or reject creator payout requests submitted through
+ * MonetizationController.
+ *
+ * Routes: under the admin payouts prefix in routes/api.php.
+ * Frontend consumers: admin console payouts view.
+ * Related: PayoutRequest model, MonetizationService.
+ * See PROJECT_OVERVIEW.md §3.27 for the full data-flow map.
+ */
 class AdminPayoutController extends Controller
 {
     public function index(Request $request): JsonResponse

@@ -12,6 +12,19 @@ use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * AI editing studio controller.
+ *
+ * Persists lightweight video-editing "projects" and triggers generation
+ * runs against them via AiEditingStudioService.
+ *
+ * Routes: GET/POST /ai/studio/projects,
+ * GET /ai/studio/projects/{aiEditingProject},
+ * POST /ai/studio/projects/{aiEditingProject}/generate.
+ * Frontend consumers: pages/Workspace.jsx.
+ * Related: AiEditingProject model, AiEditingStudioService.
+ * See PROJECT_OVERVIEW.md §3.18 for the full data-flow map.
+ */
 class AiEditingStudioController extends Controller
 {
     public function index(Request $request): JsonResponse
