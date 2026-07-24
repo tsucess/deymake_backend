@@ -28,6 +28,7 @@ class UserResource extends JsonResource
             'avatarUrl' => $this->avatar_url,
             'bio' => $this->bio,
             'isOnline' => $this->isActiveNow(),
+            'isAdmin' => (bool) $this->is_admin,
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }
