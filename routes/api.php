@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminChallengeController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminLiveStreamController;
 use App\Http\Controllers\Api\AdminPayoutController;
 use App\Http\Controllers\Api\AdminUserManagementController;
+use App\Http\Controllers\Api\AdminVideoController;
 use App\Http\Controllers\Api\AiAssistantController;
 use App\Http\Controllers\Api\AiEditingStudioController;
 use App\Http\Controllers\Api\ChallengeController;
@@ -304,6 +306,14 @@ Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unr
             Route::patch('/creator-verification-requests/{creatorVerificationRequest}', [CreatorVerificationController::class, 'updateAdmin']);
             Route::get('/live-streams', [AdminLiveStreamController::class, 'index']);
             Route::post('/live-streams/{video}/stop', [AdminLiveStreamController::class, 'stop']);
+            Route::get('/videos', [AdminVideoController::class, 'index']);
+            Route::get('/videos/{video}', [AdminVideoController::class, 'show']);
+            Route::patch('/videos/{video}', [AdminVideoController::class, 'update']);
+            Route::delete('/videos/{video}', [AdminVideoController::class, 'destroy']);
+            Route::get('/challenges', [AdminChallengeController::class, 'index']);
+            Route::get('/challenges/{challenge}', [AdminChallengeController::class, 'show']);
+            Route::patch('/challenges/{challenge}', [AdminChallengeController::class, 'update']);
+            Route::delete('/challenges/{challenge}', [AdminChallengeController::class, 'destroy']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);
