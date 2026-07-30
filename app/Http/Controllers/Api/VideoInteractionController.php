@@ -137,7 +137,11 @@ class VideoInteractionController extends Controller
             'messages.notifications.subscription_title',
             'messages.notifications.subscription_body',
             ['name' => $request->user()->name],
-            ['creatorId' => $creator->id],
+            [
+                'actorId' => $request->user()->id,
+                'creatorId' => $request->user()->id,
+                'userAvatar' => $request->user()->avatar_url,
+            ],
         );
 
         $creator->loadCount('subscribers');
