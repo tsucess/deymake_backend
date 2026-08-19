@@ -58,7 +58,7 @@ class ChallengeSubmission extends Model
         return $query->with([
             'user' => fn ($userQuery) => $userQuery->withProfileAggregates($viewer),
             'challenge.host' => fn ($hostQuery) => $hostQuery->withProfileAggregates($viewer),
-            'video.user' => fn ($userQuery) => $userQuery->withProfileAggregates($viewer),
+            'video' => fn ($videoQuery) => $videoQuery->withApiResourceData($viewer),
         ]);
     }
 }

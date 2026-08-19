@@ -8,14 +8,19 @@ use App\Http\Requests\Challenge\StoreChallengeSubmissionRequest;
 use App\Http\Requests\Challenge\UpdateChallengeRequest;
 use App\Http\Resources\ChallengeResource;
 use App\Http\Resources\ChallengeSubmissionResource;
+use App\Models\Category;
 use App\Models\Challenge;
 use App\Models\ChallengeSubmission;
+use App\Models\Upload;
 use App\Models\Video;
+use App\Services\CloudinaryUploadService;
+use App\Services\ContentModerationService;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Challenges controller.
@@ -273,7 +278,7 @@ class ChallengeController extends Controller
         return $this->submissionResponse($request, __('messages.challenges.my_submissions_retrieved'), $submissions, 'submissions');
     }
 
-    public function storeSubmission(StoreChallengeSubmissionRequest $request, Challenge $challenge): JsonResponse
+    public function storeSubmission(StoreChallengeSubmissionRequest $request, Challenge $challenge, ContentModerationService $moderationService): JsonResponse
     {
         SupportedLocales::apply($request);
 
@@ -290,6 +295,7 @@ class ChallengeController extends Controller
 
         $validated = $request->validated();
         $video = null;
+        $upload = null;
 
         if (! empty($validated['videoId'])) {
             $video = Video::query()->findOrFail($validated['videoId']);
@@ -297,20 +303,73 @@ class ChallengeController extends Controller
             abort_if($video->is_draft, 422, __('messages.challenges.video_must_be_published'));
         }
 
-        $submission = ChallengeSubmission::query()->create([
-            'challenge_id' => $challenge->id,
-            'user_id' => $request->user()->id,
-            'video_id' => $video?->id,
-            'title' => $validated['title'] ?? $video?->title,
-            'caption' => $validated['caption'] ?? $video?->caption,
-            'description' => $validated['description'] ?? $video?->description,
-            'media_url' => $validated['mediaUrl'] ?? $video?->media_url,
-            'thumbnail_url' => $validated['thumbnailUrl'] ?? $video?->thumbnail_url,
-            'external_url' => $validated['externalUrl'] ?? null,
-            'metadata' => $validated['metadata'] ?? null,
-            'status' => 'submitted',
-            'submitted_at' => now(),
-        ]);
+        if (! $video && ! empty($validated['uploadId'])) {
+            $upload = Upload::query()->findOrFail($validated['uploadId']);
+            abort_if($upload->user_id !== $request->user()->id, 403, __('messages.challenges.video_not_owned'));
+        }
+
+        $mediaUrl = $validated['mediaUrl'] ?? $upload?->url ?? $video?->media_url;
+        $thumbnailUrl = $validated['thumbnailUrl'] ?? $video?->thumbnail_url ?? $this->deriveThumbnailUrl($upload?->path ?? $mediaUrl);
+        $caption = $validated['caption'] ?? $video?->caption;
+        $description = $validated['description'] ?? $video?->description ?? $caption;
+        $title = $validated['title'] ?? $video?->title ?? $challenge->title;
+
+        // Promote the submission to a full Video record so it flows into the Home/Explore feeds
+        // with real playback, likes, comments, saves, reposts, and shares.
+        $submission = DB::transaction(function () use (
+            $request, $challenge, $video, $upload, $validated, $mediaUrl, $thumbnailUrl, $caption, $description, $title
+        ) {
+            $videoRecord = $video;
+
+            if (! $videoRecord && ($upload || $mediaUrl)) {
+                $challengeHashtag = $this->extractChallengeHashtag($challenge);
+                $captionWithTag = $challengeHashtag && ! str_contains((string) $caption, $challengeHashtag)
+                    ? trim(($caption ?? '').' '.$challengeHashtag)
+                    : $caption;
+                $descriptionWithTag = $challengeHashtag && ! str_contains((string) $description, $challengeHashtag)
+                    ? trim(($description ?? '').' '.$challengeHashtag)
+                    : $description;
+                $hashtags = Category::extractHashtags($descriptionWithTag ?? $captionWithTag) ?: ($challengeHashtag ? [ltrim($challengeHashtag, '#')] : []);
+                $categoryId = Category::resolveFromHashtags($descriptionWithTag ?? $captionWithTag);
+
+                $videoRecord = Video::create([
+                    'user_id' => $request->user()->id,
+                    'category_id' => $categoryId,
+                    'upload_id' => $upload?->id,
+                    'type' => 'video',
+                    'title' => $title,
+                    'caption' => $captionWithTag,
+                    'description' => $descriptionWithTag,
+                    'tagged_users' => [],
+                    'hashtags' => $hashtags,
+                    'media_url' => $mediaUrl,
+                    'thumbnail_url' => $thumbnailUrl,
+                    'is_live' => false,
+                    'is_draft' => false,
+                    'visibility' => 'everyone',
+                    'allow_gifts' => true,
+                ]);
+            }
+
+            return ChallengeSubmission::query()->create([
+                'challenge_id' => $challenge->id,
+                'user_id' => $request->user()->id,
+                'video_id' => $videoRecord?->id,
+                'title' => $title,
+                'caption' => $caption,
+                'description' => $description,
+                'media_url' => $mediaUrl,
+                'thumbnail_url' => $thumbnailUrl,
+                'external_url' => $validated['externalUrl'] ?? null,
+                'metadata' => $validated['metadata'] ?? null,
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
+        });
+
+        if ($submission->video_id) {
+            $moderationService->scanVideo($submission->video);
+        }
 
         $submission = ChallengeSubmission::query()->withApiResourceData($request->user())->findOrFail($submission->id);
 
@@ -320,6 +379,46 @@ class ChallengeController extends Controller
                 'submission' => new ChallengeSubmissionResource($submission),
             ],
         ], 201);
+    }
+
+    private function extractChallengeHashtag(Challenge $challenge): ?string
+    {
+        $requirements = $challenge->requirements;
+        if (! is_array($requirements)) {
+            return null;
+        }
+        foreach ($requirements as $line) {
+            if (! is_string($line)) {
+                continue;
+            }
+            if (stripos($line, 'hashtag:') === 0) {
+                $tag = trim(substr($line, strlen('hashtag:')));
+                if ($tag === '') {
+                    return null;
+                }
+                return str_starts_with($tag, '#') ? $tag : '#'.$tag;
+            }
+        }
+        return null;
+    }
+
+    private function deriveThumbnailUrl(?string $sourceUrl): ?string
+    {
+        if (! is_string($sourceUrl) || $sourceUrl === '') {
+            return null;
+        }
+        if (strtolower((string) parse_url($sourceUrl, PHP_URL_HOST)) !== 'res.cloudinary.com') {
+            return null;
+        }
+        try {
+            $cloudinary = app(CloudinaryUploadService::class);
+            if (! $cloudinary->isManagedUrl($sourceUrl)) {
+                return null;
+            }
+            return $cloudinary->thumbnailUrlFor($sourceUrl);
+        } catch (\RuntimeException) {
+            return null;
+        }
     }
 
     public function withdrawSubmission(Request $request, ChallengeSubmission $submission): JsonResponse

@@ -18,6 +18,7 @@ class StoreChallengeSubmissionRequest extends FormRequest
     {
         return [
             'videoId' => ['nullable', 'integer', 'exists:videos,id'],
+            'uploadId' => ['nullable', 'integer', 'exists:uploads,id'],
             'title' => ['nullable', 'string', 'max:255'],
             'caption' => ['nullable', 'string', 'max:2000'],
             'description' => ['nullable', 'string'],
@@ -32,10 +33,11 @@ class StoreChallengeSubmissionRequest extends FormRequest
     {
         $validator->after(function ($validator): void {
             $hasVideo = $this->filled('videoId');
+            $hasUpload = $this->filled('uploadId');
             $hasMedia = $this->filled('mediaUrl');
             $hasExternal = $this->filled('externalUrl');
 
-            if (! $hasVideo && ! $hasMedia && ! $hasExternal) {
+            if (! $hasVideo && ! $hasUpload && ! $hasMedia && ! $hasExternal) {
                 $validator->errors()->add('videoId', __('messages.challenges.submission_asset_required'));
             }
         });

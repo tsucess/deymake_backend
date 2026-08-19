@@ -32,9 +32,14 @@ class ChallengeSubmissionResource extends JsonResource
             ]),
             'video' => $this->whenLoaded('video', fn () => $this->video ? [
                 'id' => $this->video->id,
+                'publicId' => $this->video->public_id,
                 'title' => $this->video->title,
                 'thumbnailUrl' => $this->video->thumbnail_url,
                 'mediaUrl' => $this->video->media_url,
+                'views' => (int) $this->video->views_count,
+                'likes' => (int) ($this->video->likes_count ?? 0),
+                'commentsCount' => (int) ($this->video->comments_count ?? 0),
+                'shares' => (int) $this->video->shares_count,
             ] : null),
             'currentUserState' => [
                 'isOwner' => $viewer?->id === $this->user_id,
