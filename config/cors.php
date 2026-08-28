@@ -9,6 +9,8 @@ return [
     'allowed_origins' => [
         'https://deymake.com',
         'https://www.deymake.com',
+        'https://www.risenetworks.org',
+        'https://deymake.risenetworks.org',
         'https://app.deymake.com',
         'http://localhost:5173',
         'http://127.0.0.1:5173',
