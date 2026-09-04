@@ -585,8 +585,13 @@ class AuthController extends Controller
         }
 
         $state = Str::random(48);
+        $returnTo = $this->resolveOauthReturnTo($request);
 
-        Cache::put($this->oauthStateCacheKey($provider, $state), true, now()->addMinutes(10));
+        Cache::put(
+            $this->oauthStateCacheKey($provider, $state),
+            ['return_to' => $returnTo],
+            now()->addMinutes(10),
+        );
 
         return redirect()->away($this->buildProviderAuthorizationUrl($provider, $state));
     }
@@ -610,12 +615,16 @@ class AuthController extends Controller
         $state = (string) $request->query('state', '');
         $code = (string) $request->query('code', '');
 
-        if ($state === '' || ! Cache::pull($this->oauthStateCacheKey($provider, $state))) {
+        $stateData = $state !== '' ? Cache::pull($this->oauthStateCacheKey($provider, $state)) : null;
+
+        if ($stateData === null) {
             return $this->oauthErrorResponse($request, $provider, __('messages.auth.oauth.invalid_state'));
         }
 
+        $returnTo = is_array($stateData) ? ($stateData['return_to'] ?? null) : null;
+
         if ($code === '') {
-            return $this->oauthErrorResponse($request, $provider, __('messages.auth.oauth.missing_code'));
+            return $this->oauthErrorResponse($request, $provider, __('messages.auth.oauth.missing_code'), 422, true, $returnTo);
         }
 
         try {
@@ -626,14 +635,14 @@ class AuthController extends Controller
             if ($user->isSuspended()) {
                 $user->tokens()->delete();
 
-                return $this->oauthErrorResponse($request, $provider, __('messages.auth.account_suspended'), 403);
+                return $this->oauthErrorResponse($request, $provider, __('messages.auth.account_suspended'), 403, true, $returnTo);
             }
 
             $authToken = $user->createToken('auth_token')->plainTextToken;
 
             return redirect()->away($this->buildFrontendCallbackUrl($provider, [
                 'token' => $authToken,
-            ]));
+            ], $returnTo));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -642,6 +651,8 @@ class AuthController extends Controller
                 $provider,
                 __('messages.auth.oauth.signin_failed', ['provider' => ucfirst($provider)]),
                 502,
+                true,
+                $returnTo,
             );
         }
     }
@@ -824,6 +835,7 @@ class AuthController extends Controller
         string $message,
         int $status = 422,
         bool $configured = true,
+        ?string $returnTo = null,
     ): JsonResponse|RedirectResponse {
         if ($request->expectsJson()) {
             return response()->json([
@@ -837,12 +849,15 @@ class AuthController extends Controller
 
         return redirect()->away($this->buildFrontendCallbackUrl($provider, [
             'error' => $message,
-        ]));
+        ], $returnTo));
     }
 
-    private function buildFrontendCallbackUrl(string $provider, array $fragment = []): string
+    private function buildFrontendCallbackUrl(string $provider, array $fragment = [], ?string $baseOverride = null): string
     {
-        $baseUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/').'/auth/callback';
+        $base = $baseOverride !== null && $baseOverride !== ''
+            ? $baseOverride
+            : (string) config('app.frontend_url', 'http://localhost:5173');
+        $baseUrl = rtrim($base, '/').'/auth/callback';
         $fragmentString = http_build_query([
             'provider' => $provider,
             ...array_filter($fragment, static fn ($value) => $value !== null && $value !== ''),
@@ -854,6 +869,33 @@ class AuthController extends Controller
     private function oauthStateCacheKey(string $provider, string $state): string
     {
         return 'oauth_state:'.$provider.':'.$state;
+    }
+
+    private function resolveOauthReturnTo(Request $request): ?string
+    {
+        $candidate = trim((string) $request->query('return_to', ''));
+
+        if ($candidate === '') {
+            return null;
+        }
+
+        $parsed = parse_url($candidate);
+
+        if (! is_array($parsed) || empty($parsed['scheme']) || empty($parsed['host'])) {
+            return null;
+        }
+
+        $origin = $parsed['scheme'].'://'.$parsed['host'].(isset($parsed['port']) ? ':'.$parsed['port'] : '');
+
+        $allowed = collect(explode(',', (string) config('services.oauth.frontend_allowlist', '')))
+            ->map(static fn ($value) => rtrim(trim((string) $value), '/'))
+            ->filter()
+            ->push(rtrim((string) config('app.frontend_url', ''), '/'))
+            ->filter()
+            ->unique()
+            ->all();
+
+        return in_array($origin, $allowed, true) ? $origin : null;
     }
 
     private function uniqueUsernameFor(string $name, string $email, ?User $ignoreUser = null): string

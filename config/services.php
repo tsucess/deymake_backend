@@ -51,6 +51,10 @@ return [
         'redirect' => env('FACEBOOK_REDIRECT_URI'),
     ],
 
+    'oauth' => [
+        'frontend_allowlist' => env('OAUTH_FRONTEND_ALLOWLIST', ''),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
