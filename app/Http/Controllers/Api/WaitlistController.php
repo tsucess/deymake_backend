@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Waitlist\StoreWaitlistRequest;
 use App\Http\Resources\WaitlistEntryResource;
 use App\Models\WaitlistEntry;
+use App\Notifications\WaitlistJoined;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 /**
  * Waitlist controller.
@@ -32,6 +35,13 @@ class WaitlistController extends Controller
             'agreed_to_contact' => $request->boolean('agreed'),
             'status' => 'pending',
         ]);
+
+        try {
+            Notification::route('mail', $waitlistEntry->email)
+                ->notify(new WaitlistJoined($waitlistEntry->full_name));
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'message' => __('messages.waitlist.added'),

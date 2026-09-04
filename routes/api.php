@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdminLiveStreamController;
 use App\Http\Controllers\Api\AdminPayoutController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AdminVideoController;
+use App\Http\Controllers\Api\AdminWaitlistController;
 use App\Http\Controllers\Api\AiAssistantController;
 use App\Http\Controllers\Api\AiEditingStudioController;
 use App\Http\Controllers\Api\ChallengeController;
@@ -314,6 +315,10 @@ Route::delete('/videos/{video}/repost', [VideoInteractionController::class, 'unr
             Route::get('/challenges/{challenge}', [AdminChallengeController::class, 'show']);
             Route::patch('/challenges/{challenge}', [AdminChallengeController::class, 'update']);
             Route::delete('/challenges/{challenge}', [AdminChallengeController::class, 'destroy']);
+            Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
+            Route::get('/waitlist/export', [AdminWaitlistController::class, 'exportCsv']);
+            Route::patch('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'update']);
+            Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);

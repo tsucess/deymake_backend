@@ -74,7 +74,15 @@ return [
         'terms_title' => 'Terms of Service',
         'terms_content' => 'Review the rules, responsibilities, and terms for using DeyMake.',
     ],
-    'waitlist' => ['added' => 'You have been added to the waitlist.'],
+    'waitlist' => [
+        'added' => 'You have been added to the waitlist.',
+        'email_taken' => 'This email is already on the waitlist.',
+        'mail_subject' => 'Welcome to the DeyMake waitlist',
+        'mail_greeting' => 'Hi :name,',
+        'mail_line1' => "Thanks for joining the DeyMake waitlist — you're officially on the list.",
+        'mail_line2' => "We'll email you the moment early access opens. In the meantime, keep an eye out for updates on what's coming.",
+        'mail_signoff' => 'See you soon, The DeyMake team',
+    ],
     'profile' => [
         'retrieved' => 'Profile retrieved successfully.',
         'updated' => 'Profile updated successfully.',
@@ -138,6 +146,9 @@ return [
         'challenge_retrieved' => 'Admin challenge retrieved successfully.',
         'challenge_updated' => 'Admin challenge updated successfully.',
         'challenge_deleted' => 'Admin challenge deleted successfully.',
+        'waitlist_retrieved' => 'Admin waitlist entries retrieved successfully.',
+        'waitlist_updated' => 'Admin waitlist entry updated successfully.',
+        'waitlist_deleted' => 'Admin waitlist entry deleted successfully.',
     ],
     'ai' => [
         'captions_generated' => 'AI caption suggestions generated successfully.',

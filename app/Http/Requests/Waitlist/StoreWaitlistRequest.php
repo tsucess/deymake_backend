@@ -26,4 +26,14 @@ class StoreWaitlistRequest extends FormRequest
             'agreed' => ['accepted'],
         ];
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.unique' => __('messages.waitlist.email_taken'),
+        ];
+    }
 }
