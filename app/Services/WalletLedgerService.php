@@ -58,6 +58,38 @@ class WalletLedgerService
         ]);
     }
 
+    /**
+     * Record a debit against a creator wallet.
+     *
+     * Used for reversals/refunds (status 'posted') that immediately reduce the
+     * available balance, distinct from payout debits which move through the
+     * requested/processing/paid lifecycle via syncPayoutTransaction().
+     *
+     * @param  array<string, mixed>|null  $metadata
+     */
+    public function recordDebit(
+        User|int $user,
+        string $type,
+        int $amount,
+        string $currency,
+        string $status = 'posted',
+        ?string $description = null,
+        ?array $metadata = null,
+        ?Carbon $occurredAt = null,
+    ): WalletTransaction {
+        return WalletTransaction::query()->create([
+            'user_id' => $user instanceof User ? $user->id : $user,
+            'type' => $type,
+            'direction' => 'debit',
+            'status' => $status,
+            'amount' => max(0, $amount),
+            'currency' => strtoupper($currency),
+            'description' => $description,
+            'metadata' => $metadata,
+            'occurred_at' => $occurredAt ?? now(),
+        ]);
+    }
+
     public function syncPayoutTransaction(PayoutRequest $payoutRequest): WalletTransaction
     {
         return WalletTransaction::query()->updateOrCreate(
@@ -103,6 +135,11 @@ class WalletLedgerService
             ->where('status', 'paid')
             ->sum('amount');
 
+        $reversals = (int) $transactions
+            ->where('direction', 'debit')
+            ->where('status', 'posted')
+            ->sum('amount');
+
         $pending = (int) $transactions
             ->where('direction', 'debit')
             ->whereIn('status', ['requested', 'processing'])
@@ -115,8 +152,9 @@ class WalletLedgerService
         return [
             'grossRevenue' => $credits,
             'withdrawn' => $withdrawn,
+            'reversals' => $reversals,
             'pendingPayouts' => $pending,
-            'availableBalance' => max(0, $credits - $withdrawn - $pending),
+            'availableBalance' => max(0, $credits - $withdrawn - $reversals - $pending),
             'lastTransactionAt' => $latest?->occurred_at?->toISOString(),
         ];
     }

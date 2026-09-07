@@ -404,6 +404,26 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('errors.reason.0', 'account_suspended');
     }
 
+    public function test_banned_user_cannot_login(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'banned@example.com',
+            'username' => 'banned.user',
+            'password' => 'Password1',
+            'account_status' => 'banned',
+            'banned_at' => now(),
+        ]);
+
+        $this->postJson('/api/v1/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'Password1',
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.auth.account_banned'))
+            ->assertJsonPath('errors.account.0', trans('messages.auth.account_banned_detail'))
+            ->assertJsonPath('errors.reason.0', 'account_banned');
+    }
+
     public function test_login_is_throttled_after_repeated_failures(): void
     {
         RateLimiter::clear('login:ip:127.0.0.1');

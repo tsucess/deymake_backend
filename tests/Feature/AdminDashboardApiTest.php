@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Challenge;
 use App\Models\ChallengeSubmission;
 use App\Models\Comment;
@@ -47,8 +48,14 @@ class AdminDashboardApiTest extends TestCase
             'last_active_at' => now()->subHours(3),
         ]);
 
+        $category = Category::query()->create([
+            'name' => 'Music',
+            'slug' => 'music',
+        ]);
+
         $video = Video::query()->create([
             'user_id' => $creator->id,
+            'category_id' => $category->id,
             'type' => 'video',
             'title' => 'Flagged Performance',
             'caption' => 'Needs review',
@@ -56,6 +63,7 @@ class AdminDashboardApiTest extends TestCase
             'thumbnail_url' => 'https://cdn.example.com/flagged.jpg',
             'is_live' => true,
             'is_draft' => false,
+            'views_count' => 500,
         ]);
 
         Comment::query()->create([
@@ -141,7 +149,13 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.summary.reviewedVideoReports', 1)
             ->assertJsonPath('data.recentVideoReports.0.id', $pendingReport->id)
             ->assertJsonPath('data.recentChallenges.0.id', $challenge->id)
-            ->assertJsonPath('data.recentUsers.0.fullName', fn ($value) => in_array($value, ['Admin User', 'Creator User', 'Reporter User'], true));
+            ->assertJsonPath('data.recentUsers.0.fullName', fn ($value) => in_array($value, ['Admin User', 'Creator User', 'Reporter User'], true))
+            ->assertJsonCount(7, 'data.charts.growth.labels')
+            ->assertJsonCount(7, 'data.charts.growth.newCreators')
+            ->assertJsonCount(7, 'data.charts.growth.activeCreators')
+            ->assertJsonPath('data.charts.totalViews', 500)
+            ->assertJsonPath('data.charts.categories.0.name', 'Music')
+            ->assertJsonPath('data.charts.categories.0.views', 500);
 
         $this->getJson('/api/v1/admin/reports/videos?status=pending')
             ->assertOk()
@@ -267,5 +281,70 @@ class AdminDashboardApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.user.accountStatus', 'active')
             ->assertJsonPath('data.user.isSuspended', false);
+    }
+
+    public function test_admin_can_ban_and_unban_a_user_through_admin_management_api(): void
+    {
+        $admin = User::factory()->admin()->create([
+            'name' => 'Admin Enforcer',
+            'username' => 'admin.enforcer',
+            'email' => 'admin-enforcer@example.com',
+        ]);
+        $member = User::factory()->create([
+            'name' => 'Rule Breaker',
+            'username' => 'rule.breaker',
+            'email' => 'rule-breaker@example.com',
+        ]);
+
+        $member->createToken('member-test')->plainTextToken;
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson('/api/v1/admin/users/'.$member->id, [
+                'accountStatus' => 'banned',
+                'accountStatusNotes' => 'Severe terms of service violation.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_updated'))
+            ->assertJsonPath('data.user.accountStatus', 'banned')
+            ->assertJsonPath('data.user.isBanned', true)
+            ->assertJsonPath('data.user.isSuspended', false)
+            ->assertJsonPath('data.user.accountStatusNotes', 'Severe terms of service violation.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $member->id,
+            'account_status' => 'banned',
+            'account_status_notes' => 'Severe terms of service violation.',
+            'banned_by' => $admin->id,
+        ]);
+        $this->assertNotNull($member->fresh()->banned_at);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_type' => $member->getMorphClass(),
+            'tokenable_id' => $member->id,
+        ]);
+
+        Sanctum::actingAs($member->fresh());
+
+        $this
+            ->getJson('/api/v1/auth/me')
+            ->assertForbidden()
+            ->assertJsonPath('message', trans('messages.auth.account_banned'));
+
+        Sanctum::actingAs($admin->fresh());
+
+        $this
+            ->patchJson('/api/v1/admin/users/'.$member->id, [
+                'accountStatus' => 'active',
+                'accountStatusNotes' => 'Ban lifted after appeal.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.user.accountStatus', 'active')
+            ->assertJsonPath('data.user.isBanned', false);
+
+        $fresh = $member->fresh();
+        $this->assertNull($fresh->banned_at);
+        $this->assertNull($fresh->banned_by);
     }
 }

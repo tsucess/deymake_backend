@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\UpdateVideoReportRequest;
 use App\Http\Resources\ChallengeResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\VideoReportResource;
+use App\Models\Category;
 use App\Models\Challenge;
 use App\Models\ChallengeSubmission;
 use App\Models\Comment;
@@ -87,8 +88,72 @@ class AdminDashboardController extends Controller
                 'recentVideos' => $recentVideos,
                 'recentChallenges' => ChallengeResource::collection($recentChallenges),
                 'recentVideoReports' => VideoReportResource::collection($recentReports),
+                'charts' => $this->charts(),
             ],
         ]);
+    }
+
+    /**
+     * Chart-friendly aggregates: a 7-day creator growth series and a view-count
+     * distribution by content category.
+     *
+     * Uses per-day count queries and GROUP BY/SUM so the aggregation behaves
+     * identically on sqlite (tests) and mysql (production).
+     */
+    private function charts(): array
+    {
+        $labels = [];
+        $newCreators = [];
+        $activeCreators = [];
+
+        foreach (range(6, 0) as $offset) {
+            $day = now()->subDays($offset);
+            $start = $day->copy()->startOfDay();
+            $end = $day->copy()->endOfDay();
+
+            $labels[] = $day->format('M d');
+
+            $newCreators[] = User::query()
+                ->has('videos')
+                ->whereBetween('created_at', [$start, $end])
+                ->count();
+
+            $activeCreators[] = User::query()
+                ->has('videos')
+                ->whereBetween('last_active_at', [$start, $end])
+                ->count();
+        }
+
+        $categoryViews = Video::query()
+            ->where('is_draft', false)
+            ->whereNotNull('category_id')
+            ->selectRaw('category_id, SUM(views_count) as views')
+            ->groupBy('category_id')
+            ->pluck('views', 'category_id');
+
+        $categoryNames = Category::query()
+            ->whereIn('id', $categoryViews->keys())
+            ->pluck('name', 'id');
+
+        $categories = $categoryViews
+            ->map(fn ($views, $id) => [
+                'name' => $categoryNames->get($id, __('messages.admin.uncategorized')),
+                'views' => (int) $views,
+            ])
+            ->sortByDesc('views')
+            ->take(6)
+            ->values()
+            ->all();
+
+        return [
+            'growth' => [
+                'labels' => $labels,
+                'newCreators' => $newCreators,
+                'activeCreators' => $activeCreators,
+            ],
+            'categories' => $categories,
+            'totalViews' => (int) Video::query()->where('is_draft', false)->sum('views_count'),
+        ];
     }
 
     public function videoReports(Request $request): JsonResponse

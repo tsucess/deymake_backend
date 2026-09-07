@@ -97,10 +97,12 @@ class AdminUserManagementController extends Controller
         $nextIsAdmin = array_key_exists('isAdmin', $validated) ? (bool) $validated['isAdmin'] : $user->isAdmin();
 
         abort_if(
-            $isSelf && ($nextStatus === 'suspended' || ! $nextIsAdmin),
+            $isSelf && (in_array($nextStatus, ['suspended', 'banned'], true) || ! $nextIsAdmin),
             422,
             __('messages.admin.user_self_protection')
         );
+
+        $isBlocked = in_array($nextStatus, ['suspended', 'banned'], true);
 
         $user->forceFill([
             'is_admin' => $nextIsAdmin,
@@ -108,10 +110,12 @@ class AdminUserManagementController extends Controller
             'account_status_notes' => $validated['accountStatusNotes'] ?? $user->account_status_notes,
             'suspended_at' => $nextStatus === 'suspended' ? now() : null,
             'suspended_by' => $nextStatus === 'suspended' ? $currentAdmin->id : null,
-            'is_online' => $nextStatus === 'suspended' ? false : $user->is_online,
+            'banned_at' => $nextStatus === 'banned' ? now() : null,
+            'banned_by' => $nextStatus === 'banned' ? $currentAdmin->id : null,
+            'is_online' => $isBlocked ? false : $user->is_online,
         ])->save();
 
-        if (($validated['clearSessions'] ?? false) || $nextStatus === 'suspended') {
+        if (($validated['clearSessions'] ?? false) || $isBlocked) {
             $user->tokens()->delete();
         }
 
@@ -131,8 +135,9 @@ class AdminUserManagementController extends Controller
     private function managementCounts(): array
     {
         return [
-            'videos',
+            'videos as videos_count' => fn (Builder $builder) => $builder->where('is_draft', false)->where('moderation_status', 'visible'),
             'subscribers',
+            'subscribedCreators as following_count',
             'videoReports',
             'challengeSubmissions',
             'videos as published_videos_count' => fn (Builder $builder) => $builder->where('is_draft', false),

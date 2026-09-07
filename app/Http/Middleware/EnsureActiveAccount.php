@@ -13,11 +13,13 @@ class EnsureActiveAccount
     {
         $user = $request->user();
 
-        if ($user && $user->isSuspended()) {
+        if ($user && $user->isBlocked()) {
+            $banned = $user->isBanned();
+
             return new JsonResponse([
-                'message' => __('messages.auth.account_suspended'),
+                'message' => __($banned ? 'messages.auth.account_banned' : 'messages.auth.account_suspended'),
                 'errors' => [
-                    'account' => [__('messages.auth.account_suspended_detail')],
+                    'account' => [__($banned ? 'messages.auth.account_banned_detail' : 'messages.auth.account_suspended_detail')],
                 ],
             ], 403);
         }

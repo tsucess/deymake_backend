@@ -18,7 +18,7 @@ class UpdateManagedUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'accountStatus' => ['sometimes', Rule::in(['active', 'suspended'])],
+            'accountStatus' => ['sometimes', Rule::in(['active', 'suspended', 'banned'])],
             'accountStatusNotes' => ['nullable', 'string', 'max:1000'],
             'isAdmin' => ['sometimes', 'boolean'],
             'clearSessions' => ['sometimes', 'boolean'],

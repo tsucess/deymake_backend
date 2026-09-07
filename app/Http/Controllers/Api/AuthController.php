@@ -119,8 +119,8 @@ class AuthController extends Controller
         $user = User::query()->where('phone', $phone)->first();
 
         if ($user) {
-            if ($user->isSuspended()) {
-                return $this->suspendedAccountResponse();
+            if ($user->isBlocked()) {
+                return $this->blockedAccountResponse($user);
             }
 
             $this->issuePhoneCode($phone, 'login', $sms, 'messages.auth.phone_login_code_sms_message');
@@ -164,8 +164,8 @@ class AuthController extends Controller
             ], 422);
         }
 
-        if ($user->isSuspended()) {
-            return $this->suspendedAccountResponse();
+        if ($user->isBlocked()) {
+            return $this->blockedAccountResponse($user);
         }
 
         RateLimiter::clear($ipKey);
@@ -322,8 +322,8 @@ class AuthController extends Controller
             ], 422);
         }
 
-        if ($user->isSuspended()) {
-            return $this->suspendedAccountResponse();
+        if ($user->isBlocked()) {
+            return $this->blockedAccountResponse($user);
         }
 
         if (! $user->email_verified_at && ! $user->phone_verified_at) {
@@ -392,8 +392,8 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $validated['email'])->firstOrFail();
 
-        if ($user->isSuspended()) {
-            return $this->suspendedAccountResponse();
+        if ($user->isBlocked()) {
+            return $this->blockedAccountResponse($user);
         }
 
         if ($user->email_verified_at) {
@@ -516,7 +516,7 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $validated['email'])->first();
 
-        if ($user && ! $user->isSuspended()) {
+        if ($user && ! $user->isBlocked()) {
             $token = Str::random(64);
 
             DB::table('password_reset_tokens')->updateOrInsert(
@@ -632,10 +632,10 @@ class AuthController extends Controller
             $profile = $this->fetchOauthProfile($provider, $token);
             $user = $this->resolveOauthUser($provider, $profile);
 
-            if ($user->isSuspended()) {
+            if ($user->isBlocked()) {
                 $user->tokens()->delete();
 
-                return $this->oauthErrorResponse($request, $provider, __('messages.auth.account_suspended'), 403, true, $returnTo);
+                return $this->oauthErrorResponse($request, $provider, __($user->isBanned() ? 'messages.auth.account_banned' : 'messages.auth.account_suspended'), 403, true, $returnTo);
             }
 
             $authToken = $user->createToken('auth_token')->plainTextToken;
@@ -941,13 +941,15 @@ class AuthController extends Controller
         ], $status);
     }
 
-    private function suspendedAccountResponse(): JsonResponse
+    private function blockedAccountResponse(?User $user = null): JsonResponse
     {
+        $banned = $user?->isBanned() ?? false;
+
         return response()->json([
-            'message' => __('messages.auth.account_suspended'),
+            'message' => __($banned ? 'messages.auth.account_banned' : 'messages.auth.account_suspended'),
             'errors' => [
-                'account' => [__('messages.auth.account_suspended_detail')],
-                'reason' => ['account_suspended'],
+                'account' => [__($banned ? 'messages.auth.account_banned_detail' : 'messages.auth.account_suspended_detail')],
+                'reason' => [$banned ? 'account_banned' : 'account_suspended'],
             ],
         ], 403);
     }

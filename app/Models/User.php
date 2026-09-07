@@ -48,6 +48,8 @@ class User extends Authenticatable
         'account_status_notes',
         'suspended_at',
         'suspended_by',
+        'banned_at',
+        'banned_by',
         'provider',
         'provider_id',
     ];
@@ -80,6 +82,7 @@ class User extends Authenticatable
             'last_active_at' => 'datetime',
             'is_admin' => 'boolean',
             'suspended_at' => 'datetime',
+            'banned_at' => 'datetime',
         ];
     }
 
@@ -274,11 +277,25 @@ class User extends Authenticatable
 
     public function accountStatus(): string
     {
+        if ($this->isBanned()) {
+            return 'banned';
+        }
+
         return $this->isSuspended() ? 'suspended' : ((string) ($this->account_status ?: 'active'));
     }
 
     public function isSuspended(): bool
     {
         return $this->account_status === 'suspended' || $this->suspended_at !== null;
+    }
+
+    public function isBanned(): bool
+    {
+        return $this->account_status === 'banned' || $this->banned_at !== null;
+    }
+
+    public function isBlocked(): bool
+    {
+        return $this->isSuspended() || $this->isBanned();
     }
 }
