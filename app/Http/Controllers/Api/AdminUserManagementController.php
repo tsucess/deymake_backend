@@ -43,7 +43,7 @@ class AdminUserManagementController extends Controller
                             ->orWhere('email', 'like', '%'.$query.'%');
                     });
                 })
-                ->when(in_array($accountStatus, ['active', 'suspended'], true), fn (Builder $builder) => $builder->where('account_status', $accountStatus))
+                ->when(in_array($accountStatus, ['active', 'suspended', 'banned'], true), fn (Builder $builder) => $builder->where('account_status', $accountStatus))
                 ->when($role === 'admin', fn (Builder $builder) => $builder->where('is_admin', true))
                 ->when($role === 'creator', fn (Builder $builder) => $builder->has('videos'))
                 ->when($role === 'member', fn (Builder $builder) => $builder->where('is_admin', false)->doesntHave('videos'))
@@ -66,6 +66,7 @@ class AdminUserManagementController extends Controller
                     'totalUsers' => User::query()->count(),
                     'adminUsers' => User::query()->where('is_admin', true)->count(),
                     'suspendedUsers' => User::query()->where('account_status', 'suspended')->count(),
+                    'bannedUsers' => User::query()->where('account_status', 'banned')->count(),
                     'creatorUsers' => User::query()->has('videos')->count(),
                 ],
             ],
