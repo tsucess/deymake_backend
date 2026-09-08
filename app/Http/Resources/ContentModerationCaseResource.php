@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Comment;
 use App\Models\ContentModerationCase;
+use App\Models\User;
 use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -49,12 +50,15 @@ class ContentModerationCaseResource extends JsonResource
                 'description' => $subject->description,
                 'thumbnailUrl' => $subject->thumbnail_url,
                 'ownerId' => $subject->user_id,
+                'owner' => $subject->relationLoaded('user') ? $this->userSummary($subject->user) : null,
                 'moderationStatus' => $subject->moderation_status,
                 'createdAt' => $subject->created_at?->toISOString(),
             ];
         }
 
         if ($subject instanceof Comment) {
+            $video = $subject->relationLoaded('video') ? $subject->video : null;
+
             return [
                 'id' => $subject->id,
                 'type' => 'comment',
@@ -62,11 +66,35 @@ class ContentModerationCaseResource extends JsonResource
                 'parentId' => $subject->parent_id,
                 'videoId' => $subject->video_id,
                 'ownerId' => $subject->user_id,
+                'author' => $subject->relationLoaded('user') ? $this->userSummary($subject->user) : null,
+                'video' => $video ? [
+                    'id' => $video->id,
+                    'title' => $video->title,
+                    'thumbnailUrl' => $video->thumbnail_url,
+                    'owner' => $video->relationLoaded('user') ? $this->userSummary($video->user) : null,
+                ] : null,
                 'moderationStatus' => $subject->moderation_status,
                 'createdAt' => $subject->created_at?->toISOString(),
             ];
         }
 
         return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function userSummary(?User $user): ?array
+    {
+        if (! $user) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'fullName' => $user->name,
+            'username' => $user->username,
+            'avatarUrl' => $user->avatar_url,
+        ];
     }
 }

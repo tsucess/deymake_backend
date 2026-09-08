@@ -23,6 +23,7 @@ class UpdateChallengeRequest extends FormRequest
             'title' => ['sometimes', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('challenges', 'slug')->ignore($challengeId)],
             'summary' => ['nullable', 'string', 'max:500'],
+            'category' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
             'bannerUrl' => ['nullable', 'string', 'max:2048'],
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],

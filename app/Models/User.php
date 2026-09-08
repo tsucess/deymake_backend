@@ -7,9 +7,10 @@ use App\Support\Username;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -43,6 +44,8 @@ class User extends Authenticatable
         'preferences',
         'is_online',
         'last_active_at',
+        'last_platform',
+        'last_device_type',
         'is_admin',
         'account_status',
         'account_status_notes',
@@ -173,6 +176,14 @@ class User extends Authenticatable
     public function reviewedVideoReports(): HasMany
     {
         return $this->hasMany(VideoReport::class, 'reviewed_by');
+    }
+
+    /**
+     * Reports filed against this user's own videos.
+     */
+    public function receivedVideoReports(): HasManyThrough
+    {
+        return $this->hasManyThrough(VideoReport::class, Video::class, 'user_id', 'video_id', 'id', 'id');
     }
 
     public function memberships(): HasMany

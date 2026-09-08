@@ -23,6 +23,10 @@ class ChallengeSubmission extends Model
         'external_url',
         'metadata',
         'status',
+        'is_winner',
+        'winner_rank',
+        'review_notes',
+        'reviewed_by',
         'submitted_at',
         'reviewed_at',
         'withdrawn_at',
@@ -32,6 +36,8 @@ class ChallengeSubmission extends Model
     {
         return [
             'metadata' => 'array',
+            'is_winner' => 'boolean',
+            'winner_rank' => 'integer',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'withdrawn_at' => 'datetime',
@@ -53,12 +59,18 @@ class ChallengeSubmission extends Model
         return $this->belongsTo(Video::class);
     }
 
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     public function scopeWithApiResourceData(Builder $query, ?User $viewer = null): Builder
     {
         return $query->with([
             'user' => fn ($userQuery) => $userQuery->withProfileAggregates($viewer),
             'challenge.host' => fn ($hostQuery) => $hostQuery->withProfileAggregates($viewer),
             'video' => fn ($videoQuery) => $videoQuery->withApiResourceData($viewer),
+            'reviewer:id,name,username',
         ]);
     }
 }

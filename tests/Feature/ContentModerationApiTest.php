@@ -144,4 +144,101 @@ class ContentModerationApiTest extends TestCase
             ->assertJsonCount(1, 'data.comments')
             ->assertJsonPath('data.comments.0.id', $commentId);
     }
+
+    public function test_admin_can_search_comment_cases_and_manual_decision_is_audited(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $creator = User::factory()->create();
+        $commenter = User::factory()->create();
+
+        $video = Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Studio Session',
+            'caption' => 'Behind the scenes',
+            'media_url' => 'https://cdn.example.com/studio.mp4',
+            'thumbnail_url' => 'https://cdn.example.com/studio.jpg',
+            'is_draft' => false,
+        ]);
+
+        Sanctum::actingAs($commenter);
+
+        $commentId = $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'Absolutely lovely choreography showcase',
+        ])->assertCreated()->json('data.comment.id');
+
+        $moderationCase = ContentModerationCase::query()->where([
+            'moderatable_type' => Comment::class,
+            'moderatable_id' => $commentId,
+        ])->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/moderation/cases?contentType=comment&q=choreography')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.cases')
+            ->assertJsonPath('data.cases.0.id', $moderationCase->id)
+            ->assertJsonPath('data.cases.0.subject.id', $commentId)
+            ->assertJsonPath('data.cases.0.subject.author.id', $commenter->id)
+            ->assertJsonPath('data.cases.0.subject.video.id', $video->id)
+            ->assertJsonPath('meta.summary.total', 1);
+
+        $this->getJson('/api/v1/admin/moderation/cases?contentType=comment&q=nonexistentterm')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.cases');
+
+        $this->patchJson('/api/v1/admin/moderation/cases/'.$moderationCase->id, [
+            'action' => 'restrict',
+            'notes' => 'Restricted after manual review.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.case.status', 'restricted')
+            ->assertJsonPath('data.case.subject.moderationStatus', 'restricted');
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.comment_restricted',
+            'auditable_id' => $moderationCase->id,
+        ]);
+    }
+
+    public function test_admin_rescan_comment_records_audit_log(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $creator = User::factory()->create();
+        $commenter = User::factory()->create();
+
+        $video = Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Open Mic',
+            'media_url' => 'https://cdn.example.com/openmic.mp4',
+            'thumbnail_url' => 'https://cdn.example.com/openmic.jpg',
+            'is_draft' => false,
+        ]);
+
+        Sanctum::actingAs($commenter);
+
+        $commentId = $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+            'body' => 'Great set tonight',
+        ])->assertCreated()->json('data.comment.id');
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/v1/admin/moderation/comments/'.$commentId.'/rescan')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.moderation.comment_rescanned'))
+            ->assertJsonPath('data.case.subject.id', $commentId);
+
+        $moderationCase = ContentModerationCase::query()->where([
+            'moderatable_type' => Comment::class,
+            'moderatable_id' => $commentId,
+        ])->firstOrFail();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.comment_rescanned',
+            'auditable_id' => $moderationCase->id,
+        ]);
+    }
 }

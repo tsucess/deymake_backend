@@ -18,6 +18,7 @@ class Challenge extends Model
         'title',
         'slug',
         'summary',
+        'category',
         'description',
         'banner_url',
         'thumbnail_url',

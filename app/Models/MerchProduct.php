@@ -20,6 +20,7 @@ class MerchProduct extends Model
         'sku',
         'description',
         'price_amount',
+        'discount_amount',
         'currency',
         'inventory_count',
         'images',
@@ -29,6 +30,9 @@ class MerchProduct extends Model
     {
         return [
             'images' => 'array',
+            'price_amount' => 'integer',
+            'discount_amount' => 'integer',
+            'inventory_count' => 'integer',
         ];
     }
 

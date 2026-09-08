@@ -126,6 +126,7 @@ class ChallengeController extends Controller
             'title' => $validated['title'],
             'slug' => $validated['slug'] ?? null,
             'summary' => $validated['summary'] ?? null,
+            'category' => $validated['category'] ?? null,
             'description' => $validated['description'] ?? null,
             'banner_url' => $validated['bannerUrl'] ?? null,
             'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
@@ -164,6 +165,7 @@ class ChallengeController extends Controller
                 ? ($validated['slug'] ?: Challenge::generateUniqueSlug($validated['title'] ?? $challenge->title, $challenge->id))
                 : $challenge->slug,
             'summary' => array_key_exists('summary', $validated) ? $validated['summary'] : $challenge->summary,
+            'category' => array_key_exists('category', $validated) ? $validated['category'] : $challenge->category,
             'description' => array_key_exists('description', $validated) ? $validated['description'] : $challenge->description,
             'banner_url' => array_key_exists('bannerUrl', $validated) ? $validated['bannerUrl'] : $challenge->banner_url,
             'thumbnail_url' => array_key_exists('thumbnailUrl', $validated) ? $validated['thumbnailUrl'] : $challenge->thumbnail_url,
@@ -396,9 +398,11 @@ class ChallengeController extends Controller
                 if ($tag === '') {
                     return null;
                 }
+
                 return str_starts_with($tag, '#') ? $tag : '#'.$tag;
             }
         }
+
         return null;
     }
 
@@ -415,6 +419,7 @@ class ChallengeController extends Controller
             if (! $cloudinary->isManagedUrl($sourceUrl)) {
                 return null;
             }
+
             return $cloudinary->thumbnailUrlFor($sourceUrl);
         } catch (\RuntimeException) {
             return null;

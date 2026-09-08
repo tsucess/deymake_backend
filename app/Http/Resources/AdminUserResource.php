@@ -41,6 +41,7 @@ class AdminUserResource extends JsonResource
                 'subscribersCount' => (int) ($this->subscribers_count ?? 0),
                 'followingCount' => (int) ($this->following_count ?? 0),
                 'reportsSubmittedCount' => (int) ($this->video_reports_count ?? 0),
+                'reportsAgainstCount' => (int) ($this->received_video_reports_count ?? 0),
                 'challengeSubmissionsCount' => (int) ($this->challenge_submissions_count ?? 0),
             ],
         ];

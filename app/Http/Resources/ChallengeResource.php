@@ -20,6 +20,7 @@ class ChallengeResource extends JsonResource
             'title' => $challenge->title,
             'slug' => $challenge->slug,
             'summary' => $challenge->summary,
+            'category' => $challenge->category ?: self::extractRequirement($challenge->requirements, 'Category:'),
             'description' => $challenge->description,
             'bannerUrl' => $challenge->banner_url,
             'thumbnailUrl' => $challenge->thumbnail_url,
@@ -49,5 +50,27 @@ class ChallengeResource extends JsonResource
             'createdAt' => $challenge->created_at?->toISOString(),
             'updatedAt' => $challenge->updated_at?->toISOString(),
         ];
+    }
+
+    /**
+     * Pull a "Prefix: value" entry out of a challenge's requirements[] array.
+     * Legacy challenges stored their category inside requirements before the
+     * dedicated column existed, so the resource stays backward-compatible.
+     */
+    private static function extractRequirement(mixed $requirements, string $prefix): ?string
+    {
+        if (! is_array($requirements)) {
+            return null;
+        }
+
+        foreach ($requirements as $line) {
+            if (is_string($line) && stripos($line, $prefix) === 0) {
+                $value = trim(substr($line, strlen($prefix)));
+
+                return $value !== '' ? $value : null;
+            }
+        }
+
+        return null;
     }
 }

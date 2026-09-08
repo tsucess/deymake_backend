@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CreatorVerificationRequestResource;
 use App\Models\CreatorVerificationRequest;
+use App\Support\AuditLogger;
 use App\Support\DeveloperWebhookDispatcher;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
@@ -109,6 +110,10 @@ class CreatorVerificationController extends Controller
         SupportedLocales::apply($request);
 
         $status = trim($request->string('status')->toString());
+        $search = trim($request->string('q')->toString());
+        $from = trim($request->string('from')->toString());
+        $to = trim($request->string('to')->toString());
+
         $requests = PaginatedJson::paginate(
             CreatorVerificationRequest::query()
                 ->with([
@@ -116,6 +121,22 @@ class CreatorVerificationController extends Controller
                     'reviewer' => fn ($query) => $query->withProfileAggregates($request->user()),
                 ])
                 ->when($status !== '', fn ($query) => $query->where('status', $status))
+                ->when($search !== '', function ($query) use ($search): void {
+                    $query->where(function ($searchQuery) use ($search): void {
+                        $searchQuery
+                            ->where('legal_name', 'like', '%'.$search.'%')
+                            ->orWhere('country', 'like', '%'.$search.'%')
+                            ->when(ctype_digit($search), fn ($idQuery) => $idQuery->orWhere('id', (int) $search))
+                            ->orWhereHas('user', function ($userQuery) use ($search): void {
+                                $userQuery
+                                    ->where('name', 'like', '%'.$search.'%')
+                                    ->orWhere('username', 'like', '%'.$search.'%')
+                                    ->orWhere('email', 'like', '%'.$search.'%');
+                            });
+                    });
+                })
+                ->when($from !== '', fn ($query) => $query->whereDate('submitted_at', '>=', $from))
+                ->when($to !== '', fn ($query) => $query->whereDate('submitted_at', '<=', $to))
                 ->latest('submitted_at'),
             $request
         );
@@ -127,6 +148,37 @@ class CreatorVerificationController extends Controller
             ],
             'meta' => [
                 'requests' => PaginatedJson::meta($requests),
+                'summary' => [
+                    'total' => CreatorVerificationRequest::query()->count(),
+                    'pending' => CreatorVerificationRequest::query()->where('status', 'pending')->count(),
+                    'approved' => CreatorVerificationRequest::query()->where('status', 'approved')->count(),
+                    'rejected' => CreatorVerificationRequest::query()->where('status', 'rejected')->count(),
+                    'needsMoreInfo' => CreatorVerificationRequest::query()->where('status', 'needs_more_info')->count(),
+                ],
+            ],
+        ]);
+    }
+
+    public function showAdmin(Request $request, CreatorVerificationRequest $creatorVerificationRequest): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        $creatorVerificationRequest->load([
+            'user' => fn ($query) => $query->withProfileAggregates($request->user()),
+            'reviewer' => fn ($query) => $query->withProfileAggregates($request->user()),
+        ]);
+
+        // Reading an applicant's submitted identity documents is a sensitive
+        // action; record who accessed which request for the audit trail.
+        AuditLogger::record('admin.creator_verification_viewed', $creatorVerificationRequest, (int) $request->user()->id, [
+            'userId' => $creatorVerificationRequest->user_id,
+            'status' => $creatorVerificationRequest->status,
+        ], $request->ip());
+
+        return response()->json([
+            'message' => __('messages.creator_verification.admin_request_retrieved'),
+            'data' => [
+                'request' => new CreatorVerificationRequestResource($creatorVerificationRequest),
             ],
         ]);
     }
@@ -141,6 +193,7 @@ class CreatorVerificationController extends Controller
         ]);
 
         $status = $validated['status'];
+        $previousStatus = $creatorVerificationRequest->status;
         $creatorVerificationRequest->forceFill([
             'status' => $status,
             'review_notes' => $validated['reviewNotes'] ?? null,
@@ -171,6 +224,13 @@ class CreatorVerificationController extends Controller
             'reviewedBy' => $request->user()->id,
         ]);
 
+        AuditLogger::record($this->reviewAction($status), $creatorVerificationRequest, (int) $request->user()->id, [
+            'from' => $previousStatus,
+            'to' => $status,
+            'userId' => $creatorVerificationRequest->user_id,
+            'notes' => $validated['reviewNotes'] ?? null,
+        ], $request->ip());
+
         $creatorVerificationRequest->load([
             'user' => fn ($query) => $query->withProfileAggregates($request->user()),
             'reviewer' => fn ($query) => $query->withProfileAggregates($request->user()),
@@ -182,5 +242,14 @@ class CreatorVerificationController extends Controller
                 'request' => new CreatorVerificationRequestResource($creatorVerificationRequest),
             ],
         ]);
+    }
+
+    private function reviewAction(string $status): string
+    {
+        return match ($status) {
+            'approved' => 'admin.creator_verification_approved',
+            'rejected' => 'admin.creator_verification_rejected',
+            default => 'admin.creator_verification_more_info_requested',
+        };
     }
 }

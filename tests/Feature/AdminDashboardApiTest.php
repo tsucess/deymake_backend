@@ -6,11 +6,16 @@ use App\Models\Category;
 use App\Models\Challenge;
 use App\Models\ChallengeSubmission;
 use App\Models\Comment;
+use App\Models\ContentModerationCase;
 use App\Models\CreatorPlan;
+use App\Models\CreatorVerificationRequest;
+use App\Models\FanTip;
 use App\Models\Membership;
+use App\Models\PayoutRequest;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoReport;
+use App\Models\WalletTransaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -346,5 +351,418 @@ class AdminDashboardApiTest extends TestCase
         $fresh = $member->fresh();
         $this->assertNull($fresh->banned_at);
         $this->assertNull($fresh->banned_by);
+    }
+
+    public function test_admin_dashboard_returns_expanded_metrics_charts_and_recent_feeds(): void
+    {
+        $admin = User::factory()->admin()->create([
+            'name' => 'Metrics Admin',
+            'username' => 'metrics.admin',
+        ]);
+        $creator = User::factory()->create([
+            'name' => 'Revenue Creator',
+            'username' => 'revenue.creator',
+            'creator_verification_status' => 'approved',
+            'creator_verified_at' => now()->subDay(),
+        ]);
+        User::factory()->create([
+            'name' => 'Suspended Person',
+            'username' => 'suspended.person',
+            'account_status' => 'suspended',
+        ]);
+        User::factory()->create([
+            'name' => 'Banned Person',
+            'username' => 'banned.person',
+            'account_status' => 'banned',
+        ]);
+        $reporter = User::factory()->create([
+            'name' => 'Report Author',
+            'username' => 'report.author',
+        ]);
+
+        $category = Category::query()->create(['name' => 'Dance', 'slug' => 'dance']);
+
+        $video = Video::query()->create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Live Set',
+            'caption' => 'Streaming now',
+            'media_url' => 'https://cdn.example.com/live.mp4',
+            'thumbnail_url' => 'https://cdn.example.com/live.jpg',
+            'is_live' => true,
+            'is_draft' => false,
+            'views_count' => 320,
+            'live_started_at' => now(),
+        ]);
+
+        VideoReport::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $reporter->id,
+            'reason' => 'spam',
+            'details' => 'Reported clip',
+            'status' => 'pending',
+        ]);
+
+        WalletTransaction::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'membership_credit',
+            'direction' => 'credit',
+            'status' => 'posted',
+            'amount' => 5000,
+            'currency' => 'NGN',
+            'occurred_at' => now(),
+        ]);
+
+        FanTip::query()->create([
+            'creator_id' => $creator->id,
+            'fan_id' => $reporter->id,
+            'video_id' => $video->id,
+            'amount' => 1200,
+            'currency' => 'NGN',
+            'status' => 'posted',
+            'tipped_at' => now(),
+        ]);
+
+        PayoutRequest::query()->create([
+            'user_id' => $creator->id,
+            'amount' => 3000,
+            'currency' => 'NGN',
+            'status' => 'requested',
+            'requested_at' => now(),
+        ]);
+
+        CreatorVerificationRequest::query()->create([
+            'user_id' => $reporter->id,
+            'status' => 'pending',
+            'legal_name' => 'Report Author',
+            'country' => 'Nigeria',
+            'document_type' => 'passport',
+            'document_url' => 'https://cdn.example.com/doc.pdf',
+            'submitted_at' => now(),
+        ]);
+
+        ContentModerationCase::query()->create([
+            'moderatable_type' => Video::class,
+            'moderatable_id' => $video->id,
+            'content_type' => 'video',
+            'source' => 'user_report',
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.summary.suspendedUsers', 1)
+            ->assertJsonPath('data.summary.bannedUsers', 1)
+            ->assertJsonPath('data.summary.verifiedCreators', 1)
+            ->assertJsonPath('data.summary.totalCreators', 1)
+            ->assertJsonPath('data.summary.reportedVideos', 1)
+            ->assertJsonPath('data.summary.liveStreams', 1)
+            ->assertJsonPath('data.summary.revenue', 5000)
+            ->assertJsonPath('data.summary.tips', 1200)
+            ->assertJsonPath('data.summary.payoutRequests', 1)
+            ->assertJsonPath('data.summary.pendingModerationCases', 1)
+            ->assertJsonPath('data.summary.pendingVerificationRequests', 1)
+            ->assertJsonCount(7, 'data.charts.labels')
+            ->assertJsonCount(7, 'data.charts.revenue.revenue')
+            ->assertJsonCount(7, 'data.charts.live.liveStreams')
+            ->assertJsonCount(7, 'data.charts.content.newVideos')
+            ->assertJsonCount(7, 'data.charts.users.newUsers')
+            ->assertJsonPath('data.recentPayouts.0.amount', 3000)
+            ->assertJsonPath('data.recentPayouts.0.status', 'requested')
+            ->assertJsonPath('data.topCreators.0.id', $creator->id)
+            ->assertJsonPath('data.topCreators.0.views', 320)
+            ->assertJsonPath('data.topCreators.0.earnings', 5000)
+            ->assertJsonPath('data.recentVerificationRequests.0.status', 'pending')
+            ->assertJsonPath('data.recentVerificationRequests.0.creator.id', $reporter->id)
+            ->assertJsonPath('data.recentVerificationRequests.0.creator.username', 'report.author');
+    }
+
+    public function test_admin_dashboard_respects_date_range_filter(): void
+    {
+        $admin = User::factory()->admin()->create([
+            'name' => 'Range Admin',
+            'username' => 'range.admin',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $from = now()->subDays(2)->toDateString();
+        $to = now()->toDateString();
+
+        $this->getJson('/api/v1/admin/dashboard?from='.$from.'&to='.$to)
+            ->assertOk()
+            ->assertJsonCount(3, 'data.charts.labels')
+            ->assertJsonCount(3, 'data.charts.growth.labels')
+            ->assertJsonCount(3, 'data.charts.revenue.revenue');
+    }
+
+    public function test_admin_can_filter_managed_users_by_verification_status(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'verify.admin']);
+        $verified = User::factory()->create([
+            'username' => 'verified.creator',
+            'creator_verification_status' => 'approved',
+            'creator_verified_at' => now(),
+        ]);
+        $pending = User::factory()->create([
+            'username' => 'pending.creator',
+            'creator_verification_status' => 'pending',
+        ]);
+        User::factory()->create([
+            'username' => 'plain.member',
+            'creator_verification_status' => 'unsubmitted',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/users?verificationStatus=verified')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.users')
+            ->assertJsonPath('data.users.0.id', $verified->id)
+            ->assertJsonPath('meta.summary.verifiedUsers', 1)
+            ->assertJsonPath('meta.summary.pendingVerificationUsers', 1);
+
+        $this->getJson('/api/v1/admin/users?verificationStatus=pending')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.users')
+            ->assertJsonPath('data.users.0.id', $pending->id);
+
+        // Unverified covers everyone whose status is not "approved" (admin, pending, member).
+        $this->getJson('/api/v1/admin/users?verificationStatus=unverified')
+            ->assertOk()
+            ->assertJsonCount(3, 'data.users');
+    }
+
+    public function test_admin_can_view_user_videos_reports_and_activity_feeds(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'feeds.admin']);
+        $creator = User::factory()->create(['username' => 'feeds.creator']);
+        $reporter = User::factory()->create(['username' => 'feeds.reporter']);
+
+        $video = Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Creator Feed Clip',
+            'caption' => 'Watch me',
+            'media_url' => 'https://cdn.example.com/feed.mp4',
+            'is_draft' => false,
+            'is_live' => false,
+        ]);
+
+        VideoReport::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $reporter->id,
+            'reason' => 'spam',
+            'details' => 'Reported clip',
+            'status' => 'pending',
+        ]);
+
+        PayoutRequest::query()->create([
+            'user_id' => $creator->id,
+            'amount' => 4500,
+            'currency' => 'NGN',
+            'status' => 'requested',
+            'requested_at' => now(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id)
+            ->assertOk()
+            ->assertJsonPath('data.user.stats.reportsAgainstCount', 1);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id.'/videos')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_videos_retrieved'))
+            ->assertJsonCount(1, 'data.videos')
+            ->assertJsonPath('data.videos.0.id', $video->id);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id.'/reports')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_reports_retrieved'))
+            ->assertJsonCount(1, 'data.reports')
+            ->assertJsonPath('data.reports.0.reason', 'spam')
+            ->assertJsonPath('data.reports.0.video.id', $video->id);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id.'/activity')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_activity_retrieved'))
+            ->assertJsonCount(2, 'data.activity')
+            ->assertJsonFragment(['type' => 'video'])
+            ->assertJsonFragment(['type' => 'payout']);
+    }
+
+    public function test_admin_user_details_include_wallet_membership_and_moderation_summaries(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'detail.admin']);
+        $creator = User::factory()->create(['username' => 'detail.creator']);
+        $member = User::factory()->create(['username' => 'detail.member']);
+
+        $video = Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Detail Clip',
+            'media_url' => 'https://cdn.example.com/detail.mp4',
+            'is_draft' => false,
+            'is_live' => false,
+        ]);
+
+        WalletTransaction::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'membership_credit',
+            'direction' => 'credit',
+            'status' => 'posted',
+            'amount' => 8000,
+            'currency' => 'NGN',
+            'description' => 'Membership payout',
+            'occurred_at' => now(),
+        ]);
+
+        WalletTransaction::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'payout_debit',
+            'direction' => 'debit',
+            'status' => 'posted',
+            'amount' => 3000,
+            'currency' => 'NGN',
+            'occurred_at' => now(),
+        ]);
+
+        $plan = CreatorPlan::query()->create([
+            'creator_id' => $creator->id,
+            'name' => 'Detail Club',
+            'price_amount' => 2500,
+            'currency' => 'NGN',
+            'billing_period' => 'monthly',
+            'is_active' => true,
+        ]);
+
+        Membership::query()->create([
+            'creator_plan_id' => $plan->id,
+            'creator_id' => $creator->id,
+            'member_id' => $member->id,
+            'status' => 'active',
+            'price_amount' => 2500,
+            'currency' => 'NGN',
+            'billing_period' => 'monthly',
+            'started_at' => now()->subDay(),
+        ]);
+
+        ContentModerationCase::query()->create([
+            'moderatable_type' => Video::class,
+            'moderatable_id' => $video->id,
+            'content_type' => 'video',
+            'source' => 'user_report',
+            'status' => 'flagged',
+            'ai_risk_level' => 'high',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id)
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_retrieved'))
+            ->assertJsonPath('data.wallet.credited', 8000)
+            ->assertJsonPath('data.wallet.debited', 3000)
+            ->assertJsonPath('data.wallet.balance', 5000)
+            ->assertJsonPath('data.wallet.transactionsCount', 2)
+            ->assertJsonPath('data.membership.asCreator.active', 1)
+            ->assertJsonPath('data.membership.asCreator.monthlyRevenue', 2500)
+            ->assertJsonPath('data.moderation.total', 1)
+            ->assertJsonPath('data.moderation.flagged', 1);
+
+        $this->getJson('/api/v1/admin/users/'.$creator->id.'/transactions')
+            ->assertOk()
+            ->assertJsonPath('message', trans('messages.admin.user_transactions_retrieved'))
+            ->assertJsonCount(2, 'data.transactions')
+            ->assertJsonPath('meta.transactions.total', 2);
+    }
+
+    public function test_admin_can_reset_a_user_verification_status_and_records_an_audit_log(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'reset.admin']);
+        $creator = User::factory()->create([
+            'username' => 'reset.creator',
+            'creator_verification_status' => 'approved',
+            'creator_verified_at' => now(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/v1/admin/users/'.$creator->id, ['resetVerification' => true])
+            ->assertOk()
+            ->assertJsonPath('data.user.creatorVerificationStatus', 'unsubmitted')
+            ->assertJsonPath('data.user.isVerifiedCreator', false)
+            ->assertJsonPath('data.user.creatorVerifiedAt', null);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $creator->id,
+            'creator_verification_status' => 'unsubmitted',
+            'creator_verified_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.user_verification_reset',
+            'auditable_type' => $creator->getMorphClass(),
+            'auditable_id' => $creator->id,
+        ]);
+    }
+
+    public function test_admin_can_promote_and_demote_users_and_records_audit_logs(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'role.admin']);
+        $member = User::factory()->create(['username' => 'role.member']);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/v1/admin/users/'.$member->id, ['isAdmin' => true])
+            ->assertOk()
+            ->assertJsonPath('data.user.isAdmin', true);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.user_promoted',
+            'auditable_id' => $member->id,
+        ]);
+
+        $this->patchJson('/api/v1/admin/users/'.$member->id, ['isAdmin' => false])
+            ->assertOk()
+            ->assertJsonPath('data.user.isAdmin', false);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.user_demoted',
+            'auditable_id' => $member->id,
+        ]);
+    }
+
+    public function test_suspension_records_an_audit_log_and_the_last_administrator_is_protected(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'audit.admin']);
+        $member = User::factory()->create(['username' => 'audit.member']);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/v1/admin/users/'.$member->id, [
+            'accountStatus' => 'suspended',
+            'accountStatusNotes' => 'Policy violation.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'admin.user_suspended',
+            'auditable_id' => $member->id,
+        ]);
+
+        // The only administrator cannot remove their own admin access.
+        $this->patchJson('/api/v1/admin/users/'.$admin->id, ['isAdmin' => false])
+            ->assertStatus(422)
+            ->assertJsonPath('message', trans('messages.admin.user_self_protection'));
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'is_admin' => true]);
     }
 }

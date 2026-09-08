@@ -12,6 +12,7 @@ class VideoReportResource extends JsonResource
         return [
             'id' => $this->id,
             'reason' => $this->reason,
+            'severity' => $this->severity,
             'details' => $this->details,
             'status' => $this->status,
             'resolutionNotes' => $this->resolution_notes,
@@ -32,6 +33,8 @@ class VideoReportResource extends JsonResource
                     'mediaUrl' => $this->video->media_url,
                     'isDraft' => (bool) $this->video->is_draft,
                     'isLive' => (bool) $this->video->is_live,
+                    'moderationStatus' => $this->video->moderation_status,
+                    'visibility' => $this->video->visibility,
                     'author' => $this->video->relationLoaded('user') && $this->video->user
                         ? new ProfileResource($this->video->user)
                         : null,

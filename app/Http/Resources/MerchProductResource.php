@@ -11,17 +11,20 @@ class MerchProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'creatorId' => (int) $this->creator_id,
             'name' => $this->name,
             'slug' => $this->slug,
             'status' => $this->status,
             'sku' => $this->sku,
             'description' => $this->description,
             'priceAmount' => (int) $this->price_amount,
+            'discountAmount' => (int) $this->discount_amount,
             'currency' => $this->currency,
             'inventoryCount' => (int) $this->inventory_count,
             'images' => $this->images ?? [],
             'creator' => $this->whenLoaded('creator', fn () => new ProfileResource($this->creator)),
             'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
         ];
     }
 }
