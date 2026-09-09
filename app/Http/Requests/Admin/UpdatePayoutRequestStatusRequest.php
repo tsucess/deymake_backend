@@ -18,7 +18,7 @@ class UpdatePayoutRequestStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::in(['requested', 'processing', 'paid', 'rejected'])],
+            'status' => ['required', Rule::in(['requested', 'processing', 'paid', 'rejected', 'failed'])],
             'notes' => ['nullable', 'string', 'max:1000'],
             'rejectionReason' => ['nullable', 'string', 'max:1000'],
             'externalReference' => ['nullable', 'string', 'max:255'],

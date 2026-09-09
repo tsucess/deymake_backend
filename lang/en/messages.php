@@ -330,6 +330,8 @@ return [
         'payout_paid_body' => 'Your payout request for :currency :amount has been marked as paid.',
         'payout_rejected_title' => 'Payout request rejected',
         'payout_rejected_body' => 'Your payout request for :currency :amount needs changes before it can be paid.',
+        'payout_failed_title' => 'Payout processing failed',
+        'payout_failed_body' => 'Your payout request for :currency :amount failed and needs review before retrying.',
         'collaboration_invite_title' => 'New collaboration invite',
         'collaboration_invite_body' => ':name invited you to a :type collaboration on :title.',
         'collaboration_accepted_title' => 'Collaboration invite accepted',
