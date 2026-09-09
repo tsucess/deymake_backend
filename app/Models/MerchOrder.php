@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MerchOrder extends Model
 {
@@ -49,5 +50,13 @@ class MerchOrder extends Model
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id');
+    }
+
+    /**
+     * Provider payments recorded against this order (purpose `merch_order`).
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'purpose_id')->where('purpose', 'merch_order');
     }
 }

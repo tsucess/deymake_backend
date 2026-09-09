@@ -8,7 +8,6 @@ use App\Http\Resources\MerchProductResource;
 use App\Models\MerchOrder;
 use App\Models\MerchProduct;
 use App\Models\User;
-use App\Services\WalletLedgerService;
 use App\Support\DeveloperWebhookDispatcher;
 use App\Support\SupportedLocales;
 use App\Support\UserNotifier;
@@ -101,7 +100,7 @@ class MerchController extends Controller
         ]);
     }
 
-    public function storeOrder(Request $request, MerchProduct $merchProduct, WalletLedgerService $walletLedgerService): JsonResponse
+    public function storeOrder(Request $request, MerchProduct $merchProduct): JsonResponse
     {
         SupportedLocales::apply($request);
         abort_if($merchProduct->status !== 'active', 422, __('messages.merch.product_not_active'));
@@ -124,23 +123,13 @@ class MerchController extends Controller
             'unit_price_amount' => (int) $merchProduct->price_amount,
             'total_amount' => $total,
             'currency' => $merchProduct->currency,
-            'status' => 'paid',
+            'status' => 'pending',
             'shipping_address' => $validated['shippingAddress'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'placed_at' => now(),
         ]);
 
         $merchProduct->decrement('inventory_count', $quantity);
-        $walletLedgerService->recordCredit(
-            $merchProduct->creator_id,
-            'merch_sale_credit',
-            $total,
-            $merchProduct->currency,
-            'Merch order paid.',
-            ['merchOrderId' => $order->id, 'buyerId' => $request->user()->id, 'productId' => $merchProduct->id],
-            $order->placed_at,
-        );
-
         UserNotifier::sendTranslated(
             $merchProduct->creator_id,
             $request->user()->id,

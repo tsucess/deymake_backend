@@ -16,6 +16,8 @@ class MerchOrderResource extends JsonResource
             'totalAmount' => (int) $this->total_amount,
             'currency' => $this->currency,
             'status' => $this->status,
+            'paymentStatus' => $this->resolvePaymentStatus(),
+            'shippingStatus' => $this->resolveShippingStatus(),
             'shippingAddress' => $this->shipping_address ?? [],
             'notes' => $this->notes,
             'placedAt' => $this->placed_at?->toISOString(),
@@ -24,6 +26,55 @@ class MerchOrderResource extends JsonResource
             'product' => $this->whenLoaded('product', fn () => new MerchProductResource($this->product)),
             'creator' => $this->whenLoaded('creator', fn () => new ProfileResource($this->creator)),
             'buyer' => $this->whenLoaded('buyer', fn () => new ProfileResource($this->buyer)),
+            'payment' => $this->when(
+                $this->relationLoaded('payments'),
+                fn () => $this->latestPayment()
+                    ? new PaymentResource($this->latestPayment())
+                    : null
+            ),
         ];
+    }
+
+    /**
+     * Payment status for the order, preferring a linked provider payment when the
+     * relation is loaded and otherwise deriving it from the order status.
+     */
+    private function resolvePaymentStatus(): string
+    {
+        $payment = $this->latestPayment();
+
+        if ($payment !== null) {
+            return (string) $payment->status;
+        }
+
+        return match ($this->status) {
+            'paid', 'fulfilled' => 'paid',
+            'refunded' => 'refunded',
+            'cancelled' => 'unpaid',
+            default => 'pending',
+        };
+    }
+
+    /**
+     * Fulfillment/shipping status derived from the order lifecycle.
+     */
+    private function resolveShippingStatus(): string
+    {
+        return match ($this->status) {
+            'fulfilled' => 'shipped',
+            'cancelled' => 'cancelled',
+            'refunded' => 'refunded',
+            'paid' => 'processing',
+            default => 'awaiting_payment',
+        };
+    }
+
+    private function latestPayment(): ?\App\Models\Payment
+    {
+        if (! $this->relationLoaded('payments')) {
+            return null;
+        }
+
+        return $this->payments->sortByDesc('created_at')->first();
     }
 }

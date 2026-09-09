@@ -1,9 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\AdminChallengeController;
+use App\Http\Controllers\Api\AdminCoinController;
 use App\Http\Controllers\Api\AdminCreatorController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminGiftController;
 use App\Http\Controllers\Api\AdminLiveStreamController;
+use App\Http\Controllers\Api\AdminMerchProductController;
+use App\Http\Controllers\Api\AdminOrderController;
+use App\Http\Controllers\Api\AdminPaymentController;
 use App\Http\Controllers\Api\AdminPayoutController;
 use App\Http\Controllers\Api\AdminReportController;
 use App\Http\Controllers\Api\AdminUserManagementController;
@@ -37,6 +42,8 @@ use App\Http\Controllers\Api\MonetizationController;
 use App\Http\Controllers\Api\MutualsController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OfflineUploadQueueController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RevenueShareController;
 use App\Http\Controllers\Api\SearchController;
@@ -73,6 +80,9 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::post('/waitlist', [WaitlistController::class, 'store']);
+
+        // Provider webhook: authenticated by HMAC signature, not a session/token.
+        Route::post('/payments/webhook/paystack', [PaymentWebhookController::class, 'paystack']);
 
         Route::get('/home', [HomeController::class, 'index']);
         Route::get('/categories', [HomeController::class, 'categories']);
@@ -291,8 +301,19 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/orders/{merchOrder}', [MerchController::class, 'updateOrder']);
         });
 
+        Route::prefix('payments')->group(function (): void {
+            Route::post('/initialize', [PaymentController::class, 'initialize']);
+            Route::get('/verify/{reference}', [PaymentController::class, 'verify']);
+        });
+
         Route::middleware('admin')->prefix('admin')->group(function (): void {
             Route::get('/dashboard', [AdminDashboardController::class, 'dashboard']);
+            Route::get('/orders', [AdminOrderController::class, 'index']);
+            Route::get('/orders/export', [AdminOrderController::class, 'exportCsv']);
+            Route::get('/orders/{merchOrder}', [AdminOrderController::class, 'show']);
+            Route::patch('/orders/{merchOrder}/status', [AdminOrderController::class, 'updateStatus']);
+            Route::post('/orders/{merchOrder}/cancel', [AdminOrderController::class, 'cancel']);
+            Route::post('/orders/{merchOrder}/refund', [AdminOrderController::class, 'refund']);
             Route::get('/users', [AdminUserManagementController::class, 'index']);
             Route::get('/users/{user}', [AdminUserManagementController::class, 'show']);
             Route::get('/users/{user}/videos', [AdminUserManagementController::class, 'videos']);
@@ -344,6 +365,43 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/creators/monetization', [AdminCreatorController::class, 'monetization']);
             Route::get('/creators/programs', [AdminCreatorController::class, 'programs']);
             Route::get('/creators/collaborations', [AdminCreatorController::class, 'collaborations']);
+            Route::get('/coins/overview', [AdminCoinController::class, 'overview']);
+            Route::get('/coins/timeseries', [AdminCoinController::class, 'timeseries']);
+            Route::get('/coins/top-senders', [AdminCoinController::class, 'topSenders']);
+            Route::get('/coins/transactions', [AdminCoinController::class, 'transactions']);
+            Route::get('/coins/export', [AdminCoinController::class, 'exportCsv']);
+            Route::get('/coins/packages', [AdminCoinController::class, 'packages']);
+            Route::post('/coins/packages', [AdminCoinController::class, 'storePackage']);
+            Route::patch('/coins/packages/{coinPackage}', [AdminCoinController::class, 'updatePackage']);
+            Route::delete('/coins/packages/{coinPackage}', [AdminCoinController::class, 'destroyPackage']);
+            Route::post('/coins/packages/{coinPackage}/toggle', [AdminCoinController::class, 'togglePackage']);
+            Route::get('/coins/purchases', [AdminCoinController::class, 'purchases']);
+            Route::post('/coins/purchases/{coinPurchase}/refund', [AdminCoinController::class, 'refundPurchase']);
+            Route::post('/coins/purchases/{coinPurchase}/review', [AdminCoinController::class, 'reviewPurchase']);
+            Route::get('/gifts', [AdminGiftController::class, 'gifts']);
+            Route::post('/gifts', [AdminGiftController::class, 'storeGift']);
+            Route::patch('/gifts/{gift}', [AdminGiftController::class, 'updateGift']);
+            Route::delete('/gifts/{gift}', [AdminGiftController::class, 'destroyGift']);
+            Route::post('/gifts/{gift}/toggle', [AdminGiftController::class, 'toggleGift']);
+            Route::get('/gift-transactions', [AdminGiftController::class, 'transactions']);
+            Route::post('/gift-transactions/{giftTransaction}/refund', [AdminGiftController::class, 'refundTransaction']);
+            Route::post('/gift-transactions/{giftTransaction}/review', [AdminGiftController::class, 'reviewTransaction']);
+            Route::get('/gift-creator-earnings', [AdminGiftController::class, 'creatorEarnings']);
+            Route::get('/products', [AdminMerchProductController::class, 'index']);
+            Route::get('/products/export', [AdminMerchProductController::class, 'exportCsv']);
+            Route::post('/products', [AdminMerchProductController::class, 'store']);
+            Route::get('/products/{merchProduct}', [AdminMerchProductController::class, 'show']);
+            Route::patch('/products/{merchProduct}', [AdminMerchProductController::class, 'update']);
+            Route::delete('/products/{merchProduct}', [AdminMerchProductController::class, 'destroy']);
+            Route::post('/products/{merchProduct}/publish', [AdminMerchProductController::class, 'publish']);
+            Route::post('/products/{merchProduct}/inventory', [AdminMerchProductController::class, 'adjustInventory']);
+            Route::get('/payments', [AdminPaymentController::class, 'index']);
+            Route::get('/payments/export', [AdminPaymentController::class, 'exportCsv']);
+            Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);
+            Route::post('/payments/{payment}/verify', [AdminPaymentController::class, 'verify']);
+            Route::post('/payments/{payment}/reconcile', [AdminPaymentController::class, 'reconcile']);
+            Route::post('/payments/{payment}/refund', [AdminPaymentController::class, 'refund']);
+            Route::post('/payments/{payment}/review', [AdminPaymentController::class, 'review']);
             Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
             Route::get('/waitlist/export', [AdminWaitlistController::class, 'exportCsv']);
             Route::patch('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'update']);

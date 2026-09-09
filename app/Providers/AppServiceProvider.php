@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Contracts\SmsSender;
+use App\Services\Payments\PaymentGatewayContract;
+use App\Services\Payments\PaystackGateway;
 use App\Support\Sms\LogSmsSender;
 use App\Support\Sms\TwilioSmsSender;
 use Illuminate\Support\ServiceProvider;
@@ -27,7 +29,16 @@ class AppServiceProvider extends ServiceProvider
                 );
             }
 
-            return new LogSmsSender();
+            return new LogSmsSender;
+        });
+
+        $this->app->bind(PaymentGatewayContract::class, function ($app) {
+            $paystack = $app['config']->get('services.paystack', []);
+
+            return new PaystackGateway(
+                (string) ($paystack['secret_key'] ?? ''),
+                (string) ($paystack['base_url'] ?? 'https://api.paystack.co'),
+            );
         });
     }
 

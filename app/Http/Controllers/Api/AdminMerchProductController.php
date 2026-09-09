@@ -89,6 +89,246 @@ class AdminMerchProductController extends Controller
         ]);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        $data = $request->validate([
+            'creatorId' => ['required', 'integer', 'exists:users,id'],
+            'name' => ['required', 'string', 'max:180'],
+            'sku' => ['nullable', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'status' => ['nullable', Rule::in(self::STATUSES)],
+            'priceAmount' => ['required', 'integer', 'min:0'],
+            'discountAmount' => ['nullable', 'integer', 'min:0'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'inventoryCount' => ['nullable', 'integer', 'min:0'],
+            'images' => ['nullable', 'array', 'max:10'],
+            'images.*' => ['string', 'max:2048'],
+        ]);
+
+        $this->assertDiscountWithinPrice(
+            $data['priceAmount'],
+            $data['discountAmount'] ?? 0
+        );
+
+        $product = MerchProduct::query()->create([
+            'creator_id' => $data['creatorId'],
+            'name' => $data['name'],
+            'sku' => $data['sku'] ?? null,
+            'description' => $data['description'] ?? null,
+            'status' => $data['status'] ?? 'draft',
+            'price_amount' => $data['priceAmount'],
+            'discount_amount' => $data['discountAmount'] ?? 0,
+            'currency' => strtoupper($data['currency'] ?? 'NGN'),
+            'inventory_count' => $data['inventoryCount'] ?? 0,
+            'images' => $data['images'] ?? [],
+        ]);
+
+        AuditLogger::record('admin.merch_product_created', $product, $request->user()?->id, [
+            'name' => $product->name,
+            'creatorId' => $product->creator_id,
+        ], $request->ip());
+
+        $product->load(['creator' => fn ($query) => $query->withProfileAggregates($request->user())]);
+
+        return response()->json([
+            'message' => __('messages.admin.product_created'),
+            'data' => ['product' => new MerchProductResource($product)],
+        ], 201);
+    }
+
+    public function update(Request $request, MerchProduct $merchProduct): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:180'],
+            'sku' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'status' => ['sometimes', Rule::in(self::STATUSES)],
+            'priceAmount' => ['sometimes', 'integer', 'min:0'],
+            'discountAmount' => ['sometimes', 'integer', 'min:0'],
+            'currency' => ['sometimes', 'string', 'size:3'],
+            'inventoryCount' => ['sometimes', 'integer', 'min:0'],
+            'images' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'images.*' => ['string', 'max:2048'],
+        ]);
+
+        $price = array_key_exists('priceAmount', $data) ? $data['priceAmount'] : $merchProduct->price_amount;
+        $discount = array_key_exists('discountAmount', $data) ? $data['discountAmount'] : $merchProduct->discount_amount;
+        $this->assertDiscountWithinPrice($price, $discount);
+
+        if (array_key_exists('name', $data)) {
+            $merchProduct->name = $data['name'];
+        }
+        if (array_key_exists('sku', $data)) {
+            $merchProduct->sku = $data['sku'];
+        }
+        if (array_key_exists('description', $data)) {
+            $merchProduct->description = $data['description'];
+        }
+        if (array_key_exists('status', $data)) {
+            $merchProduct->status = $data['status'];
+        }
+        if (array_key_exists('priceAmount', $data)) {
+            $merchProduct->price_amount = $data['priceAmount'];
+        }
+        if (array_key_exists('discountAmount', $data)) {
+            $merchProduct->discount_amount = $data['discountAmount'];
+        }
+        if (array_key_exists('currency', $data)) {
+            $merchProduct->currency = strtoupper($data['currency']);
+        }
+        if (array_key_exists('inventoryCount', $data)) {
+            $merchProduct->inventory_count = $data['inventoryCount'];
+        }
+        if (array_key_exists('images', $data)) {
+            $merchProduct->images = $data['images'] ?? [];
+        }
+        $merchProduct->save();
+
+        AuditLogger::record('admin.merch_product_updated', $merchProduct, $request->user()?->id, [
+            'name' => $merchProduct->name,
+        ], $request->ip());
+
+        $merchProduct->load(['creator' => fn ($query) => $query->withProfileAggregates($request->user())]);
+
+        return response()->json([
+            'message' => __('messages.admin.product_updated'),
+            'data' => ['product' => new MerchProductResource($merchProduct)],
+        ]);
+    }
+
+    public function destroy(Request $request, MerchProduct $merchProduct): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        AuditLogger::record('admin.merch_product_deleted', $merchProduct, $request->user()?->id, [
+            'name' => $merchProduct->name,
+        ], $request->ip());
+        $merchProduct->delete();
+
+        return response()->json(['message' => __('messages.admin.product_deleted')]);
+    }
+
+    /**
+     * Toggle publish state between active and archived (unpublish).
+     */
+    public function publish(Request $request, MerchProduct $merchProduct): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['publish', 'unpublish'])],
+        ]);
+
+        $merchProduct->status = $data['action'] === 'publish' ? 'active' : 'archived';
+        $merchProduct->save();
+
+        AuditLogger::record("admin.merch_product_{$data['action']}ed", $merchProduct, $request->user()?->id, [
+            'status' => $merchProduct->status,
+        ], $request->ip());
+
+        $merchProduct->load(['creator' => fn ($query) => $query->withProfileAggregates($request->user())]);
+
+        return response()->json([
+            'message' => __("messages.admin.product_{$data['action']}ed"),
+            'data' => ['product' => new MerchProductResource($merchProduct)],
+        ]);
+    }
+
+    /**
+     * Adjust inventory by a signed delta or set an absolute value, guarded by a
+     * row lock inside a transaction so concurrent adjustments cannot corrupt the
+     * stock count.
+     */
+    public function adjustInventory(Request $request, MerchProduct $merchProduct): JsonResponse
+    {
+        SupportedLocales::apply($request);
+
+        $data = $request->validate([
+            'delta' => ['required_without:set', 'integer'],
+            'set' => ['required_without:delta', 'integer', 'min:0'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $merchProduct = DB::transaction(function () use ($merchProduct, $data): MerchProduct {
+            $locked = MerchProduct::query()->lockForUpdate()->findOrFail($merchProduct->id);
+
+            if (array_key_exists('set', $data)) {
+                $locked->inventory_count = (int) $data['set'];
+            } else {
+                $next = $locked->inventory_count + (int) $data['delta'];
+                if ($next < 0) {
+                    throw ValidationException::withMessages([
+                        'delta' => [__('messages.admin.product_inventory_negative')],
+                    ]);
+                }
+                $locked->inventory_count = $next;
+            }
+
+            $locked->save();
+
+            return $locked;
+        });
+
+        AuditLogger::record('admin.merch_product_inventory_adjusted', $merchProduct, $request->user()?->id, [
+            'inventoryCount' => $merchProduct->inventory_count,
+            'delta' => $data['delta'] ?? null,
+            'set' => $data['set'] ?? null,
+            'reason' => $data['reason'] ?? null,
+        ], $request->ip());
+
+        $merchProduct->load(['creator' => fn ($query) => $query->withProfileAggregates($request->user())]);
+
+        return response()->json([
+            'message' => __('messages.admin.product_inventory_adjusted'),
+            'data' => ['product' => new MerchProductResource($merchProduct)],
+        ]);
+    }
+
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        SupportedLocales::apply($request);
+
+        $query = $this->applyFilters($this->baseQuery($request), $request)->latest();
+        $filename = 'merch-products-'.now()->format('Ymd_His').'.csv';
+
+        return response()->streamDownload(function () use ($query): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'Name', 'SKU', 'Creator', 'Status', 'Price', 'Discount', 'Currency', 'Stock', 'CreatedAt']);
+
+            $query->chunk(200, function ($chunk) use ($handle): void {
+                foreach ($chunk as $product) {
+                    fputcsv($handle, [
+                        $product->id,
+                        $product->name,
+                        $product->sku,
+                        $product->creator?->username,
+                        $product->status,
+                        $product->price_amount,
+                        $product->discount_amount,
+                        $product->currency,
+                        $product->inventory_count,
+                        optional($product->created_at)->toIso8601String(),
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    private function assertDiscountWithinPrice(int $price, int $discount): void
+    {
+        if ($discount > $price) {
+            throw ValidationException::withMessages([
+                'discountAmount' => [__('messages.admin.product_discount_exceeds_price')],
+            ]);
+        }
+    }
+
     private function baseQuery(Request $request): Builder
     {
         return MerchProduct::query()

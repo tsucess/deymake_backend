@@ -7,12 +7,23 @@ use App\Models\CreatorPlan;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class BrandAndCommerceApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config([
+            'services.paystack.secret_key' => 'sk_test_123',
+            'services.paystack.base_url' => 'https://api.paystack.co',
+        ]);
+    }
 
     public function test_brand_campaigns_can_match_talent_and_send_sponsorship_proposals(): void
     {
@@ -133,7 +144,29 @@ class BrandAndCommerceApiTest extends TestCase
         $this->getJson('/api/v1/merch/orders/mine')
             ->assertOk()
             ->assertJsonPath('data.orders.0.id', $orderId)
-            ->assertJsonPath('data.orders.0.status', 'paid');
+            ->assertJsonPath('data.orders.0.status', 'pending');
+
+        Http::fake([
+            'api.paystack.co/transaction/initialize' => Http::response([
+                'status' => true,
+                'data' => ['reference' => 'PSK_MERCH_1', 'authorization_url' => 'https://paystack.test/pay'],
+            ], 200),
+            'api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'data' => ['status' => 'success', 'reference' => 'PSK_MERCH_1', 'paid_at' => now()->toIso8601String()],
+            ], 200),
+        ]);
+
+        $paymentReference = $this->postJson('/api/v1/payments/initialize', [
+            'amount' => 16000,
+            'purpose' => 'merch_order',
+            'purposeId' => $orderId,
+            'email' => $buyer->email,
+        ])->assertCreated()->json('data.reference');
+
+        $this->getJson('/api/v1/payments/verify/'.$paymentReference)
+            ->assertOk()
+            ->assertJsonPath('data.payment.status', 'successful');
 
         Sanctum::actingAs($creator);
 
