@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class PaginatedJson
 {
-    public static function empty(Request $request, int $defaultPerPage = 12, int $maxPerPage = 50): LengthAwarePaginator
+    public static function empty(Request $request, int $defaultPerPage = 10, int $maxPerPage = 50): LengthAwarePaginator
     {
         return new \Illuminate\Pagination\LengthAwarePaginator(
             collect(),
@@ -42,14 +42,14 @@ class PaginatedJson
         ];
     }
 
-    public static function paginate($query, Request $request, int $defaultPerPage = 12, int $maxPerPage = 50): LengthAwarePaginator
+    public static function paginate($query, Request $request, int $defaultPerPage = 10, int $maxPerPage = 50): LengthAwarePaginator
     {
         return $query
             ->paginate(self::perPage($request, $defaultPerPage, $maxPerPage))
             ->withQueryString();
     }
 
-    public static function perPage(Request $request, int $defaultPerPage = 12, int $maxPerPage = 50): int
+    public static function perPage(Request $request, int $defaultPerPage = 10, int $maxPerPage = 50): int
     {
         $rawPerPage = $request->query('per_page', $request->query('limit'));
 
