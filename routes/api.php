@@ -7,11 +7,13 @@ use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminGiftController;
 use App\Http\Controllers\Api\AdminLiveStreamController;
 use App\Http\Controllers\Api\AdminMerchProductController;
+use App\Http\Controllers\Api\AdminNotificationController;
 use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\AdminPaymentController;
 use App\Http\Controllers\Api\AdminPayoutController;
 use App\Http\Controllers\Api\AdminRefundController;
 use App\Http\Controllers\Api\AdminReportController;
+use App\Http\Controllers\Api\AdminSettingsController;
 use App\Http\Controllers\Api\AdminUserManagementController;
 use App\Http\Controllers\Api\AdminVideoController;
 use App\Http\Controllers\Api\AdminWaitlistController;
@@ -422,6 +424,9 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/waitlist/export', [AdminWaitlistController::class, 'exportCsv']);
             Route::patch('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'update']);
             Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
+            Route::get('/notifications', [AdminNotificationController::class, 'index']);
+            Route::get('/settings', [AdminSettingsController::class, 'index']);
+            Route::patch('/settings', [AdminSettingsController::class, 'update']);
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);
