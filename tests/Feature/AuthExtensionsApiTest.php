@@ -131,6 +131,13 @@ class AuthExtensionsApiTest extends TestCase
 
     public function test_oauth_endpoints_report_when_provider_credentials_are_missing(): void
     {
+        Config::set('services.google.client_id', '');
+        Config::set('services.google.client_secret', '');
+        Config::set('services.google.redirect', '');
+        Config::set('services.facebook.client_id', '');
+        Config::set('services.facebook.client_secret', '');
+        Config::set('services.facebook.redirect', '');
+
         $this->getJson('/api/v1/auth/oauth/google/redirect')
             ->assertStatus(503)
             ->assertJsonPath('data.provider', 'google')
