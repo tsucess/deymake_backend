@@ -16,6 +16,8 @@ class MerchOrderResource extends JsonResource
             'totalAmount' => (int) $this->total_amount,
             'currency' => $this->currency,
             'status' => $this->status,
+            'discountCode' => $this->discount_code,
+            'discountAmount' => (int) ($this->discount_amount ?? 0),
             'paymentStatus' => $this->resolvePaymentStatus(),
             'shippingStatus' => $this->resolveShippingStatus(),
             'shippingAddress' => $this->shipping_address ?? [],

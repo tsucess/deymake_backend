@@ -27,6 +27,8 @@ class MerchOrderFactory extends Factory
             'unit_price_amount' => $unitPrice,
             'total_amount' => $quantity * $unitPrice,
             'currency' => 'NGN',
+            'discount_code' => null,
+            'discount_amount' => 0,
             'status' => 'paid',
             'shipping_address' => null,
             'notes' => null,

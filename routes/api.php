@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\CreatorAnalyticsController;
 use App\Http\Controllers\Api\CreatorSuggestionController;
 use App\Http\Controllers\Api\CreatorVerificationController;
 use App\Http\Controllers\Api\DeveloperController;
+use App\Http\Controllers\Api\DiscountController;
 use App\Http\Controllers\Api\ExploreController;
 use App\Http\Controllers\Api\FanTipController;
 use App\Http\Controllers\Api\HealthController;
@@ -299,6 +300,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/orders/mine', [MerchController::class, 'myOrders']);
             Route::get('/orders/received', [MerchController::class, 'receivedOrders']);
             Route::patch('/orders/{merchOrder}', [MerchController::class, 'updateOrder']);
+            Route::post('/discounts/validate', [DiscountController::class, 'validateCode']);
         });
 
         Route::prefix('payments')->group(function (): void {
@@ -395,6 +397,11 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('/products/{merchProduct}', [AdminMerchProductController::class, 'destroy']);
             Route::post('/products/{merchProduct}/publish', [AdminMerchProductController::class, 'publish']);
             Route::post('/products/{merchProduct}/inventory', [AdminMerchProductController::class, 'adjustInventory']);
+            Route::get('/discounts', [DiscountController::class, 'index']);
+            Route::post('/discounts', [DiscountController::class, 'store']);
+            Route::patch('/discounts/{discount}', [DiscountController::class, 'update']);
+            Route::delete('/discounts/{discount}', [DiscountController::class, 'destroy']);
+            Route::post('/discounts/{discount}/toggle', [DiscountController::class, 'toggle']);
             Route::get('/payments', [AdminPaymentController::class, 'index']);
             Route::get('/payments/export', [AdminPaymentController::class, 'exportCsv']);
             Route::get('/payments/{payment}', [AdminPaymentController::class, 'show']);

@@ -19,6 +19,8 @@ class MerchOrder extends Model
         'unit_price_amount',
         'total_amount',
         'currency',
+        'discount_code',
+        'discount_amount',
         'status',
         'shipping_address',
         'notes',
@@ -31,6 +33,7 @@ class MerchOrder extends Model
     {
         return [
             'shipping_address' => 'array',
+            'discount_amount' => 'integer',
             'placed_at' => 'datetime',
             'fulfilled_at' => 'datetime',
             'cancelled_at' => 'datetime',

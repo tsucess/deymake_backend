@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\MerchOrderResource;
 use App\Http\Resources\MerchProductResource;
+use App\Models\Discount;
 use App\Models\MerchOrder;
 use App\Models\MerchProduct;
 use App\Models\User;
@@ -109,12 +110,43 @@ class MerchController extends Controller
             'quantity' => ['required', 'integer', 'min:1'],
             'shippingAddress' => ['nullable', 'array'],
             'notes' => ['nullable', 'string'],
+            'discountCode' => ['nullable', 'string', 'max:50'],
         ]);
 
         $quantity = (int) $validated['quantity'];
         abort_if($merchProduct->inventory_count < $quantity, 422, __('messages.merch.insufficient_inventory'));
 
-        $total = $quantity * (int) $merchProduct->price_amount;
+        $baseTotal = $quantity * (int) $merchProduct->price_amount;
+
+        if (! empty($validated['discountCode'])) {
+            $discount = Discount::query()->where('code', strtoupper(trim($validated['discountCode'])))->first();
+
+            if (! $discount) {
+                return response()->json([
+                    'message' => __('messages.merch.discount_not_found'),
+                    'errors' => ['discountCode' => [__('messages.merch.discount_not_found')]],
+                ], 422);
+            }
+
+            $discountValidation = (new DiscountController())->validateDiscountForOrder($request->user(), $discount, $merchProduct->id);
+
+            if ($discountValidation !== true) {
+                return response()->json([
+                    'message' => $discountValidation,
+                    'errors' => ['discountCode' => [$discountValidation]],
+                ], 422);
+            }
+
+            $discountAmount = $discount->type === 'fixed'
+                ? min((int) $discount->value, $baseTotal)
+                : (int) floor(($baseTotal * (int) $discount->value) / 100);
+
+            $total = max(0, $baseTotal - $discountAmount);
+        } else {
+            $discountAmount = 0;
+            $total = $baseTotal;
+        }
+
         $order = MerchOrder::query()->create([
             'merch_product_id' => $merchProduct->id,
             'creator_id' => $merchProduct->creator_id,
@@ -123,6 +155,8 @@ class MerchController extends Controller
             'unit_price_amount' => (int) $merchProduct->price_amount,
             'total_amount' => $total,
             'currency' => $merchProduct->currency,
+            'discount_code' => $validated['discountCode'] ?? null,
+            'discount_amount' => $discountAmount,
             'status' => 'pending',
             'shipping_address' => $validated['shippingAddress'] ?? null,
             'notes' => $validated['notes'] ?? null,
@@ -130,6 +164,14 @@ class MerchController extends Controller
         ]);
 
         $merchProduct->decrement('inventory_count', $quantity);
+
+        if (! empty($validated['discountCode'])) {
+            $discount->usage_count = (int) $discount->usage_count + 1;
+            $usedUserIds = is_array($discount->used_user_ids) ? $discount->used_user_ids : [];
+            $usedUserIds[] = (int) $request->user()->id;
+            $discount->used_user_ids = array_values(array_unique($usedUserIds));
+            $discount->save();
+        }
         UserNotifier::sendTranslated(
             $merchProduct->creator_id,
             $request->user()->id,
