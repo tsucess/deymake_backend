@@ -16,6 +16,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
+        
         DB::table('platform_settings')->insert([
             [
                 'key' => 'app',

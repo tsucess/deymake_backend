@@ -25,6 +25,7 @@ return new class extends Migration
             $table->json('provider_response')->nullable();
             $table->timestamps();
 
+            
             $table->index(['status', 'created_at']);
             $table->index(['user_id', 'status']);
             $table->index(['order_id', 'status']);
