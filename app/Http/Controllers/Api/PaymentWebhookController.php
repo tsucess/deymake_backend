@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\PaymentWebhookEvent;
+use App\Http\Controllers\Api\CoinWalletController;
 use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\MerchOrderPaymentService;
+use App\Support\UserNotifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  */
 class PaymentWebhookController extends Controller
 {
-    public function paystack(Request $request, PaymentGatewayContract $gateway, MerchOrderPaymentService $merchOrderPayments): JsonResponse
+    public function paystack(Request $request, PaymentGatewayContract $gateway, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): JsonResponse
     {
         $rawBody = $request->getContent();
         $signature = $request->header('x-paystack-signature');
@@ -58,7 +60,7 @@ class PaymentWebhookController extends Controller
             return response()->json(['message' => __('messages.payment.webhook_already_processed')], 200);
         }
 
-        $this->process($eventType, $reference, $eventData, $event, $merchOrderPayments);
+        $this->process($eventType, $reference, $eventData, $event, $merchOrderPayments, $coinWallet);
 
         return response()->json(['message' => __('messages.payment.webhook_received')], 200);
     }
@@ -66,7 +68,7 @@ class PaymentWebhookController extends Controller
     /**
      * @param  array<string, mixed>  $eventData
      */
-    private function process(string $eventType, string $reference, array $eventData, PaymentWebhookEvent $event, MerchOrderPaymentService $merchOrderPayments): void
+    private function process(string $eventType, string $reference, array $eventData, PaymentWebhookEvent $event, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): void
     {
         $payment = $reference !== ''
             ? Payment::query()->where('reference', $reference)->orWhere('provider_reference', $reference)->first()
@@ -104,6 +106,12 @@ class PaymentWebhookController extends Controller
             $event->payment_id = $payment->id;
 
             $merchOrderPayments->settle($payment->fresh());
+            $coinWallet->settlePayment($payment->fresh());
+            if ($eventType === 'charge.success' && $payment->user_id) {
+                UserNotifier::sendSystem($payment->user_id, 'payment', 'Payment successful', 'Your payment of '.$payment->amount.' '.$payment->currency.' was successful.', ['paymentId' => $payment->id, 'reference' => $payment->reference, 'purpose' => $payment->purpose]);
+            } elseif ($eventType === 'charge.failed' && $payment->user_id) {
+                UserNotifier::sendSystem($payment->user_id, 'payment', 'Payment failed', 'Your payment could not be completed.', ['paymentId' => $payment->id, 'reference' => $payment->reference, 'purpose' => $payment->purpose]);
+            }
         }
 
         $event->processed_at = now();

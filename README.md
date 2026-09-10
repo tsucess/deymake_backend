@@ -2,6 +2,53 @@
 
 > **Start here:** [PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md) — full architectural map of the DeyMake platform (28 feature areas, controllers, routes, models, resources, and their frontend consumers).
 
+## DeyMake Local Setup
+
+Requirements: PHP 8.2+, Composer, Node.js 20+, a configured MySQL database, and
+the credentials for any optional providers used by the features you enable.
+
+```powershell
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve
+```
+
+Run the frontend in a second terminal from `deymake_frontend` with
+`npm install` and `npm run dev`. Copy `.env.example` to `.env` there when the
+frontend API or Reverb host differs from the local defaults.
+
+### Payments and coins
+
+Set `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY`, `PAYSTACK_BASE_URL`, and
+`PAYSTACK_CALLBACK_URL` in the backend environment. Configure Paystack's webhook
+URL as `/api/v1/payments/webhook/paystack`. The webhook signature is verified
+server-side and duplicate event delivery is ignored. Never expose the secret key
+through a `VITE_*` variable. Coin packages and gifts are managed from the admin
+console; users receive coins only after provider verification.
+
+### Realtime
+
+For Reverb, set `BROADCAST_CONNECTION=reverb` and the `REVERB_*` values in the
+backend plus the `VITE_REVERB_*` values in the frontend. Start `php artisan
+reverb:start` alongside `php artisan serve`. Polling remains the fallback for
+live-room and notification updates when realtime is unavailable.
+
+## Quality checklist
+
+```powershell
+php artisan test --compact
+npm run lint
+npm test -- --run
+npm run build
+```
+
+Before release, verify a new user can register and verify an account, create a
+post and live session, send a gift from a funded wallet, see notifications and
+activity, complete a Paystack test checkout, and see the matching admin payment,
+coin, gift, and moderation records.
+
 For the underlying framework docs, see the Laravel section below.
 
 ---

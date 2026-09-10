@@ -46,6 +46,7 @@ return new class extends Migration
                 $table->index('status');
                 $table->index('is_flagged');
                 $table->index(['user_id', 'status']);
+                $table->unique('payment_reference');
             });
         }
 

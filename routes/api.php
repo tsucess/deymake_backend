@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\AiEditingStudioController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BrandCampaignController;
 use App\Http\Controllers\Api\ChallengeController;
+use App\Http\Controllers\Api\CoinWalletController;
 use App\Http\Controllers\Api\CollaborationController;
 use App\Http\Controllers\Api\CollaborationDeliverableController;
 use App\Http\Controllers\Api\CommentController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\Api\DeveloperController;
 use App\Http\Controllers\Api\DiscountController;
 use App\Http\Controllers\Api\ExploreController;
 use App\Http\Controllers\Api\FanTipController;
+use App\Http\Controllers\Api\GiftController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InfoController;
@@ -311,6 +313,19 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/verify/{reference}', [PaymentController::class, 'verify']);
         });
 
+        Route::prefix('wallet')->group(function (): void {
+            Route::get('/', [CoinWalletController::class, 'overview']);
+            Route::get('/packages', [CoinWalletController::class, 'packages']);
+            Route::post('/purchases', [CoinWalletController::class, 'purchase']);
+        });
+
+        Route::prefix('gifts')->group(function (): void {
+            Route::get('/', [GiftController::class, 'catalog']);
+            Route::post('/{gift}/send', [GiftController::class, 'send']);
+            Route::get('/sent', [GiftController::class, 'sent']);
+            Route::get('/received', [GiftController::class, 'received']);
+        });
+
         Route::middleware('admin')->prefix('admin')->group(function (): void {
             Route::get('/dashboard', [AdminDashboardController::class, 'dashboard']);
             Route::get('/orders', [AdminOrderController::class, 'index']);
@@ -430,7 +445,9 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/activity', [NotificationController::class, 'activity']);
         Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+        Route::delete('/notifications', [NotificationController::class, 'clear']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 

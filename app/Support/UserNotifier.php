@@ -72,6 +72,17 @@ class UserNotifier
         );
     }
 
+    public static function sendSystem(int $recipientId, string $type, string $title, string $body, array $data = []): void
+    {
+        $context = self::recipientContext($recipientId);
+
+        if (! self::notificationTypeEnabled($type, $context['preferences'])) {
+            return;
+        }
+
+        self::deliver($recipientId, $type, $title, $body, $data);
+    }
+
     private static function deliver(int $recipientId, string $type, string $title, string $body, array $data = []): void
     {
         $notification = UserNotification::create([
