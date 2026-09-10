@@ -22,7 +22,8 @@ class CoinWalletController extends Controller
 
         return response()->json(['data' => ['packages' => CoinPackageResource::collection($packages)]]);
     }
-
+ 
+    
     public function overview(Request $request): JsonResponse
     {
         $purchases = CoinPurchase::query()->where('user_id', $request->user()->id)->latest('created_at')->get();
