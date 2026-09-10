@@ -104,6 +104,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/videos/{video}/view', [VideoController::class, 'recordView']);
         Route::post('/videos/{video}/share', [VideoController::class, 'share']);
         Route::get('/videos/{video}/comments', [CommentController::class, 'index']);
+        Route::get('/uploads/{upload}/media', [UploadController::class, 'media']);
 
         Route::get('/comments/{comment}/replies', [CommentController::class, 'replies']);
 

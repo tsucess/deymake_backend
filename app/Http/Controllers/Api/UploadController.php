@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UploadResource;
 use App\Models\Upload;
+use App\Models\Story;
+use App\Models\Video;
 use App\Services\CloudinaryUploadService;
 use Cloudinary\Api\Exception\ApiError;
 use Cloudinary\Exception\ConfigurationException;
@@ -12,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Upload controller.
@@ -28,6 +31,23 @@ use RuntimeException;
  */
 class UploadController extends Controller
 {
+    public function media(Upload $upload)
+    {
+        $isDiscoverableVideo = Video::query()->where('upload_id', $upload->id)->discoverable()->exists();
+        $isActiveStory = Story::query()->where('upload_id', $upload->id)->active()->exists();
+        abort_unless($isDiscoverableVideo || $isActiveStory, 404);
+
+        if ($upload->disk === 'cloudinary') {
+            return redirect()->away($upload->url);
+        }
+
+        abort_unless(Storage::disk($upload->disk)->exists($upload->path), 404);
+
+        return response()->file(Storage::disk($upload->disk)->path($upload->path), [
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
+    }
+
     public function store(Request $request, CloudinaryUploadService $cloudinaryUploadService): JsonResponse
     {
         if (! $request->hasFile('file')) {
