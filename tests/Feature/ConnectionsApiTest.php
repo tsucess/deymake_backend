@@ -149,4 +149,20 @@ class ConnectionsApiTest extends TestCase
         $this->deleteJson("/api/v1/stories/{$story->id}")->assertOk();
         $this->assertNull(Story::find($story->id));
     }
+
+    public function test_story_owner_can_view_story_viewers_only(): void
+    {
+        $author = User::factory()->create();
+        $viewer = User::factory()->create();
+        $story = Story::create(['user_id' => $author->id, 'type' => 'image', 'media_url' => '/viewers.jpg', 'expires_at' => now()->addHours(20)]);
+
+        Sanctum::actingAs($viewer);
+        $this->postJson("/api/v1/stories/{$story->id}/view")->assertOk();
+        $this->getJson("/api/v1/stories/{$story->id}/viewers")->assertForbidden();
+
+        Sanctum::actingAs($author);
+        $this->getJson("/api/v1/stories/{$story->id}/viewers")
+            ->assertOk()
+            ->assertJsonPath('data.viewers.0.id', $viewer->id);
+    }
 }

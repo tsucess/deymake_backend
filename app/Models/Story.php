@@ -19,6 +19,7 @@ class Story extends Model
         'media_url',
         'thumbnail_url',
         'caption',
+        'background_color',
         'views_count',
         'expires_at',
     ];

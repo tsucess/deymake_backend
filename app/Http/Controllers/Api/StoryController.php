@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\StoryResource;
 use App\Models\Story;
 use App\Support\SupportedLocales;
+use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,20 +52,25 @@ class StoryController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'type' => 'nullable|string|in:image,video',
-            'mediaUrl' => 'required|string|max:2048',
+            'type' => 'nullable|string|in:text,image,video',
+            'mediaUrl' => 'nullable|string|max:2048',
             'thumbnailUrl' => 'nullable|string|max:2048',
             'caption' => 'nullable|string|max:500',
+            'backgroundColor' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'uploadId' => 'nullable|integer|exists:uploads,id',
         ]);
+
+        $type = $validated['type'] ?? 'image';
+        abort_if($type !== 'text' && blank($validated['mediaUrl'] ?? null), 422, 'Media is required for image and video stories.');
 
         $story = Story::query()->create([
             'user_id' => $request->user()->id,
             'upload_id' => $validated['uploadId'] ?? null,
-            'type' => $validated['type'] ?? 'image',
-            'media_url' => $validated['mediaUrl'],
+            'type' => $type,
+            'media_url' => $validated['mediaUrl'] ?? null,
             'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
             'caption' => $validated['caption'] ?? null,
+            'background_color' => $validated['backgroundColor'] ?? null,
             'expires_at' => now()->addHours(24),
         ]);
 
@@ -94,6 +100,9 @@ class StoryController extends Controller
             ]);
 
             $story->increment('views_count');
+            if ($story->user_id !== $request->user()->id) {
+                UserNotifier::send($story->user_id, $request->user()->id, 'story_view', 'Your story was viewed', $request->user()->name.' viewed your story.', ['storyId' => $story->id, 'viewerId' => $request->user()->id]);
+            }
         }
 
         $story = Story::query()->withViewerData($request->user())->findOrFail($story->id);
@@ -101,6 +110,18 @@ class StoryController extends Controller
         return response()->json([
             'message' => __('messages.stories.viewed'),
             'data' => ['story' => new StoryResource($story)],
+        ]);
+    }
+
+    public function viewers(Request $request, Story $story): JsonResponse
+    {
+        abort_unless($story->user_id === $request->user()->id, 403);
+
+        $viewers = $story->viewers()->withProfileAggregates($request->user())->latest('story_views.created_at')->get();
+
+        return response()->json([
+            'message' => 'Story viewers retrieved.',
+            'data' => ['viewers' => \App\Http\Resources\ProfileResource::collection($viewers)],
         ]);
     }
 

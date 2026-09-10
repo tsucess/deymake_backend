@@ -183,6 +183,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/stories/feed', [StoryController::class, 'feed']);
         Route::post('/stories', [StoryController::class, 'store']);
         Route::post('/stories/{story}/view', [StoryController::class, 'view']);
+        Route::get('/stories/{story}/viewers', [StoryController::class, 'viewers']);
         Route::delete('/stories/{story}', [StoryController::class, 'destroy']);
 
         Route::post('/videos/{video}/comments', [CommentController::class, 'store']);

@@ -17,6 +17,7 @@ class StoryResource extends JsonResource
             'mediaUrl' => $this->media_url,
             'thumbnailUrl' => $this->thumbnail_url,
             'caption' => $this->caption,
+            'backgroundColor' => $this->background_color,
             'views' => (int) $this->views_count,
             'expiresAt' => $this->expires_at?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
