@@ -9,6 +9,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
+    // Keep HTTP, console, and broadcast entry points in the framework's
+    // standard bootstrap so every environment uses the same route registry.
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -16,10 +18,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withBroadcasting(
+        // Broadcast authentication uses the same account and activity checks
+        // as protected API requests before a private channel is authorized.
         __DIR__.'/../routes/channels.php',
         ['prefix' => 'api', 'middleware' => ['api', 'auth:sanctum', EnsureActiveAccount::class, RecordUserActivity::class]],
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Aliases keep route declarations readable while centralizing the
+        // middleware classes that enforce account and admin boundaries.
         $middleware->alias([
             'admin' => EnsureAdmin::class,
             'active.account' => EnsureActiveAccount::class,

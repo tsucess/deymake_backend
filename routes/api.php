@@ -66,6 +66,8 @@ use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
+    // Locale negotiation wraps the entire versioned API. Authentication is
+    // added below only where an endpoint changes user-owned state.
     Route::middleware(SetLocale::class)->group(function (): void {
         Route::get('/health', HealthController::class);
 
