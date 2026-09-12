@@ -97,6 +97,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/explore', [ExploreController::class, 'index']);
         Route::get('/explore/videos', [ExploreController::class, 'videos']);
+        Route::get('/connections/feed', [ConnectionsController::class, 'feed']);
 
         Route::get('/videos/trending', [VideoController::class, 'trending']);
         Route::get('/videos/live', [VideoController::class, 'live']);
@@ -180,7 +181,6 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/creators/{creator}/tips', [FanTipController::class, 'store']);
         Route::get('/creators/suggestions', [CreatorSuggestionController::class, 'suggestions']);
 
-        Route::get('/connections/feed', [ConnectionsController::class, 'feed']);
         Route::get('/mutuals/feed', [MutualsController::class, 'feed']);
 
         Route::get('/stories/feed', [StoryController::class, 'feed']);

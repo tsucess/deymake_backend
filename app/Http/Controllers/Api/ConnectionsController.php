@@ -26,12 +26,12 @@ class ConnectionsController extends Controller
 
         $viewer = $request->user();
 
-        $subscribedCreatorIds = $viewer->subscribedCreators()->pluck('users.id');
+        $subscribedCreatorIds = $viewer?->subscribedCreators()->pluck('users.id') ?? collect();
 
         $query = Video::query()
             ->withApiResourceData($viewer)
             ->discoverable()
-            ->where('user_id', '!=', $viewer->id);
+            ->when($viewer, fn ($query) => $query->where('user_id', '!=', $viewer->id));
 
         if ($subscribedCreatorIds->isNotEmpty()) {
             $query->whereIn('user_id', $subscribedCreatorIds)
