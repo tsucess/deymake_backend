@@ -177,6 +177,7 @@ class AuthExtensionsApiTest extends TestCase
         Http::fake([
             'https://oauth2.googleapis.com/token' => Http::response([
                 'access_token' => 'google-access-token',
+                    'refresh_token' => 'google-refresh-token',
                 'token_type' => 'Bearer',
             ]),
             'https://www.googleapis.com/oauth2/v2/userinfo' => Http::response([
@@ -209,6 +210,9 @@ class AuthExtensionsApiTest extends TestCase
             'provider' => 'google',
             'provider_id' => 'google-user-123',
         ]);
+
+        $this->assertSame('google-access-token', User::query()->where('email', 'oauth@example.com')->value('provider_token'));
+        $this->assertSame('google-refresh-token', User::query()->where('email', 'oauth@example.com')->value('provider_refresh_token'));
 
         $this->withHeader('Authorization', 'Bearer '.$fragment['token'])
             ->getJson('/api/v1/auth/me')

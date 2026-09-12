@@ -629,8 +629,15 @@ class AuthController extends Controller
 
         try {
             $token = $this->exchangeOauthCodeForAccessToken($provider, $code);
-            $profile = $this->fetchOauthProfile($provider, $token);
+            $profile = $this->fetchOauthProfile($provider, $token['access_token']);
             $user = $this->resolveOauthUser($provider, $profile);
+
+            if ($user->provider === $provider && (string) $user->provider_id === $profile['id']) {
+                $user->forceFill([
+                    'provider_token' => $token['access_token'],
+                    'provider_refresh_token' => $token['refresh_token'] ?? $user->provider_refresh_token,
+                ])->save();
+            }
 
             if ($user->isBlocked()) {
                 $user->tokens()->delete();
@@ -711,13 +718,14 @@ class AuthController extends Controller
         ];
 
         if ($provider === 'google') {
-            $query['prompt'] = 'select_account';
+            $query['access_type'] = 'offline';
+            $query['prompt'] = 'consent select_account';
         }
 
         return $config['authorize_url'].'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
 
-    private function exchangeOauthCodeForAccessToken(string $provider, string $code): string
+    private function exchangeOauthCodeForAccessToken(string $provider, string $code): array
     {
         $config = $this->oauthConfig($provider);
 
@@ -744,7 +752,12 @@ class AuthController extends Controller
             throw new RuntimeException(__('messages.auth.oauth.missing_access_token'));
         }
 
-        return $accessToken;
+        return [
+            'access_token' => $accessToken,
+            'refresh_token' => is_string($payload['refresh_token'] ?? null)
+                ? $payload['refresh_token']
+                : null,
+        ];
     }
 
     private function fetchOauthProfile(string $provider, string $accessToken): array

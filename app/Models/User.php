@@ -55,6 +55,8 @@ class User extends Authenticatable
         'banned_by',
         'provider',
         'provider_id',
+        'provider_token',
+        'provider_refresh_token',
     ];
 
     /**
@@ -65,6 +67,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'provider_token',
+        'provider_refresh_token',
     ];
 
     /**
@@ -86,6 +90,8 @@ class User extends Authenticatable
             'is_admin' => 'boolean',
             'suspended_at' => 'datetime',
             'banned_at' => 'datetime',
+            'provider_token' => 'encrypted',
+            'provider_refresh_token' => 'encrypted',
         ];
     }
 
