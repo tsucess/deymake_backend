@@ -60,7 +60,7 @@ class AdminLiveStreamApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/live-streams')
+        $this->getJson('/api/admin/live-streams')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -86,24 +86,24 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/live-streams')
+        $this->getJson('/api/admin/live-streams')
             ->assertOk()
             ->assertJsonPath('meta.summary.liveNow', 1)
             ->assertJsonPath('meta.summary.endedTotal', 1);
 
-        $this->getJson('/api/v1/admin/live-streams?status=live')
+        $this->getJson('/api/admin/live-streams?status=live')
             ->assertOk()
             ->assertJsonCount(1, 'data.liveStreams')
             ->assertJsonPath('data.liveStreams.0.title', 'Distinctive Live Show')
             ->assertJsonPath('data.liveStreams.0.liveAnalytics.currentViewers', 2)
             ->assertJsonPath('data.liveStreams.0.liveAnalytics.peakViewers', 10);
 
-        $this->getJson('/api/v1/admin/live-streams?q=Ada')
+        $this->getJson('/api/admin/live-streams?q=Ada')
             ->assertOk()
             ->assertJsonCount(1, 'data.liveStreams')
             ->assertJsonPath('data.liveStreams.0.id', $live->id);
 
-        $this->getJson('/api/v1/admin/live-streams?q=nonexistentcreator')
+        $this->getJson('/api/admin/live-streams?q=nonexistentcreator')
             ->assertOk()
             ->assertJsonCount(0, 'data.liveStreams');
     }
@@ -128,7 +128,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/live-streams/'.$live->public_id)
+        $this->getJson('/api/admin/live-streams/'.$live->public_id)
             ->assertOk()
             ->assertJsonPath('data.stream.id', $live->id)
             ->assertJsonCount(2, 'data.audience')
@@ -154,7 +154,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/stop', ['reason' => 'Policy breach'])
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/stop', ['reason' => 'Policy breach'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.live_stream_stopped'))
             ->assertJsonPath('data.viewersDisconnected', 2)
@@ -191,7 +191,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/viewers/remove', ['sessionId' => $session->id])
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/viewers/remove', ['sessionId' => $session->id])
             ->assertOk()
             ->assertJsonCount(0, 'data.audience');
 
@@ -222,7 +222,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/co-hosts/remove', ['sessionId' => $coHostSession->id])
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/co-hosts/remove', ['sessionId' => $coHostSession->id])
             ->assertOk()
             ->assertJsonCount(0, 'data.coHosts');
 
@@ -234,7 +234,7 @@ class AdminLiveStreamApiTest extends TestCase
             'auditable_id' => $live->id,
         ]);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/co-hosts/remove', ['sessionId' => $creatorSession->id])
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/co-hosts/remove', ['sessionId' => $creatorSession->id])
             ->assertStatus(422);
     }
 
@@ -246,7 +246,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/restrict-creator', ['notes' => 'Repeated violations'])
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/restrict-creator', ['notes' => 'Repeated violations'])
             ->assertOk()
             ->assertJsonPath('data.creator.accountStatus', 'suspended');
 
@@ -279,7 +279,7 @@ class AdminLiveStreamApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/live-streams/'.$live->public_id.'/review-violations', [
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/review-violations', [
             'action' => 'restrict',
             'notes' => 'Confirmed abuse',
             'resolveReports' => true,

@@ -34,7 +34,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/v1/admin/videos')
+        $this->getJson('/api/admin/videos')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -54,32 +54,32 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/videos')
+        $this->getJson('/api/admin/videos')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.videos_retrieved'))
             ->assertJsonPath('meta.summary.totalVideos', 3)
             ->assertJsonPath('meta.summary.liveVideos', 1)
             ->assertJsonPath('meta.summary.removedVideos', 1);
 
-        $this->getJson('/api/v1/admin/videos?q=Unique Dance')
+        $this->getJson('/api/admin/videos?q=Unique Dance')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $target->id);
 
-        $this->getJson('/api/v1/admin/videos?q=ada.dev')
+        $this->getJson('/api/admin/videos?q=ada.dev')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $target->id);
 
-        $this->getJson('/api/v1/admin/videos?q='.$target->id)
+        $this->getJson('/api/admin/videos?q='.$target->id)
             ->assertOk()
             ->assertJsonPath('data.videos.0.id', $target->id);
 
-        $this->getJson('/api/v1/admin/videos?moderationStatus=removed')
+        $this->getJson('/api/admin/videos?moderationStatus=removed')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos');
 
-        $this->getJson('/api/v1/admin/videos?live=true')
+        $this->getJson('/api/admin/videos?live=true')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos');
     }
@@ -113,7 +113,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/videos/'.$video->id)
+        $this->getJson('/api/admin/videos/'.$video->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.video_retrieved'))
             ->assertJsonPath('data.video.id', $video->id)
@@ -133,7 +133,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/videos/'.$video->id, [
+        $this->patchJson('/api/admin/videos/'.$video->id, [
             'moderationStatus' => 'visible',
         ])
             ->assertOk()
@@ -151,7 +151,7 @@ class AdminVideoApiTest extends TestCase
             'auditable_id' => $video->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/videos/'.$video->id, [
+        $this->patchJson('/api/admin/videos/'.$video->id, [
             'moderationStatus' => 'restricted',
             'moderationNotes' => 'Hidden pending appeal.',
         ])
@@ -174,7 +174,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->deleteJson('/api/v1/admin/videos/'.$video->id)
+        $this->deleteJson('/api/admin/videos/'.$video->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.video_deleted'));
 
@@ -204,7 +204,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/videos/'.$video->id.'/reports')
+        $this->getJson('/api/admin/videos/'.$video->id.'/reports')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.video_reports_retrieved'))
             ->assertJsonCount(1, 'data.reports')
@@ -222,7 +222,7 @@ class AdminVideoApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/videos/'.$video->id.'/rescan')
+        $this->postJson('/api/admin/videos/'.$video->id.'/rescan')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.moderation.video_rescanned'))
             ->assertJsonPath('data.moderationCase.aiRiskLevel', 'high');

@@ -48,7 +48,7 @@ class CollaborationDeliverableApiTest extends TestCase
 
         Sanctum::actingAs($invitee);
 
-        $createResponse = $this->postJson('/api/v1/collaborations/invites/'.$invite->id.'/deliverables', [
+        $createResponse = $this->postJson('/api/collaborations/invites/'.$invite->id.'/deliverables', [
             'title' => 'Guest Verse V1',
             'brief' => 'First pass with a softer intro.',
             'draftVideoId' => $draftVideo->id,
@@ -63,7 +63,7 @@ class CollaborationDeliverableApiTest extends TestCase
 
         $deliverableId = $createResponse->json('data.deliverable.id');
 
-        $this->patchJson('/api/v1/collaborations/deliverables/'.$deliverableId, [
+        $this->patchJson('/api/collaborations/deliverables/'.$deliverableId, [
             'action' => 'submit',
         ])
             ->assertOk()
@@ -72,14 +72,14 @@ class CollaborationDeliverableApiTest extends TestCase
 
         Sanctum::actingAs($inviter);
 
-        $this->getJson('/api/v1/collaborations/invites/'.$invite->id.'/deliverables')
+        $this->getJson('/api/collaborations/invites/'.$invite->id.'/deliverables')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.collaborations.deliverables_retrieved'))
             ->assertJsonCount(1, 'data.deliverables')
             ->assertJsonPath('data.deliverables.0.id', $deliverableId)
             ->assertJsonPath('data.deliverables.0.canReview', true);
 
-        $this->patchJson('/api/v1/collaborations/deliverables/'.$deliverableId, [
+        $this->patchJson('/api/collaborations/deliverables/'.$deliverableId, [
             'action' => 'request_changes',
             'feedback' => 'Tighten the hook and punch in faster.',
         ])
@@ -89,7 +89,7 @@ class CollaborationDeliverableApiTest extends TestCase
 
         Sanctum::actingAs($invitee);
 
-        $this->patchJson('/api/v1/collaborations/deliverables/'.$deliverableId, [
+        $this->patchJson('/api/collaborations/deliverables/'.$deliverableId, [
             'action' => 'submit',
             'title' => 'Guest Verse V2',
         ])
@@ -99,7 +99,7 @@ class CollaborationDeliverableApiTest extends TestCase
 
         Sanctum::actingAs($inviter);
 
-        $this->patchJson('/api/v1/collaborations/deliverables/'.$deliverableId, [
+        $this->patchJson('/api/collaborations/deliverables/'.$deliverableId, [
             'action' => 'approve',
         ])
             ->assertOk()

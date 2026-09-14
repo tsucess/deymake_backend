@@ -42,7 +42,7 @@ class AdminCreatorApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/creators')
+        $this->getJson('/api/admin/creators')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -57,7 +57,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/v1/admin/creators')->assertOk();
+        $response = $this->getJson('/api/admin/creators')->assertOk();
 
         $response->assertJsonPath('meta.summary.total', 2);
         $response->assertJsonPath('meta.summary.verified', 1);
@@ -73,17 +73,17 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/creators?q=Distinctive')
+        $this->getJson('/api/admin/creators?q=Distinctive')
             ->assertOk()
             ->assertJsonCount(1, 'data.creators')
             ->assertJsonPath('data.creators.0.fullName', 'Distinctive Creator');
 
-        $this->getJson('/api/v1/admin/creators?verificationStatus=pending')
+        $this->getJson('/api/admin/creators?verificationStatus=pending')
             ->assertOk()
             ->assertJsonCount(1, 'data.creators')
             ->assertJsonPath('data.creators.0.fullName', 'Another Person');
 
-        $this->getJson('/api/v1/admin/creators?country=US')
+        $this->getJson('/api/admin/creators?country=US')
             ->assertOk()
             ->assertJsonCount(1, 'data.creators')
             ->assertJsonPath('data.creators.0.country', 'US');
@@ -98,7 +98,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/v1/admin/creators?per_page=2')->assertOk();
+        $response = $this->getJson('/api/admin/creators?per_page=2')->assertOk();
 
         $this->assertCount(2, $response->json('data.creators'));
         $response->assertJsonPath('meta.creators.perPage', 2);
@@ -113,7 +113,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/creators/analytics')
+        $this->getJson('/api/admin/creators/analytics')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.creator_analytics_retrieved'))
             ->assertJsonStructure([
@@ -153,7 +153,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/v1/admin/creators/monetization')->assertOk();
+        $response = $this->getJson('/api/admin/creators/monetization')->assertOk();
 
         $response->assertJsonPath('data.summary.totalEarnings', 500000);
         $response->assertJsonPath('data.summary.membershipRevenue', 500000);
@@ -191,7 +191,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/v1/admin/creators/programs')->assertOk();
+        $response = $this->getJson('/api/admin/creators/programs')->assertOk();
 
         $response->assertJsonPath('data.summary.totalPlans', 1);
         $response->assertJsonPath('data.summary.activePlans', 1);
@@ -226,13 +226,13 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/v1/admin/creators/collaborations')->assertOk();
+        $response = $this->getJson('/api/admin/creators/collaborations')->assertOk();
         $response->assertJsonPath('meta.summary.total', 2);
         $response->assertJsonPath('meta.summary.pending', 1);
         $response->assertJsonPath('meta.summary.accepted', 1);
         $this->assertCount(2, $response->json('data.collaborations'));
 
-        $this->getJson('/api/v1/admin/creators/collaborations?status=accepted')
+        $this->getJson('/api/admin/creators/collaborations?status=accepted')
             ->assertOk()
             ->assertJsonCount(1, 'data.collaborations')
             ->assertJsonPath('data.collaborations.0.status', 'accepted');
@@ -245,7 +245,7 @@ class AdminCreatorApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->get('/api/v1/admin/creators/export');
+        $response = $this->get('/api/admin/creators/export');
 
         $response->assertOk();
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');

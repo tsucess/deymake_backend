@@ -45,7 +45,7 @@ class MonetizationApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->putJson('/api/v1/monetization/payout-account', [
+        $this->putJson('/api/monetization/payout-account', [
             'provider' => 'bank_transfer',
             'accountName' => 'Paid Creator',
             'accountReference' => '0123456789',
@@ -58,7 +58,7 @@ class MonetizationApiTest extends TestCase
             ->assertJsonPath('data.account.accountName', 'Paid Creator')
             ->assertJsonPath('data.account.accountMask', '****6789');
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.monetization.summary_retrieved'))
             ->assertJsonPath('data.summary.currency', 'NGN')
@@ -67,7 +67,7 @@ class MonetizationApiTest extends TestCase
             ->assertJsonPath('data.summary.memberships.activeCustomers', 1)
             ->assertJsonPath('data.summary.payouts.accountReady', true);
 
-        $payoutResponse = $this->postJson('/api/v1/monetization/payouts', [
+        $payoutResponse = $this->postJson('/api/monetization/payouts', [
             'amount' => 3000,
             'notes' => 'First creator payout request.',
         ]);
@@ -82,21 +82,21 @@ class MonetizationApiTest extends TestCase
 
         $payoutId = $payoutResponse->json('data.payout.id');
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.pendingPayouts', 3000)
             ->assertJsonPath('data.summary.earnings.availableBalance', 3500);
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/payout-requests?status=requested')
+        $this->getJson('/api/admin/payout-requests?status=requested')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.monetization.admin_payouts_retrieved'))
             ->assertJsonPath('data.payouts.0.id', $payoutId)
             ->assertJsonPath('data.payouts.0.creator.id', $creator->id)
             ->assertJsonPath('meta.payouts.total', 1);
 
-        $this->patchJson('/api/v1/admin/payout-requests/'.$payoutId, [
+        $this->patchJson('/api/admin/payout-requests/'.$payoutId, [
             'status' => 'paid',
             'notes' => 'Settled to creator bank account.',
             'externalReference' => 'paystack-transfer-001',
@@ -122,7 +122,7 @@ class MonetizationApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/monetization/payouts')
+        $this->getJson('/api/monetization/payouts')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.monetization.payouts_retrieved'))
             ->assertJsonPath('data.payouts.0.id', $payoutId)

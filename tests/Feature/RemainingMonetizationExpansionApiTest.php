@@ -18,7 +18,7 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $requestId = $this->postJson('/api/v1/creator-verification', [
+        $requestId = $this->postJson('/api/creator-verification', [
             'legalName' => 'Verified Soon Ltd',
             'country' => 'Nigeria',
             'documentType' => 'passport',
@@ -33,13 +33,13 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/creator-verification-requests?status=pending')
+        $this->getJson('/api/admin/creator-verification-requests?status=pending')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.creator_verification.admin_requests_retrieved'))
             ->assertJsonPath('data.requests.0.id', $requestId)
             ->assertJsonPath('meta.requests.total', 1);
 
-        $this->patchJson('/api/v1/admin/creator-verification-requests/'.$requestId, [
+        $this->patchJson('/api/admin/creator-verification-requests/'.$requestId, [
             'status' => 'approved',
             'reviewNotes' => 'Audience and documents confirmed.',
         ])
@@ -51,7 +51,7 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/creator-verification')
+        $this->getJson('/api/creator-verification')
             ->assertOk()
             ->assertJsonPath('data.status', 'approved')
             ->assertJsonPath('data.request.status', 'approved');
@@ -70,7 +70,7 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($fan);
 
-        $this->postJson('/api/v1/creators/'.$creator->id.'/tips', [
+        $this->postJson('/api/creators/'.$creator->id.'/tips', [
             'amount' => 2500,
             'currency' => 'NGN',
             'message' => 'This content helped me a lot.',
@@ -82,18 +82,18 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/tips/received')
+        $this->getJson('/api/tips/received')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.fan_tips.received_retrieved'))
             ->assertJsonPath('data.tips.0.amount', 2500)
             ->assertJsonPath('data.tips.0.fan.id', $fan->id);
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.grossRevenue', 2500)
             ->assertJsonPath('data.summary.earnings.availableBalance', 2500);
 
-        $agreementId = $this->postJson('/api/v1/revenue-shares', [
+        $agreementId = $this->postJson('/api/revenue-shares', [
             'recipientId' => $collaborator->id,
             'title' => 'Duet payout split',
             'sourceType' => 'collaboration',
@@ -108,14 +108,14 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($collaborator);
 
-        $this->patchJson('/api/v1/revenue-shares/'.$agreementId, ['action' => 'accept'])
+        $this->patchJson('/api/revenue-shares/'.$agreementId, ['action' => 'accept'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.revenue_shares.updated'))
             ->assertJsonPath('data.agreement.status', 'active');
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/revenue-shares/'.$agreementId.'/settlements', [
+        $this->postJson('/api/revenue-shares/'.$agreementId.'/settlements', [
             'grossAmount' => 10000,
             'notes' => 'First payout cycle.',
         ])
@@ -125,7 +125,7 @@ class RemainingMonetizationExpansionApiTest extends TestCase
 
         Sanctum::actingAs($collaborator);
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.grossRevenue', 4000)
             ->assertJsonPath('data.summary.earnings.availableBalance', 4000);

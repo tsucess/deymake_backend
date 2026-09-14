@@ -19,13 +19,13 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/v1/developer')
+        $this->getJson('/api/developer')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.developer.overview_retrieved'))
             ->assertJsonPath('data.developer.summary.apiKeysCount', 0)
             ->assertJsonPath('data.developer.summary.webhooksCount', 0);
 
-        $apiKeyResponse = $this->postJson('/api/v1/developer/api-keys', [
+        $apiKeyResponse = $this->postJson('/api/developer/api-keys', [
             'name' => 'Creator SDK',
             'abilities' => ['memberships:read', 'memberships:write'],
         ]);
@@ -37,7 +37,7 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         $tokenId = $apiKeyResponse->json('data.apiKey.id');
 
-        $webhookResponse = $this->postJson('/api/v1/developer/webhooks', [
+        $webhookResponse = $this->postJson('/api/developer/webhooks', [
             'name' => 'Membership events',
             'targetUrl' => 'https://example.com/hooks/memberships',
             'events' => ['membership.created', 'membership.cancelled'],
@@ -51,7 +51,7 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         $webhookId = $webhookResponse->json('data.webhook.id');
 
-        $this->getJson('/api/v1/developer')
+        $this->getJson('/api/developer')
             ->assertOk()
             ->assertJsonPath('data.developer.availableEvents.0', 'membership.created')
             ->assertJsonPath('data.developer.availableEvents.1', 'membership.cancelled')
@@ -66,7 +66,7 @@ class DeveloperAndMembershipApiTest extends TestCase
             ->assertJsonPath('data.developer.summary.webhooksCount', 1)
             ->assertJsonPath('data.developer.summary.activeWebhooksCount', 1);
 
-        $this->patchJson('/api/v1/developer/webhooks/'.$webhookId, [
+        $this->patchJson('/api/developer/webhooks/'.$webhookId, [
             'name' => 'Membership updates',
             'isActive' => false,
         ])
@@ -75,15 +75,15 @@ class DeveloperAndMembershipApiTest extends TestCase
             ->assertJsonPath('data.webhook.name', 'Membership updates')
             ->assertJsonPath('data.webhook.isActive', false);
 
-        $this->postJson('/api/v1/developer/webhooks/'.$webhookId.'/rotate-secret')
+        $this->postJson('/api/developer/webhooks/'.$webhookId.'/rotate-secret')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.developer.webhook_secret_rotated'));
 
-        $this->deleteJson('/api/v1/developer/api-keys/'.$tokenId)
+        $this->deleteJson('/api/developer/api-keys/'.$tokenId)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.developer.api_key_deleted'));
 
-        $this->deleteJson('/api/v1/developer/webhooks/'.$webhookId)
+        $this->deleteJson('/api/developer/webhooks/'.$webhookId)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.developer.webhook_deleted'));
 
@@ -114,7 +114,7 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $planResponse = $this->postJson('/api/v1/memberships/plans', [
+        $planResponse = $this->postJson('/api/memberships/plans', [
             'name' => 'Gold Circle',
             'description' => 'Premium access',
             'price_amount' => 1500,
@@ -132,7 +132,7 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         $planId = $planResponse->json('data.plan.id');
 
-        $this->patchJson('/api/v1/memberships/plans/'.$planId, [
+        $this->patchJson('/api/memberships/plans/'.$planId, [
             'description' => 'Premium access + shoutouts',
             'benefits' => ['Early access', 'Members-only chat', 'Monthly shoutout'],
         ])
@@ -140,7 +140,7 @@ class DeveloperAndMembershipApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.memberships.plan_updated'))
             ->assertJsonPath('data.plan.description', 'Premium access + shoutouts');
 
-        $this->getJson('/api/v1/users/'.$creator->id.'/plans')
+        $this->getJson('/api/users/'.$creator->id.'/plans')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.plans_retrieved'))
             ->assertJsonCount(1, 'data.plans')
@@ -148,17 +148,17 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         Sanctum::actingAs($member);
 
-        $this->getJson('/api/v1/users/'.$creator->id)
+        $this->getJson('/api/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('data.user.hasActivePlans', true)
             ->assertJsonPath('data.user.activePlansCount', 1);
 
-        $this->getJson('/api/v1/users/'.$creator->id.'/plans')
+        $this->getJson('/api/users/'.$creator->id.'/plans')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.plans_retrieved'))
             ->assertJsonPath('data.plans.0.currentUserMembership', null);
 
-        $subscribeResponse = $this->postJson('/api/v1/memberships/plans/'.$planId.'/subscribe');
+        $subscribeResponse = $this->postJson('/api/memberships/plans/'.$planId.'/subscribe');
 
         $subscribeResponse
             ->assertCreated()
@@ -169,7 +169,7 @@ class DeveloperAndMembershipApiTest extends TestCase
 
         $membershipId = $subscribeResponse->json('data.membership.id');
 
-        $this->getJson('/api/v1/memberships/mine')
+        $this->getJson('/api/memberships/mine')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.mine_retrieved'))
             ->assertJsonPath('data.memberships.0.id', $membershipId)
@@ -184,21 +184,21 @@ class DeveloperAndMembershipApiTest extends TestCase
             'title' => trans('messages.notifications.membership_title', [], 'fr'),
         ]);
 
-        $this->postJson('/api/v1/memberships/'.$membershipId.'/cancel')
+        $this->postJson('/api/memberships/'.$membershipId.'/cancel')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.cancelled'))
             ->assertJsonPath('data.membership.status', 'cancelled');
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/memberships/creator')
+        $this->getJson('/api/memberships/creator')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.creator_dashboard_retrieved'))
             ->assertJsonPath('data.memberships.0.status', 'cancelled')
             ->assertJsonPath('data.memberships.0.member.fullName', 'Member Zero')
             ->assertJsonPath('data.memberships.0.plan.name', 'Gold Circle');
 
-        $this->deleteJson('/api/v1/memberships/plans/'.$planId)
+        $this->deleteJson('/api/memberships/plans/'.$planId)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.memberships.plan_deleted'));
 

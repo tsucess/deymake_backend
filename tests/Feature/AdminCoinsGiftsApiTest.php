@@ -27,7 +27,7 @@ class AdminCoinsGiftsApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/coins/overview')->assertForbidden();
+        $this->getJson('/api/admin/coins/overview')->assertForbidden();
     }
 
     public function test_overview_returns_aggregated_metrics(): void
@@ -46,7 +46,7 @@ class AdminCoinsGiftsApiTest extends TestCase
             'sent_at' => now()->subDay(),
         ]);
 
-        $this->getJson('/api/v1/admin/coins/overview')
+        $this->getJson('/api/admin/coins/overview')
             ->assertOk()
             ->assertJsonPath('data.summary.coinsPurchased', 700)
             ->assertJsonPath('data.summary.revenue', 70000)
@@ -59,7 +59,7 @@ class AdminCoinsGiftsApiTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->getJson('/api/v1/admin/coins/overview')
+        $this->getJson('/api/admin/coins/overview')
             ->assertOk()
             ->assertJsonPath('data.summary.coinsPurchased', 0)
             ->assertJsonPath('data.summary.revenue', 0)
@@ -71,7 +71,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->actingAsAdmin();
         CoinPurchase::factory()->create(['coins' => 500, 'purchased_at' => now()->subDays(3)]);
 
-        $response = $this->getJson('/api/v1/admin/coins/timeseries?group=month')
+        $response = $this->getJson('/api/admin/coins/timeseries?group=month')
             ->assertOk()
             ->assertJsonPath('data.group', 'month')
             ->assertJsonStructure(['data' => ['labels', 'series' => [['key', 'data']], 'range']]);
@@ -88,7 +88,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         GiftTransaction::factory()->create(['sender_id' => $whale->id, 'coin_amount' => 900, 'quantity' => 5, 'sent_at' => now()]);
         GiftTransaction::factory()->create(['sender_id' => $minnow->id, 'coin_amount' => 100, 'quantity' => 1, 'sent_at' => now()]);
 
-        $this->getJson('/api/v1/admin/coins/top-senders')
+        $this->getJson('/api/admin/coins/top-senders')
             ->assertOk()
             ->assertJsonPath('data.senders.0.coinsSent', 900)
             ->assertJsonPath('data.senders.0.giftsSent', 5);
@@ -100,7 +100,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         $package = CoinPackage::factory()->create();
         CoinPurchase::factory()->count(2)->create(['coin_package_id' => $package->id, 'amount' => 5000, 'coins' => 100]);
 
-        $this->getJson('/api/v1/admin/coins/packages')
+        $this->getJson('/api/admin/coins/packages')
             ->assertOk()
             ->assertJsonPath('data.packages.0.sales', 2)
             ->assertJsonPath('data.packages.0.revenue', 10000)
@@ -111,7 +111,7 @@ class AdminCoinsGiftsApiTest extends TestCase
     {
         $admin = $this->actingAsAdmin();
 
-        $created = $this->postJson('/api/v1/admin/coins/packages', [
+        $created = $this->postJson('/api/admin/coins/packages', [
             'name' => 'Mega Pack',
             'coins' => 1400,
             'bonusCoins' => 100,
@@ -121,15 +121,15 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->assertDatabaseHas('coin_packages', ['name' => 'Mega Pack', 'coins' => 1400]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.coin_package_created', 'user_id' => $admin->id]);
 
-        $this->patchJson("/api/v1/admin/coins/packages/{$created}", ['priceAmount' => 250000])
+        $this->patchJson("/api/admin/coins/packages/{$created}", ['priceAmount' => 250000])
             ->assertOk()
             ->assertJsonPath('data.package.priceAmount', 250000);
 
-        $this->postJson("/api/v1/admin/coins/packages/{$created}/toggle")
+        $this->postJson("/api/admin/coins/packages/{$created}/toggle")
             ->assertOk()
             ->assertJsonPath('data.package.isActive', false);
 
-        $this->deleteJson("/api/v1/admin/coins/packages/{$created}")->assertOk();
+        $this->deleteJson("/api/admin/coins/packages/{$created}")->assertOk();
         $this->assertDatabaseMissing('coin_packages', ['id' => $created]);
     }
 
@@ -139,7 +139,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         CoinPurchase::factory()->create();
         CoinPurchase::factory()->flagged()->create();
 
-        $this->getJson('/api/v1/admin/coins/purchases?flagged=true')
+        $this->getJson('/api/admin/coins/purchases?flagged=true')
             ->assertOk()
             ->assertJsonCount(1, 'data.purchases')
             ->assertJsonPath('meta.summary.flagged', 1);
@@ -150,7 +150,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         $admin = $this->actingAsAdmin();
         $purchase = CoinPurchase::factory()->create(['amount' => 50000]);
 
-        $this->postJson("/api/v1/admin/coins/purchases/{$purchase->id}/refund", ['reason' => 'Chargeback'])
+        $this->postJson("/api/admin/coins/purchases/{$purchase->id}/refund", ['reason' => 'Chargeback'])
             ->assertOk()
             ->assertJsonPath('data.purchase.status', 'refunded');
 
@@ -163,7 +163,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->actingAsAdmin();
         $purchase = CoinPurchase::factory()->create();
 
-        $this->postJson("/api/v1/admin/coins/purchases/{$purchase->id}/review", [
+        $this->postJson("/api/admin/coins/purchases/{$purchase->id}/review", [
             'action' => 'flag',
             'reason' => 'Velocity',
         ])->assertOk()->assertJsonPath('data.purchase.isFlagged', true);
@@ -177,7 +177,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         CoinPurchase::factory()->create(['purchased_at' => now()->subMinutes(5)]);
         GiftTransaction::factory()->create(['sent_at' => now()->subMinutes(2)]);
 
-        $response = $this->getJson('/api/v1/admin/coins/transactions')
+        $response = $this->getJson('/api/admin/coins/transactions')
             ->assertOk()
             ->assertJsonCount(2, 'data.transactions');
 
@@ -191,14 +191,14 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->actingAsAdmin();
         CoinPurchase::factory()->create();
 
-        $this->get('/api/v1/admin/coins/export')->assertOk();
+        $this->get('/api/admin/coins/export')->assertOk();
     }
 
     public function test_non_admin_cannot_list_gifts(): void
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/gifts')->assertForbidden();
+        $this->getJson('/api/admin/gifts')->assertForbidden();
     }
 
     public function test_gifts_list_returns_catalog_with_summary(): void
@@ -207,7 +207,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         Gift::factory()->count(2)->create();
         Gift::factory()->inactive()->create();
 
-        $this->getJson('/api/v1/admin/gifts')
+        $this->getJson('/api/admin/gifts')
             ->assertOk()
             ->assertJsonPath('meta.summary.totalGifts', 3)
             ->assertJsonPath('meta.summary.activeGifts', 2)
@@ -218,7 +218,7 @@ class AdminCoinsGiftsApiTest extends TestCase
     {
         $admin = $this->actingAsAdmin();
 
-        $id = $this->postJson('/api/v1/admin/gifts', [
+        $id = $this->postJson('/api/admin/gifts', [
             'name' => 'Golden Crown',
             'coinCost' => 250,
             'priceAmount' => 25000,
@@ -227,15 +227,15 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->assertDatabaseHas('gifts', ['name' => 'Golden Crown', 'coin_cost' => 250]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.gift_created', 'user_id' => $admin->id]);
 
-        $this->patchJson("/api/v1/admin/gifts/{$id}", ['coinCost' => 300])
+        $this->patchJson("/api/admin/gifts/{$id}", ['coinCost' => 300])
             ->assertOk()
             ->assertJsonPath('data.gift.coinCost', 300);
 
-        $this->postJson("/api/v1/admin/gifts/{$id}/toggle")
+        $this->postJson("/api/admin/gifts/{$id}/toggle")
             ->assertOk()
             ->assertJsonPath('data.gift.isActive', false);
 
-        $this->deleteJson("/api/v1/admin/gifts/{$id}")->assertOk();
+        $this->deleteJson("/api/admin/gifts/{$id}")->assertOk();
         $this->assertDatabaseMissing('gifts', ['id' => $id]);
     }
 
@@ -245,7 +245,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         GiftTransaction::factory()->create();
         GiftTransaction::factory()->refunded()->create();
 
-        $this->getJson('/api/v1/admin/gift-transactions?status=refunded')
+        $this->getJson('/api/admin/gift-transactions?status=refunded')
             ->assertOk()
             ->assertJsonCount(1, 'data.transactions')
             ->assertJsonPath('meta.summary.refunded', 1);
@@ -260,7 +260,7 @@ class AdminCoinsGiftsApiTest extends TestCase
             'creator_earnings' => 5000,
         ]);
 
-        $this->postJson("/api/v1/admin/gift-transactions/{$transaction->id}/refund", ['reason' => 'Fraud'])
+        $this->postJson("/api/admin/gift-transactions/{$transaction->id}/refund", ['reason' => 'Fraud'])
             ->assertOk()
             ->assertJsonPath('data.transaction.status', 'refunded');
 
@@ -279,7 +279,7 @@ class AdminCoinsGiftsApiTest extends TestCase
         $this->actingAsAdmin();
         $transaction = GiftTransaction::factory()->create();
 
-        $this->postJson("/api/v1/admin/gift-transactions/{$transaction->id}/review", ['action' => 'flag'])
+        $this->postJson("/api/admin/gift-transactions/{$transaction->id}/review", ['action' => 'flag'])
             ->assertOk()
             ->assertJsonPath('data.transaction.isFlagged', true);
     }
@@ -294,7 +294,7 @@ class AdminCoinsGiftsApiTest extends TestCase
             'quantity' => 3,
         ]);
 
-        $this->getJson('/api/v1/admin/gift-creator-earnings')
+        $this->getJson('/api/admin/gift-creator-earnings')
             ->assertOk()
             ->assertJsonPath('data.creators.0.earnings', 8000)
             ->assertJsonPath('data.creators.0.giftsReceived', 6)

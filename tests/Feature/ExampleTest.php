@@ -15,6 +15,6 @@ class ExampleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'DeyMake API')
             ->assertJsonPath('data.status', 'ok')
-            ->assertJsonPath('data.health', url('/api/v1/health'));
+            ->assertJsonPath('data.health', url('/api/health'));
     }
 }

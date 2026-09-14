@@ -22,7 +22,7 @@ class VideoHashtagsOverrideTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $response = $this->postJson('/api/v1/videos', [
+        $response = $this->postJson('/api/videos', [
             'uploadId' => $upload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -51,7 +51,7 @@ class VideoHashtagsOverrideTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $response = $this->postJson('/api/v1/videos', [
+        $response = $this->postJson('/api/videos', [
             'uploadId' => $upload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -76,7 +76,7 @@ class VideoHashtagsOverrideTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $response = $this->postJson('/api/v1/videos', [
+        $response = $this->postJson('/api/videos', [
             'uploadId' => $upload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -98,7 +98,7 @@ class VideoHashtagsOverrideTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos', [
+        $this->postJson('/api/videos', [
             'uploadId' => $upload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -124,7 +124,7 @@ class VideoHashtagsOverrideTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->patchJson('/api/v1/videos/'.$video->id, [
+        $this->patchJson('/api/videos/'.$video->id, [
             'hashtags' => ['naijamusic', '#lagos'],
         ])
             ->assertOk()
@@ -139,7 +139,7 @@ class VideoHashtagsOverrideTest extends TestCase
             'user_id' => $user->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-'.$user->id.'/clip.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-'.$user->id.'/clip.mp4',
             'original_name' => 'clip.mp4',
             'mime_type' => 'video/mp4',
             'size' => 1024,

@@ -39,7 +39,7 @@ class PaymentFlowTest extends TestCase
             ], 200),
         ]);
 
-        $response = $this->postJson('/api/v1/payments/initialize', [
+        $response = $this->postJson('/api/payments/initialize', [
             'amount' => 500000,
             'purpose' => 'coin_purchase',
         ]);
@@ -60,7 +60,7 @@ class PaymentFlowTest extends TestCase
         config(['services.paystack.secret_key' => '']);
         Sanctum::actingAs(User::factory()->create());
 
-        $this->postJson('/api/v1/payments/initialize', ['amount' => 500000])
+        $this->postJson('/api/payments/initialize', ['amount' => 500000])
             ->assertStatus(503);
     }
 
@@ -86,7 +86,7 @@ class PaymentFlowTest extends TestCase
             ], 200),
         ]);
 
-        $this->getJson('/api/v1/payments/verify/DMK_VERIFY_1')
+        $this->getJson('/api/payments/verify/DMK_VERIFY_1')
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'successful');
 
@@ -106,7 +106,7 @@ class PaymentFlowTest extends TestCase
             ], 200),
         ]);
 
-        $this->getJson('/api/v1/payments/verify/DMK_VERIFY_2')
+        $this->getJson('/api/payments/verify/DMK_VERIFY_2')
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'abandoned');
 

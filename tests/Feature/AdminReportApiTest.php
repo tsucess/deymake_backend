@@ -43,7 +43,7 @@ class AdminReportApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/reports')
+        $this->getJson('/api/admin/reports')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -63,51 +63,51 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/reports')
+        $this->getJson('/api/admin/reports')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.reports_retrieved'))
             ->assertJsonPath('meta.summary.totalReports', 3)
             ->assertJsonPath('meta.summary.pendingReports', 2)
             ->assertJsonPath('meta.summary.reviewedReports', 1);
 
-        $this->getJson('/api/v1/admin/reports?q=grace.h')
+        $this->getJson('/api/admin/reports?q=grace.h')
             ->assertOk()
             ->assertJsonCount(2, 'data.reports');
 
-        $this->getJson('/api/v1/admin/reports?q=Unique Reported')
+        $this->getJson('/api/admin/reports?q=Unique Reported')
             ->assertOk()
             ->assertJsonCount(2, 'data.reports');
 
-        $this->getJson('/api/v1/admin/reports?q='.$nudity->id)
+        $this->getJson('/api/admin/reports?q='.$nudity->id)
             ->assertOk()
             ->assertJsonPath('data.reports.0.id', $nudity->id);
 
-        $this->getJson('/api/v1/admin/reports?status=reviewed')
+        $this->getJson('/api/admin/reports?status=reviewed')
             ->assertOk()
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.id', $copyright->id);
 
-        $this->getJson('/api/v1/admin/reports?reason=nudity')
+        $this->getJson('/api/admin/reports?reason=nudity')
             ->assertOk()
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.id', $nudity->id);
 
-        $this->getJson('/api/v1/admin/reports?severity=high')
+        $this->getJson('/api/admin/reports?severity=high')
             ->assertOk()
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.severity', 'high');
 
-        $this->getJson('/api/v1/admin/reports?severity=low')
+        $this->getJson('/api/admin/reports?severity=low')
             ->assertOk()
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.id', $spam->id);
 
-        $this->getJson('/api/v1/admin/reports?type=live')
+        $this->getJson('/api/admin/reports?type=live')
             ->assertOk()
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.id', $spam->id);
 
-        $this->getJson('/api/v1/admin/reports?to=2000-01-01')
+        $this->getJson('/api/admin/reports?to=2000-01-01')
             ->assertOk()
             ->assertJsonCount(0, 'data.reports');
     }
@@ -132,7 +132,7 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/reports/'.$report->id)
+        $this->getJson('/api/admin/reports/'.$report->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.report_retrieved'))
             ->assertJsonPath('data.report.id', $report->id)
@@ -154,7 +154,7 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, [
+        $this->patchJson('/api/admin/reports/'.$report->id, [
             'status' => 'reviewed',
             'adminNotes' => 'Confirmed the violation.',
         ])
@@ -175,7 +175,7 @@ class AdminReportApiTest extends TestCase
             'auditable_id' => $report->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['status' => 'dismissed'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['status' => 'dismissed'])
             ->assertOk()
             ->assertJsonPath('data.report.status', 'dismissed');
 
@@ -185,7 +185,7 @@ class AdminReportApiTest extends TestCase
             'auditable_id' => $report->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['status' => 'escalated'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['status' => 'escalated'])
             ->assertOk()
             ->assertJsonPath('data.report.status', 'escalated');
 
@@ -207,7 +207,7 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, [
+        $this->patchJson('/api/admin/reports/'.$report->id, [
             'status' => 'reviewed',
             'contentAction' => 'restrict',
         ])
@@ -225,7 +225,7 @@ class AdminReportApiTest extends TestCase
             'auditable_id' => $video->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['contentAction' => 'remove'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['contentAction' => 'remove'])
             ->assertOk()
             ->assertJsonPath('data.report.video.moderationStatus', 'removed');
 
@@ -235,7 +235,7 @@ class AdminReportApiTest extends TestCase
             'auditable_id' => $video->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['contentAction' => 'restore'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['contentAction' => 'restore'])
             ->assertOk()
             ->assertJsonPath('data.report.video.moderationStatus', 'visible');
 
@@ -257,7 +257,7 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, [
+        $this->patchJson('/api/admin/reports/'.$report->id, [
             'status' => 'reviewed',
             'notifyReporter' => true,
         ])->assertOk();
@@ -283,11 +283,11 @@ class AdminReportApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['status' => 'bogus'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['status' => 'bogus'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('status');
 
-        $this->patchJson('/api/v1/admin/reports/'.$report->id, ['contentAction' => 'nuke'])
+        $this->patchJson('/api/admin/reports/'.$report->id, ['contentAction' => 'nuke'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('contentAction');
     }

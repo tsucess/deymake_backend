@@ -866,7 +866,7 @@
             ],
             "support": {
                 "issues": "https://github.com/fruitcake/php-cors/issues",
-                "source": "https://github.com/fruitcake/php-cors/tree/v1.4.0"
+                "source": "https://github.com/fruitcake/php-cors/tree.4.0"
             },
             "funding": [
                 {
@@ -928,7 +928,7 @@
             ],
             "support": {
                 "issues": "https://github.com/GrahamCampbell/Result-Type/issues",
-                "source": "https://github.com/GrahamCampbell/Result-Type/tree/v1.1.4"
+                "source": "https://github.com/GrahamCampbell/Result-Type/tree.1.4"
             },
             "funding": [
                 {
@@ -1336,7 +1336,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/uri-template/issues",
-                "source": "https://github.com/guzzle/uri-template/tree/v1.0.5"
+                "source": "https://github.com/guzzle/uri-template/tree.0.5"
             },
             "funding": [
                 {
@@ -1710,7 +1710,7 @@
             ],
             "support": {
                 "issues": "https://github.com/laravel/reverb/issues",
-                "source": "https://github.com/laravel/reverb/tree/v1.10.0"
+                "source": "https://github.com/laravel/reverb/tree.10.0"
             },
             "time": "2026-03-29T14:51:57+00:00"
         },
@@ -2734,7 +2734,7 @@
             ],
             "support": {
                 "issues": "https://github.com/nette/schema/issues",
-                "source": "https://github.com/nette/schema/tree/v1.3.5"
+                "source": "https://github.com/nette/schema/tree.3.5"
             },
             "time": "2026-02-23T03:47:12+00:00"
         },
@@ -4016,7 +4016,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/cache/issues",
-                "source": "https://github.com/reactphp/cache/tree/v1.2.0"
+                "source": "https://github.com/reactphp/cache/tree.2.0"
             },
             "funding": [
                 {
@@ -4092,7 +4092,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/dns/issues",
-                "source": "https://github.com/reactphp/dns/tree/v1.14.0"
+                "source": "https://github.com/reactphp/dns/tree.14.0"
             },
             "funding": [
                 {
@@ -4164,7 +4164,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/event-loop/issues",
-                "source": "https://github.com/reactphp/event-loop/tree/v1.6.0"
+                "source": "https://github.com/reactphp/event-loop/tree.6.0"
             },
             "funding": [
                 {
@@ -4316,7 +4316,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/promise-timer/issues",
-                "source": "https://github.com/reactphp/promise-timer/tree/v1.11.0"
+                "source": "https://github.com/reactphp/promise-timer/tree.11.0"
             },
             "funding": [
                 {
@@ -4396,7 +4396,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/socket/issues",
-                "source": "https://github.com/reactphp/socket/tree/v1.17.0"
+                "source": "https://github.com/reactphp/socket/tree.17.0"
             },
             "funding": [
                 {
@@ -4474,7 +4474,7 @@
             ],
             "support": {
                 "issues": "https://github.com/reactphp/stream/issues",
-                "source": "https://github.com/reactphp/stream/tree/v1.4.0"
+                "source": "https://github.com/reactphp/stream/tree.4.0"
             },
             "funding": [
                 {
@@ -5542,7 +5542,7 @@
                 "portable"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-ctype/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-ctype/tree.33.0"
             },
             "funding": [
                 {
@@ -5624,7 +5624,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-intl-grapheme/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-intl-grapheme/tree.33.0"
             },
             "funding": [
                 {
@@ -5711,7 +5711,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-intl-idn/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-intl-idn/tree.33.0"
             },
             "funding": [
                 {
@@ -5796,7 +5796,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-intl-normalizer/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-intl-normalizer/tree.33.0"
             },
             "funding": [
                 {
@@ -5881,7 +5881,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-mbstring/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-mbstring/tree.33.0"
             },
             "funding": [
                 {
@@ -5965,7 +5965,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-php80/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-php80/tree.33.0"
             },
             "funding": [
                 {
@@ -6045,7 +6045,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-php83/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-php83/tree.33.0"
             },
             "funding": [
                 {
@@ -6125,7 +6125,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-php84/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-php84/tree.33.0"
             },
             "funding": [
                 {
@@ -6205,7 +6205,7 @@
                 "shim"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-php85/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-php85/tree.33.0"
             },
             "funding": [
                 {
@@ -6288,7 +6288,7 @@
                 "uuid"
             ],
             "support": {
-                "source": "https://github.com/symfony/polyfill-uuid/tree/v1.33.0"
+                "source": "https://github.com/symfony/polyfill-uuid/tree.33.0"
             },
             "funding": [
                 {
@@ -7022,7 +7022,7 @@
             "description": "Token builder for agora.io",
             "support": {
                 "issues": "https://github.com/taylanunutmaz/agora-token-builder/issues",
-                "source": "https://github.com/taylanunutmaz/agora-token-builder/tree/v1.1"
+                "source": "https://github.com/taylanunutmaz/agora-token-builder/tree.1"
             },
             "time": "2021-01-25T16:34:58+00:00"
         },
@@ -7350,7 +7350,7 @@
             ],
             "support": {
                 "issues": "https://github.com/FakerPHP/Faker/issues",
-                "source": "https://github.com/FakerPHP/Faker/tree/v1.24.1"
+                "source": "https://github.com/FakerPHP/Faker/tree.24.1"
             },
             "time": "2024-11-21T13:46:39+00:00"
         },

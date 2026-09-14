@@ -41,7 +41,7 @@ class CollaborationInviteApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $inviteResponse = $this->postJson('/api/v1/collaborations/invites', [
+        $inviteResponse = $this->postJson('/api/collaborations/invites', [
             'inviteeId' => $invitee->id,
             'videoId' => $video->id,
             'type' => 'duet',
@@ -66,14 +66,14 @@ class CollaborationInviteApiTest extends TestCase
 
         Sanctum::actingAs($invitee);
 
-        $this->getJson('/api/v1/collaborations/invites?scope=inbox&status=pending')
+        $this->getJson('/api/collaborations/invites?scope=inbox&status=pending')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.collaborations.invites_retrieved'))
             ->assertJsonCount(1, 'data.invites')
             ->assertJsonPath('data.invites.0.id', $inviteId)
             ->assertJsonPath('data.invites.0.canRespond', true);
 
-        $this->patchJson('/api/v1/collaborations/invites/'.$inviteId, [
+        $this->patchJson('/api/collaborations/invites/'.$inviteId, [
             'action' => 'accept',
         ])
             ->assertOk()
@@ -95,7 +95,7 @@ class CollaborationInviteApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/collaborations/invites?scope=sent&status=accepted')
+        $this->getJson('/api/collaborations/invites?scope=sent&status=accepted')
             ->assertOk()
             ->assertJsonCount(1, 'data.invites')
             ->assertJsonPath('data.invites.0.id', $inviteId)
@@ -126,7 +126,7 @@ class CollaborationInviteApiTest extends TestCase
 
         Sanctum::actingAs($invitee);
 
-        $this->patchJson('/api/v1/collaborations/invites/'.$firstInvite->id, [
+        $this->patchJson('/api/collaborations/invites/'.$firstInvite->id, [
             'action' => 'reject',
         ])
             ->assertOk()
@@ -148,7 +148,7 @@ class CollaborationInviteApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->patchJson('/api/v1/collaborations/invites/'.$secondInvite->id, [
+        $this->patchJson('/api/collaborations/invites/'.$secondInvite->id, [
             'action' => 'cancel',
         ])
             ->assertOk()

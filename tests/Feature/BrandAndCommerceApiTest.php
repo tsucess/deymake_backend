@@ -56,7 +56,7 @@ class BrandAndCommerceApiTest extends TestCase
 
         Sanctum::actingAs($brand);
 
-        $campaignId = $this->postJson('/api/v1/brand/campaigns', [
+        $campaignId = $this->postJson('/api/brand/campaigns', [
             'title' => 'Campus Dance Push',
             'objective' => 'awareness',
             'status' => 'active',
@@ -71,14 +71,14 @@ class BrandAndCommerceApiTest extends TestCase
             ->assertJsonPath('data.campaign.status', 'active')
             ->json('data.campaign.id');
 
-        $this->getJson('/api/v1/brand/campaigns/'.$campaignId.'/matches?verifiedOnly=1&hasActivePlans=1')
+        $this->getJson('/api/brand/campaigns/'.$campaignId.'/matches?verifiedOnly=1&hasActivePlans=1')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.brand_campaigns.matches_retrieved'))
             ->assertJsonPath('data.creators.0.profile.id', $creator->id);
 
         Sanctum::actingAs($brand);
 
-        $proposalId = $this->postJson('/api/v1/sponsorships/proposals', [
+        $proposalId = $this->postJson('/api/sponsorships/proposals', [
             'recipientId' => $creator->id,
             'brandCampaignId' => $campaignId,
             'title' => 'Dance product placement',
@@ -94,12 +94,12 @@ class BrandAndCommerceApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/sponsorships/proposals?scope=inbox')
+        $this->getJson('/api/sponsorships/proposals?scope=inbox')
             ->assertOk()
             ->assertJsonPath('data.proposals.0.id', $proposalId)
             ->assertJsonPath('data.proposals.0.status', 'pending');
 
-        $this->patchJson('/api/v1/sponsorships/proposals/'.$proposalId, ['action' => 'accept'])
+        $this->patchJson('/api/sponsorships/proposals/'.$proposalId, ['action' => 'accept'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.sponsorships.updated'))
             ->assertJsonPath('data.proposal.status', 'accepted');
@@ -112,7 +112,7 @@ class BrandAndCommerceApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $productId = $this->postJson('/api/v1/merch/products', [
+        $productId = $this->postJson('/api/merch/products', [
             'name' => 'DeyMake Hoodie',
             'description' => 'Premium creator hoodie.',
             'priceAmount' => 8000,
@@ -125,14 +125,14 @@ class BrandAndCommerceApiTest extends TestCase
             ->assertJsonPath('data.product.name', 'DeyMake Hoodie')
             ->json('data.product.id');
 
-        $this->getJson('/api/v1/users/'.$creator->id.'/merch')
+        $this->getJson('/api/users/'.$creator->id.'/merch')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.merch.products_retrieved'))
             ->assertJsonPath('data.products.0.id', $productId);
 
         Sanctum::actingAs($buyer);
 
-        $orderId = $this->postJson('/api/v1/merch/products/'.$productId.'/orders', [
+        $orderId = $this->postJson('/api/merch/products/'.$productId.'/orders', [
             'quantity' => 2,
             'shippingAddress' => ['city' => 'Lagos', 'line1' => '12 Campus Road'],
         ])
@@ -141,7 +141,7 @@ class BrandAndCommerceApiTest extends TestCase
             ->assertJsonPath('data.order.totalAmount', 16000)
             ->json('data.order.id');
 
-        $this->getJson('/api/v1/merch/orders/mine')
+        $this->getJson('/api/merch/orders/mine')
             ->assertOk()
             ->assertJsonPath('data.orders.0.id', $orderId)
             ->assertJsonPath('data.orders.0.status', 'pending');
@@ -157,30 +157,30 @@ class BrandAndCommerceApiTest extends TestCase
             ], 200),
         ]);
 
-        $paymentReference = $this->postJson('/api/v1/payments/initialize', [
+        $paymentReference = $this->postJson('/api/payments/initialize', [
             'amount' => 16000,
             'purpose' => 'merch_order',
             'purposeId' => $orderId,
             'email' => $buyer->email,
         ])->assertCreated()->json('data.reference');
 
-        $this->getJson('/api/v1/payments/verify/'.$paymentReference)
+        $this->getJson('/api/payments/verify/'.$paymentReference)
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'successful');
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/merch/orders/received')
+        $this->getJson('/api/merch/orders/received')
             ->assertOk()
             ->assertJsonPath('data.orders.0.id', $orderId)
             ->assertJsonPath('data.orders.0.buyer.id', $buyer->id);
 
-        $this->patchJson('/api/v1/merch/orders/'.$orderId, ['action' => 'fulfill'])
+        $this->patchJson('/api/merch/orders/'.$orderId, ['action' => 'fulfill'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.merch.order_updated'))
             ->assertJsonPath('data.order.status', 'fulfilled');
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.grossRevenue', 16000)
             ->assertJsonPath('data.summary.earnings.availableBalance', 16000);

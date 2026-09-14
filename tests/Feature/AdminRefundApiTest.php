@@ -44,7 +44,7 @@ class AdminRefundApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/refunds')->assertForbidden();
+        $this->getJson('/api/admin/refunds')->assertForbidden();
     }
 
     public function test_admin_can_list_and_filter_refund_requests(): void
@@ -73,12 +73,12 @@ class AdminRefundApiTest extends TestCase
             'amount' => 6000,
         ]);
 
-        $this->getJson('/api/v1/admin/refunds?q=Damaged&status=pending')
+        $this->getJson('/api/admin/refunds?q=Damaged&status=pending')
             ->assertOk()
             ->assertJsonPath('data.refunds.0.id', $target->id)
             ->assertJsonPath('meta.summary.pending', 1);
 
-        $this->getJson('/api/v1/admin/refunds/'.$target->id)
+        $this->getJson('/api/admin/refunds/'.$target->id)
             ->assertOk()
             ->assertJsonPath('data.refund.id', $target->id)
             ->assertJsonPath('data.refund.order.id', $order->id);
@@ -106,7 +106,7 @@ class AdminRefundApiTest extends TestCase
             'reason' => 'Not as advertised',
         ]);
 
-        $this->patchJson('/api/v1/admin/refunds/'.$refund->id, [
+        $this->patchJson('/api/admin/refunds/'.$refund->id, [
             'status' => 'approved',
             'adminNotes' => 'Approved after review',
         ])
@@ -114,7 +114,7 @@ class AdminRefundApiTest extends TestCase
             ->assertJsonPath('data.refund.status', 'approved')
             ->assertJsonPath('data.refund.adminNotes', 'Approved after review');
 
-        $this->postJson('/api/v1/admin/refunds/'.$refund->id.'/process')
+        $this->postJson('/api/admin/refunds/'.$refund->id.'/process')
             ->assertOk()
             ->assertJsonPath('data.refund.status', 'completed');
 

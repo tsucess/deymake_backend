@@ -42,24 +42,24 @@ class GrowthAndToolingApiTest extends TestCase
 
         $student = User::factory()->create();
 
-        $this->getJson('/api/v1/academy/courses')
+        $this->getJson('/api/academy/courses')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.academy.courses_retrieved'))
             ->assertJsonPath('data.courses.0.id', $course->id);
 
         Sanctum::actingAs($student);
 
-        $this->postJson('/api/v1/academy/courses/'.$course->id.'/enroll')
+        $this->postJson('/api/academy/courses/'.$course->id.'/enroll')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.academy.enrolled'))
             ->assertJsonPath('data.enrollment.course.id', $course->id);
 
-        $this->postJson('/api/v1/academy/lessons/'.$lesson->id.'/complete')
+        $this->postJson('/api/academy/lessons/'.$lesson->id.'/complete')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.academy.lesson_completed'))
             ->assertJsonPath('data.enrollment.progressPercent', 100);
 
-        $this->getJson('/api/v1/academy/me')
+        $this->getJson('/api/academy/me')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.academy.learning_retrieved'))
             ->assertJsonPath('data.enrollments.0.course.id', $course->id)
@@ -93,7 +93,7 @@ class GrowthAndToolingApiTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $projectId = $this->postJson('/api/v1/ai/studio/projects', [
+        $projectId = $this->postJson('/api/ai/studio/projects', [
             'sourceVideoId' => $video->id,
             'sourceUploadId' => $upload->id,
             'title' => 'Creator Story Cutdown',
@@ -104,13 +104,13 @@ class GrowthAndToolingApiTest extends TestCase
             ->assertJsonPath('data.project.status', 'draft')
             ->json('data.project.id');
 
-        $this->postJson('/api/v1/ai/studio/projects/'.$projectId.'/generate')
+        $this->postJson('/api/ai/studio/projects/'.$projectId.'/generate')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.ai_studio.generated'))
             ->assertJsonPath('data.project.status', 'generated')
             ->assertJsonPath('data.project.output.seed', 'Creator Story Cutdown');
 
-        $queueId = $this->postJson('/api/v1/uploads/offline-queue', [
+        $queueId = $this->postJson('/api/uploads/offline-queue', [
             'clientReference' => 'ios-device-queue-1',
             'type' => 'video',
             'title' => 'Offline Campus Story',
@@ -123,7 +123,7 @@ class GrowthAndToolingApiTest extends TestCase
             ->assertJsonPath('data.item.status', 'queued')
             ->json('data.item.id');
 
-        $this->patchJson('/api/v1/uploads/offline-queue/'.$queueId, [
+        $this->patchJson('/api/uploads/offline-queue/'.$queueId, [
             'status' => 'synced',
             'videoId' => $video->id,
         ])
@@ -131,7 +131,7 @@ class GrowthAndToolingApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.offline_uploads.updated'))
             ->assertJsonPath('data.item.videoId', $video->id);
 
-        $this->getJson('/api/v1/uploads/offline-queue')
+        $this->getJson('/api/uploads/offline-queue')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.offline_uploads.retrieved'))
             ->assertJsonPath('data.items.0.id', $queueId)
@@ -167,7 +167,7 @@ class GrowthAndToolingApiTest extends TestCase
             'views_count' => 900,
         ]);
 
-        $this->getJson('/api/v1/talent/discovery?categoryId='.$category->id.'&verifiedOnly=1&hasActivePlans=1')
+        $this->getJson('/api/talent/discovery?categoryId='.$category->id.'&verifiedOnly=1&hasActivePlans=1')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.talent_discovery.retrieved'))
             ->assertJsonPath('data.creators.0.profile.id', $creator->id)

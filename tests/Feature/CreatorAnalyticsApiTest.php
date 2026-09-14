@@ -147,7 +147,7 @@ class CreatorAnalyticsApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/me/analytics?period=30d&limit=3')
+        $this->getJson('/api/me/analytics?period=30d&limit=3')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.analytics.dashboard_retrieved'))
             ->assertJsonPath('data.overview.videos.total', 3)
@@ -231,7 +231,7 @@ class CreatorAnalyticsApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/me/analytics/videos/'.$video->id.'?period=30d')
+        $this->getJson('/api/me/analytics/videos/'.$video->id.'?period=30d')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.analytics.video_retrieved'))
             ->assertJsonPath('data.video.id', $video->id)

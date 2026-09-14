@@ -21,7 +21,7 @@ class VideoResource extends JsonResource
             ? ($this->upload?->processed_url ?: $this->media_url ?: $this->upload?->url)
             : ($this->media_url ?: $this->upload?->url);
         if ($this->upload && $this->upload->disk !== 'cloudinary' && $this->upload->id) {
-            $mediaUrl = url('/api/v1/uploads/'.$this->upload->id.'/media');
+            $mediaUrl = url('/api/uploads/'.$this->upload->id.'/media');
         }
         $streamUrl = null;
 

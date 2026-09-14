@@ -25,7 +25,7 @@ class AdminMerchProductApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/products')->assertForbidden();
+        $this->getJson('/api/admin/products')->assertForbidden();
     }
 
     public function test_index_returns_products_with_summary(): void
@@ -35,7 +35,7 @@ class AdminMerchProductApiTest extends TestCase
         MerchProduct::factory()->draft()->create();
         MerchProduct::factory()->outOfStock()->create();
 
-        $this->getJson('/api/v1/admin/products')
+        $this->getJson('/api/admin/products')
             ->assertOk()
             ->assertJsonPath('meta.summary.totalProducts', 4)
             ->assertJsonPath('meta.summary.draftProducts', 1)
@@ -49,7 +49,7 @@ class AdminMerchProductApiTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->getJson('/api/v1/admin/products')
+        $this->getJson('/api/admin/products')
             ->assertOk()
             ->assertJsonPath('meta.summary.totalProducts', 0)
             ->assertJsonPath('meta.summary.totalInventory', 0);
@@ -62,16 +62,16 @@ class AdminMerchProductApiTest extends TestCase
         MerchProduct::factory()->for($creator, 'creator')->create(['name' => 'Signature Hoodie']);
         MerchProduct::factory()->archived()->create(['name' => 'Old Cap']);
 
-        $this->getJson('/api/v1/admin/products?q=Hoodie')
+        $this->getJson('/api/admin/products?q=Hoodie')
             ->assertOk()
             ->assertJsonPath('meta.products.total', 1)
             ->assertJsonPath('data.products.0.name', 'Signature Hoodie');
 
-        $this->getJson('/api/v1/admin/products?creatorId='.$creator->id)
+        $this->getJson('/api/admin/products?creatorId='.$creator->id)
             ->assertOk()
             ->assertJsonPath('meta.products.total', 1);
 
-        $this->getJson('/api/v1/admin/products?status=archived')
+        $this->getJson('/api/admin/products?status=archived')
             ->assertOk()
             ->assertJsonPath('meta.products.total', 1)
             ->assertJsonPath('data.products.0.name', 'Old Cap');
@@ -86,7 +86,7 @@ class AdminMerchProductApiTest extends TestCase
             'quantity' => 3,
         ]);
 
-        $this->getJson('/api/v1/admin/products/'.$product->id)
+        $this->getJson('/api/admin/products/'.$product->id)
             ->assertOk()
             ->assertJsonPath('data.product.id', $product->id)
             ->assertJsonPath('data.stats.unitsSold', 3)
@@ -98,7 +98,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $creator = User::factory()->create();
 
-        $response = $this->postJson('/api/v1/admin/products', [
+        $response = $this->postJson('/api/admin/products', [
             'creatorId' => $creator->id,
             'name' => 'Limited Tee',
             'priceAmount' => 500000,
@@ -118,7 +118,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $creator = User::factory()->create();
 
-        $this->postJson('/api/v1/admin/products', [
+        $this->postJson('/api/admin/products', [
             'creatorId' => $creator->id,
             'name' => 'Bad Deal',
             'priceAmount' => 1000,
@@ -131,7 +131,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $product = MerchProduct::factory()->create(['name' => 'Before']);
 
-        $this->patchJson('/api/v1/admin/products/'.$product->id, ['name' => 'After'])
+        $this->patchJson('/api/admin/products/'.$product->id, ['name' => 'After'])
             ->assertOk()
             ->assertJsonPath('data.product.name', 'After');
 
@@ -143,7 +143,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $product = MerchProduct::factory()->create();
 
-        $this->deleteJson('/api/v1/admin/products/'.$product->id)->assertOk();
+        $this->deleteJson('/api/admin/products/'.$product->id)->assertOk();
 
         $this->assertDatabaseMissing('merch_products', ['id' => $product->id]);
     }
@@ -153,11 +153,11 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $product = MerchProduct::factory()->draft()->create();
 
-        $this->postJson('/api/v1/admin/products/'.$product->id.'/publish', ['action' => 'publish'])
+        $this->postJson('/api/admin/products/'.$product->id.'/publish', ['action' => 'publish'])
             ->assertOk()
             ->assertJsonPath('data.product.status', 'active');
 
-        $this->postJson('/api/v1/admin/products/'.$product->id.'/publish', ['action' => 'unpublish'])
+        $this->postJson('/api/admin/products/'.$product->id.'/publish', ['action' => 'unpublish'])
             ->assertOk()
             ->assertJsonPath('data.product.status', 'archived');
     }
@@ -167,11 +167,11 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $product = MerchProduct::factory()->create(['inventory_count' => 10]);
 
-        $this->postJson('/api/v1/admin/products/'.$product->id.'/inventory', ['delta' => 5])
+        $this->postJson('/api/admin/products/'.$product->id.'/inventory', ['delta' => 5])
             ->assertOk()
             ->assertJsonPath('data.product.inventoryCount', 15);
 
-        $this->postJson('/api/v1/admin/products/'.$product->id.'/inventory', ['set' => 3])
+        $this->postJson('/api/admin/products/'.$product->id.'/inventory', ['set' => 3])
             ->assertOk()
             ->assertJsonPath('data.product.inventoryCount', 3);
     }
@@ -181,7 +181,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         $product = MerchProduct::factory()->create(['inventory_count' => 2]);
 
-        $this->postJson('/api/v1/admin/products/'.$product->id.'/inventory', ['delta' => -5])
+        $this->postJson('/api/admin/products/'.$product->id.'/inventory', ['delta' => -5])
             ->assertStatus(422)
             ->assertJsonValidationErrors('delta');
 
@@ -193,7 +193,7 @@ class AdminMerchProductApiTest extends TestCase
         $this->actingAsAdmin();
         MerchProduct::factory()->create(['name' => 'Exported Item']);
 
-        $response = $this->get('/api/v1/admin/products/export');
+        $response = $this->get('/api/admin/products/export');
 
         $response->assertOk();
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));

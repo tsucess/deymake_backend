@@ -24,7 +24,7 @@ class AdminDiscountApiTest extends TestCase
     {
         $this->admin();
 
-        $response = $this->postJson('/api/v1/admin/discounts', [
+        $response = $this->postJson('/api/admin/discounts', [
             'name' => 'Summer Sale',
             'code' => 'SUMMER10',
             'type' => 'percentage',
@@ -38,19 +38,19 @@ class AdminDiscountApiTest extends TestCase
         $response->assertCreated();
         $discountId = $response->json('data.discount.id');
 
-        $this->getJson('/api/v1/admin/discounts')
+        $this->getJson('/api/admin/discounts')
             ->assertOk()
             ->assertJsonPath('data.discounts.0.code', 'SUMMER10');
 
-        $this->patchJson('/api/v1/admin/discounts/'.$discountId, [
+        $this->patchJson('/api/admin/discounts/'.$discountId, [
             'name' => 'Summer Sale Updated',
             'value' => 15,
         ])->assertOk();
 
-        $this->postJson('/api/v1/admin/discounts/'.$discountId.'/toggle')
+        $this->postJson('/api/admin/discounts/'.$discountId.'/toggle')
             ->assertOk();
 
-        $this->deleteJson('/api/v1/admin/discounts/'.$discountId)
+        $this->deleteJson('/api/admin/discounts/'.$discountId)
             ->assertOk();
     }
 
@@ -65,7 +65,7 @@ class AdminDiscountApiTest extends TestCase
             'inventory_count' => 5,
         ]);
 
-        $this->postJson('/api/v1/admin/discounts', [
+        $this->postJson('/api/admin/discounts', [
             'name' => 'Creator Promo',
             'code' => 'CREATOR5',
             'type' => 'percentage',
@@ -77,7 +77,7 @@ class AdminDiscountApiTest extends TestCase
 
         Sanctum::actingAs($buyer);
 
-        $this->postJson('/api/v1/merch/products/'.$product->id.'/orders', [
+        $this->postJson('/api/merch/products/'.$product->id.'/orders', [
             'quantity' => 1,
             'discountCode' => 'CREATOR5',
         ])

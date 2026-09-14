@@ -21,7 +21,7 @@ class NotificationApiTest extends TestCase
         UserNotification::create(['user_id' => $user->id, 'type' => 'gift', 'title' => 'Gift', 'body' => 'Sent a gift']);
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/v1/notifications?type=like&per_page=1')
+        $this->getJson('/api/notifications?type=like&per_page=1')
             ->assertOk()
             ->assertJsonCount(1, 'data.notifications')
             ->assertJsonPath('meta.notifications.total', 2);
@@ -36,9 +36,9 @@ class NotificationApiTest extends TestCase
         CoinPurchase::factory()->create(['user_id' => $user->id, 'coins' => 500, 'status' => 'completed']);
         Sanctum::actingAs($user);
 
-        $activity = $this->getJson('/api/v1/activity')->assertOk()->json('data.activity');
+        $activity = $this->getJson('/api/activity')->assertOk()->json('data.activity');
         $this->assertTrue(collect($activity)->contains('type', 'coin_purchase'));
-        $this->deleteJson('/api/v1/notifications')->assertOk();
+        $this->deleteJson('/api/notifications')->assertOk();
         $this->assertDatabaseCount('user_notifications', 1);
     }
 }

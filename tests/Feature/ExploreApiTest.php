@@ -56,7 +56,7 @@ class ExploreApiTest extends TestCase
             'moderation_status' => 'visible',
         ]);
 
-        $response = $this->getJson('/api/v1/explore')
+        $response = $this->getJson('/api/explore')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.explore.retrieved'))
             ->assertJsonStructure([
@@ -109,7 +109,7 @@ class ExploreApiTest extends TestCase
             'views_count' => 200,
         ]);
 
-        $response = $this->getJson('/api/v1/explore/videos?category=music')
+        $response = $this->getJson('/api/explore/videos?category=music')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.explore.videos_retrieved'))
             ->assertJsonPath('data.activeCategory.slug', 'music');
@@ -134,7 +134,7 @@ class ExploreApiTest extends TestCase
             'views_count' => 50,
         ]);
 
-        $this->getJson('/api/v1/explore?category=trending')
+        $this->getJson('/api/explore?category=trending')
             ->assertOk()
             ->assertJsonPath('data.activeCategory', null);
     }

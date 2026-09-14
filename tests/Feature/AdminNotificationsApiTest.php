@@ -24,7 +24,7 @@ class AdminNotificationsApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/notifications')->assertForbidden();
+        $this->getJson('/api/admin/notifications')->assertForbidden();
     }
 
     public function test_admin_can_list_and_filter_notifications(): void
@@ -53,13 +53,13 @@ class AdminNotificationsApiTest extends TestCase
             'read_at' => now(),
         ]);
 
-        $this->getJson('/api/v1/admin/notifications?q=comment&status=unread')
+        $this->getJson('/api/admin/notifications?q=comment&status=unread')
             ->assertOk()
             ->assertJsonPath('data.notifications.0.id', $target->id)
             ->assertJsonPath('meta.summary.unread', 1)
             ->assertJsonPath('meta.summary.total', 2);
 
-        $this->getJson('/api/v1/admin/notifications/'.$target->id)
+        $this->getJson('/api/admin/notifications/'.$target->id)
             ->assertNotFound();
     }
 }

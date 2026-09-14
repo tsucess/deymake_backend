@@ -59,7 +59,7 @@ class AdminPaymentApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/payments')->assertForbidden();
+        $this->getJson('/api/admin/payments')->assertForbidden();
     }
 
     public function test_index_returns_payments_with_summary(): void
@@ -69,7 +69,7 @@ class AdminPaymentApiTest extends TestCase
         Payment::factory()->failed()->create();
         Payment::factory()->refunded()->create();
 
-        $this->getJson('/api/v1/admin/payments')
+        $this->getJson('/api/admin/payments')
             ->assertOk()
             ->assertJsonPath('meta.summary.totalPayments', 5)
             ->assertJsonPath('meta.summary.successful', 3)
@@ -85,7 +85,7 @@ class AdminPaymentApiTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->getJson('/api/v1/admin/payments')
+        $this->getJson('/api/admin/payments')
             ->assertOk()
             ->assertJsonPath('meta.summary.totalPayments', 0)
             ->assertJsonPath('meta.summary.totalRevenue', 0);
@@ -101,16 +101,16 @@ class AdminPaymentApiTest extends TestCase
         ]);
         Payment::factory()->create(['reference' => 'DMK_OTHER_2', 'status' => 'failed']);
 
-        $this->getJson('/api/v1/admin/payments?q=FINDME')
+        $this->getJson('/api/admin/payments?q=FINDME')
             ->assertOk()
             ->assertJsonPath('meta.payments.total', 1)
             ->assertJsonPath('data.payments.0.reference', 'DMK_FINDME_1');
 
-        $this->getJson('/api/v1/admin/payments?status=failed')
+        $this->getJson('/api/admin/payments?status=failed')
             ->assertOk()
             ->assertJsonPath('meta.payments.total', 1);
 
-        $this->getJson('/api/v1/admin/payments?userId='.$target->user_id)
+        $this->getJson('/api/admin/payments?userId='.$target->user_id)
             ->assertOk()
             ->assertJsonPath('meta.payments.total', 1);
     }
@@ -120,7 +120,7 @@ class AdminPaymentApiTest extends TestCase
         $this->actingAsAdmin();
         $payment = Payment::factory()->create();
 
-        $this->getJson('/api/v1/admin/payments/'.$payment->id)
+        $this->getJson('/api/admin/payments/'.$payment->id)
             ->assertOk()
             ->assertJsonPath('data.payment.id', $payment->id)
             ->assertJsonStructure(['data' => ['payment', 'webhookEvents']]);
@@ -132,7 +132,7 @@ class AdminPaymentApiTest extends TestCase
         $this->fakeVerify('success');
         $payment = Payment::factory()->pending()->create();
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/verify')
+        $this->postJson('/api/admin/payments/'.$payment->id.'/verify')
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'successful');
 
@@ -146,7 +146,7 @@ class AdminPaymentApiTest extends TestCase
         $this->fakeVerify('failed');
         $payment = Payment::factory()->pending()->create();
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/verify')
+        $this->postJson('/api/admin/payments/'.$payment->id.'/verify')
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'failed');
 
@@ -159,7 +159,7 @@ class AdminPaymentApiTest extends TestCase
         $this->fakeVerify('success');
         $payment = Payment::factory()->pending()->create();
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/reconcile')
+        $this->postJson('/api/admin/payments/'.$payment->id.'/reconcile')
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'successful');
 
@@ -172,7 +172,7 @@ class AdminPaymentApiTest extends TestCase
         $this->fakeVerify();
         $payment = Payment::factory()->create(['status' => 'successful']);
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/refund', ['reason' => 'Customer request'])
+        $this->postJson('/api/admin/payments/'.$payment->id.'/refund', ['reason' => 'Customer request'])
             ->assertOk()
             ->assertJsonPath('data.payment.status', 'refunded');
 
@@ -184,7 +184,7 @@ class AdminPaymentApiTest extends TestCase
         $this->actingAsAdmin();
         $payment = Payment::factory()->pending()->create();
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/refund')
+        $this->postJson('/api/admin/payments/'.$payment->id.'/refund')
             ->assertStatus(422);
     }
 
@@ -193,11 +193,11 @@ class AdminPaymentApiTest extends TestCase
         $this->actingAsAdmin();
         $payment = Payment::factory()->create();
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/review', ['action' => 'flag', 'reason' => 'Chargeback risk'])
+        $this->postJson('/api/admin/payments/'.$payment->id.'/review', ['action' => 'flag', 'reason' => 'Chargeback risk'])
             ->assertOk()
             ->assertJsonPath('data.payment.isFlagged', true);
 
-        $this->postJson('/api/v1/admin/payments/'.$payment->id.'/review', ['action' => 'clear'])
+        $this->postJson('/api/admin/payments/'.$payment->id.'/review', ['action' => 'clear'])
             ->assertOk()
             ->assertJsonPath('data.payment.isFlagged', false);
     }
@@ -207,7 +207,7 @@ class AdminPaymentApiTest extends TestCase
         $this->actingAsAdmin();
         Payment::factory()->count(2)->create();
 
-        $response = $this->get('/api/v1/admin/payments/export');
+        $response = $this->get('/api/admin/payments/export');
         $response->assertOk();
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
     }

@@ -9,7 +9,7 @@ Route::get('/', function (): JsonResponse {
         'data' => [
             'status' => 'ok',
             'app' => config('app.name'),
-            'health' => url('/api/v1/health'),
+            'health' => url('/api/health'),
         ],
     ]);
 });

@@ -67,7 +67,7 @@ class ChallengeApiTest extends TestCase
             'submitted_at' => now(),
         ]);
 
-        $this->getJson('/api/v1/challenges?status=active')
+        $this->getJson('/api/challenges?status=active')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.retrieved'))
             ->assertJsonCount(1, 'data.challenges')
@@ -77,19 +77,19 @@ class ChallengeApiTest extends TestCase
             ->assertJsonPath('data.challenges.0.currentUserState.canSubmit', false)
             ->assertJsonPath('meta.challenges.total', 1);
 
-        $this->getJson('/api/v1/challenges/'.$active->id)
+        $this->getJson('/api/challenges/'.$active->id)
             ->assertOk()
             ->assertJsonPath('data.challenge.slug', 'active-dance-challenge')
             ->assertJsonPath('data.challenge.submissionsCount', 1);
 
-        $this->getJson('/api/v1/challenges/'.$active->id.'/submissions')
+        $this->getJson('/api/challenges/'.$active->id.'/submissions')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.submissions_retrieved'))
             ->assertJsonPath('data.submissions.0.user.fullName', 'Challenge Fan')
             ->assertJsonPath('data.submissions.0.video.id', $video->id)
             ->assertJsonPath('meta.submissions.total', 1);
 
-        $this->getJson('/api/v1/challenges?status=featured')
+        $this->getJson('/api/challenges?status=featured')
             ->assertOk()
             ->assertJsonPath('data.challenges.0.id', $active->id)
             ->assertJsonPath('meta.challenges.total', 1);
@@ -102,7 +102,7 @@ class ChallengeApiTest extends TestCase
 
         Sanctum::actingAs($host);
 
-        $createResponse = $this->postJson('/api/v1/challenges', [
+        $createResponse = $this->postJson('/api/challenges', [
             'title' => 'Campus Talent Hunt',
             'summary' => 'Show your creative skill',
             'description' => 'Upload your most impressive performance.',
@@ -123,7 +123,7 @@ class ChallengeApiTest extends TestCase
 
         $challengeId = $createResponse->json('data.challenge.id');
 
-        $this->patchJson('/api/v1/challenges/'.$challengeId, [
+        $this->patchJson('/api/challenges/'.$challengeId, [
             'summary' => 'Updated summary',
             'isFeatured' => true,
         ])
@@ -132,13 +132,13 @@ class ChallengeApiTest extends TestCase
             ->assertJsonPath('data.challenge.summary', 'Updated summary')
             ->assertJsonPath('data.challenge.isFeatured', true);
 
-        $this->postJson('/api/v1/challenges/'.$challengeId.'/publish')
+        $this->postJson('/api/challenges/'.$challengeId.'/publish')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.published'))
             ->assertJsonPath('data.challenge.status', 'published')
             ->assertJsonPath('data.challenge.lifecycleStatus', 'active');
 
-        $this->getJson('/api/v1/me/challenges')
+        $this->getJson('/api/me/challenges')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.my_retrieved'))
             ->assertJsonPath('data.challenges.0.id', $challengeId);
@@ -156,12 +156,12 @@ class ChallengeApiTest extends TestCase
 
         Sanctum::actingAs($participant);
 
-        $this->getJson('/api/v1/challenges/'.$challengeId)
+        $this->getJson('/api/challenges/'.$challengeId)
             ->assertOk()
             ->assertJsonPath('data.challenge.currentUserState.hasSubmitted', false)
             ->assertJsonPath('data.challenge.currentUserState.canSubmit', true);
 
-        $submissionResponse = $this->postJson('/api/v1/challenges/'.$challengeId.'/submissions', [
+        $submissionResponse = $this->postJson('/api/challenges/'.$challengeId.'/submissions', [
             'videoId' => $video->id,
             'caption' => 'Submitting my best performance',
             'metadata' => ['team' => 'Blue'],
@@ -176,24 +176,24 @@ class ChallengeApiTest extends TestCase
 
         $submissionId = $submissionResponse->json('data.submission.id');
 
-        $this->postJson('/api/v1/challenges/'.$challengeId.'/submissions', [
+        $this->postJson('/api/challenges/'.$challengeId.'/submissions', [
             'videoId' => $video->id,
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', trans('messages.challenges.submission_limit_reached'));
 
-        $this->getJson('/api/v1/challenges/'.$challengeId.'/submissions/mine')
+        $this->getJson('/api/challenges/'.$challengeId.'/submissions/mine')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.my_submissions_retrieved'))
             ->assertJsonPath('data.submissions.0.id', $submissionId)
             ->assertJsonPath('meta.submissions.total', 1);
 
-        $this->getJson('/api/v1/me/challenge-submissions')
+        $this->getJson('/api/me/challenge-submissions')
             ->assertOk()
             ->assertJsonPath('data.submissions.0.challenge.id', $challengeId)
             ->assertJsonPath('data.submissions.0.user.fullName', 'Entry Creator');
 
-        $this->postJson('/api/v1/challenge-submissions/'.$submissionId.'/withdraw')
+        $this->postJson('/api/challenge-submissions/'.$submissionId.'/withdraw')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.challenges.submission_withdrawn'))
             ->assertJsonPath('data.submission.status', 'withdrawn')

@@ -23,15 +23,15 @@ class AdminSettingsApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/settings')->assertForbidden();
-        $this->patchJson('/api/v1/admin/settings', ['platform_name' => 'Blocked'])->assertForbidden();
+        $this->getJson('/api/admin/settings')->assertForbidden();
+        $this->patchJson('/api/admin/settings', ['platform_name' => 'Blocked'])->assertForbidden();
     }
 
     public function test_admin_can_read_and_update_settings_without_leaking_secrets(): void
     {
         $this->admin();
 
-        $response = $this->patchJson('/api/v1/admin/settings', [
+        $response = $this->patchJson('/api/admin/settings', [
             'platform_name' => 'DeyMake Studio',
             'registration_enabled' => true,
             'maintenance_mode' => false,
@@ -78,7 +78,7 @@ class AdminSettingsApiTest extends TestCase
         $response->assertJsonMissingPath('data.settings.oauth_providers.google.client_secret');
         $response->assertJsonMissingPath('data.settings.payment_providers.paystack.secret_key');
 
-        $this->getJson('/api/v1/admin/settings')
+        $this->getJson('/api/admin/settings')
             ->assertOk()
             ->assertJsonPath('data.settings.platform_name', 'DeyMake Studio');
     }

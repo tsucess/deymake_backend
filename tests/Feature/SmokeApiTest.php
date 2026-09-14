@@ -38,18 +38,18 @@ class SmokeApiTest extends TestCase
             'is_draft' => true,
         ]);
 
-        $this->getJson('/api/v1/categories')
+        $this->getJson('/api/categories')
             ->assertOk()
             ->assertJsonCount(2, 'data.categories');
 
-        $this->getJson('/api/v1/videos?category=alpha-music&per_page=1')
+        $this->getJson('/api/videos?category=alpha-music&per_page=1')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $video->id)
             ->assertJsonPath('meta.videos.total', 1)
             ->assertJsonPath('meta.videos.perPage', 1);
 
-        $this->getJson('/api/v1/search/suggestions?q=Alpha')
+        $this->getJson('/api/search/suggestions?q=Alpha')
             ->assertOk()
             ->assertJsonPath('data.videos.0.id', $video->id)
             ->assertJsonPath('data.creators.0.fullName', $creator->name)
@@ -58,33 +58,33 @@ class SmokeApiTest extends TestCase
             ->assertJsonPath('meta.creators.total', 1)
             ->assertJsonPath('meta.categories.total', 1);
 
-        $this->getJson('/api/v1/search/videos?q=Alpha')
+        $this->getJson('/api/search/videos?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $video->id)
             ->assertJsonPath('meta.videos.total', 1);
 
-        $this->getJson('/api/v1/search/creators?q=Alpha')
+        $this->getJson('/api/search/creators?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.creators')
             ->assertJsonPath('data.creators.0.fullName', $creator->name)
             ->assertJsonPath('meta.creators.total', 1);
 
-        $this->getJson('/api/v1/search/categories?q=Alpha')
+        $this->getJson('/api/search/categories?q=Alpha')
             ->assertOk()
             ->assertJsonCount(1, 'data.categories')
             ->assertJsonPath('data.categories.0.slug', $category->slug)
             ->assertJsonPath('meta.categories.total', 1);
 
-        $this->getJson('/api/v1/help')
+        $this->getJson('/api/help')
             ->assertOk()
             ->assertJsonPath('data.title', 'Help Center');
 
-        $this->getJson('/api/v1/legal/privacy')
+        $this->getJson('/api/legal/privacy')
             ->assertOk()
             ->assertJsonPath('data.title', 'Privacy Policy');
 
-        $this->getJson('/api/v1/legal/terms')
+        $this->getJson('/api/legal/terms')
             ->assertOk()
             ->assertJsonPath('data.title', 'Terms of Service');
     }
@@ -98,21 +98,21 @@ class SmokeApiTest extends TestCase
 
         Sanctum::actingAs($subscriber);
 
-        $this->postJson('/api/v1/uploads/presign', [
+        $this->postJson('/api/uploads/presign', [
             'type' => 'video',
             'originalName' => 'clip.mp4',
         ])->assertOk()
             ->assertJsonPath('data.strategy', 'client-direct-upload')
             ->assertJsonPath('data.provider', 'cloudinary')
             ->assertJsonPath('data.method', 'POST')
-            ->assertJsonPath('data.endpoint', 'https://api.cloudinary.com/v1_1/demo/video/upload')
+            ->assertJsonPath('data.endpoint', 'https://api.cloudinary.com_1/demo/video/upload')
             ->assertJsonPath('data.resourceType', 'video')
             ->assertJsonPath('data.fields.api_key', 'test-key')
             ->assertJsonPath('data.fields.folder', 'deymake/uploads/videos/user-1')
             ->assertJsonPath('data.fields.public_id', fn ($value) => is_string($value) && $value !== '')
             ->assertJsonPath('data.fields.signature', fn ($value) => is_string($value) && $value !== '');
 
-        $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')
+        $this->postJson('/api/creators/'.$creator->id.'/subscribe')
             ->assertOk()
             ->assertJsonPath('data.creator.subscribed', true)
             ->assertJsonPath('data.creator.subscriberCount', 1);
@@ -122,7 +122,7 @@ class SmokeApiTest extends TestCase
             'creator_id' => $creator->id,
         ]);
 
-        $this->deleteJson('/api/v1/creators/'.$creator->id.'/subscribe')
+        $this->deleteJson('/api/creators/'.$creator->id.'/subscribe')
             ->assertOk()
             ->assertJsonPath('data.creator.subscribed', false)
             ->assertJsonPath('data.creator.subscriberCount', 0);

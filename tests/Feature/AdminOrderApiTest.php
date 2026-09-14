@@ -26,7 +26,7 @@ class AdminOrderApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/orders')->assertForbidden();
+        $this->getJson('/api/admin/orders')->assertForbidden();
     }
 
     public function test_admin_can_list_filter_and_view_orders(): void
@@ -39,14 +39,14 @@ class AdminOrderApiTest extends TestCase
         ]);
         MerchOrder::factory()->create(['status' => 'cancelled']);
 
-        $this->getJson('/api/v1/admin/orders?q=Order%20Buyer&status=fulfilled&per_page=1')
+        $this->getJson('/api/admin/orders?q=Order%20Buyer&status=fulfilled&per_page=1')
             ->assertOk()
             ->assertJsonPath('data.orders.0.id', $target->id)
             ->assertJsonPath('data.orders.0.paymentStatus', 'paid')
             ->assertJsonPath('data.orders.0.shippingStatus', 'shipped')
             ->assertJsonStructure(['meta' => ['orders', 'summary']]);
 
-        $this->getJson('/api/v1/admin/orders/'.$target->id)
+        $this->getJson('/api/admin/orders/'.$target->id)
             ->assertOk()
             ->assertJsonPath('data.order.id', $target->id)
             ->assertJsonPath('data.order.buyer.id', $target->buyer_id);
@@ -57,7 +57,7 @@ class AdminOrderApiTest extends TestCase
         $this->admin();
         $order = MerchOrder::factory()->create(['status' => 'pending']);
 
-        $this->patchJson('/api/v1/admin/orders/'.$order->id.'/status', ['status' => 'paid'])
+        $this->patchJson('/api/admin/orders/'.$order->id.'/status', ['status' => 'paid'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('status');
 
@@ -70,7 +70,7 @@ class AdminOrderApiTest extends TestCase
         $order = MerchOrder::factory()->create(['status' => 'pending', 'quantity' => 2]);
         $inventoryBefore = $order->product->inventory_count;
 
-        $this->postJson('/api/v1/admin/orders/'.$order->id.'/cancel', ['reason' => 'Customer request'])
+        $this->postJson('/api/admin/orders/'.$order->id.'/cancel', ['reason' => 'Customer request'])
             ->assertOk()
             ->assertJsonPath('data.order.status', 'cancelled');
 
@@ -94,7 +94,7 @@ class AdminOrderApiTest extends TestCase
             'amount' => $order->total_amount,
         ]);
 
-        $this->patchJson('/api/v1/admin/orders/'.$order->id.'/status', ['status' => 'paid'])
+        $this->patchJson('/api/admin/orders/'.$order->id.'/status', ['status' => 'paid'])
             ->assertOk()
             ->assertJsonPath('data.order.status', 'paid');
     }
@@ -104,7 +104,7 @@ class AdminOrderApiTest extends TestCase
         $this->admin();
         MerchOrder::factory()->count(2)->create();
 
-        $response = $this->get('/api/v1/admin/orders/export?status=paid');
+        $response = $this->get('/api/admin/orders/export?status=paid');
 
         $response->assertOk();
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));

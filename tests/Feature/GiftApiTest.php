@@ -23,7 +23,7 @@ class GiftApiTest extends TestCase
         $active = Gift::factory()->create(['name' => 'Active Rose']);
         Gift::factory()->inactive()->create(['name' => 'Hidden Gift']);
 
-        $this->getJson('/api/v1/gifts')
+        $this->getJson('/api/gifts')
             ->assertOk()
             ->assertJsonPath('data.gifts.0.id', $active->id)
             ->assertJsonMissing(['name' => 'Hidden Gift']);
@@ -36,7 +36,7 @@ class GiftApiTest extends TestCase
         $gift = Gift::factory()->create(['coin_cost' => 100]);
         Sanctum::actingAs($sender);
 
-        $this->postJson("/api/v1/gifts/{$gift->id}/send", ['recipientId' => $recipient->id])
+        $this->postJson("/api/gifts/{$gift->id}/send", ['recipientId' => $recipient->id])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Insufficient coin balance.');
 
@@ -60,7 +60,7 @@ class GiftApiTest extends TestCase
         CoinPurchase::factory()->create(['user_id' => $sender->id, 'coins' => 100, 'status' => 'completed']);
         Sanctum::actingAs($sender);
 
-        $this->postJson("/api/v1/gifts/{$gift->id}/send", [
+        $this->postJson("/api/gifts/{$gift->id}/send", [
             'recipientId' => $recipient->id,
             'videoId' => $video->id,
             'quantity' => 2,
@@ -92,8 +92,8 @@ class GiftApiTest extends TestCase
         GiftTransaction::factory()->create(['sender_id' => $user->id]);
         Sanctum::actingAs($user);
 
-        $this->postJson("/api/v1/gifts/{$gift->id}/send", ['recipientId' => $user->id])
+        $this->postJson("/api/gifts/{$gift->id}/send", ['recipientId' => $user->id])
             ->assertStatus(422);
-        $this->getJson('/api/v1/gifts/sent')->assertOk()->assertJsonCount(1, 'data.transactions');
+        $this->getJson('/api/gifts/sent')->assertOk()->assertJsonCount(1, 'data.transactions');
     }
 }

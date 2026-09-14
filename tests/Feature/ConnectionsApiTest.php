@@ -41,7 +41,7 @@ class ConnectionsApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/connections/feed')
+        $this->getJson('/api/connections/feed')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.connections.feed_retrieved'))
             ->assertJsonPath('data.source', 'subscriptions')
@@ -66,7 +66,7 @@ class ConnectionsApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/connections/feed')
+        $this->getJson('/api/connections/feed')
             ->assertOk()
             ->assertJsonPath('data.source', 'trending')
             ->assertJsonPath('data.videos.0.title', 'Trending Clip');
@@ -84,7 +84,7 @@ class ConnectionsApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $response = $this->getJson('/api/v1/creators/suggestions')
+        $response = $this->getJson('/api/creators/suggestions')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.creators.suggestions_retrieved'));
 
@@ -109,7 +109,7 @@ class ConnectionsApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $response = $this->getJson('/api/v1/stories/feed')
+        $response = $this->getJson('/api/stories/feed')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.stories.feed_retrieved'))
             ->assertJsonCount(2, 'data.stories');
@@ -127,12 +127,12 @@ class ConnectionsApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson("/api/v1/stories/{$story->id}/view")
+        $this->postJson("/api/stories/{$story->id}/view")
             ->assertOk()
             ->assertJsonPath('data.story.views', 1)
             ->assertJsonPath('data.story.currentUserState.seen', true);
 
-        $this->postJson("/api/v1/stories/{$story->id}/view")->assertOk();
+        $this->postJson("/api/stories/{$story->id}/view")->assertOk();
         $this->assertSame(1, $story->fresh()->views_count);
     }
 
@@ -143,10 +143,10 @@ class ConnectionsApiTest extends TestCase
         $story = Story::create(['user_id' => $author->id, 'type' => 'image', 'media_url' => '/y.jpg', 'expires_at' => now()->addHours(20)]);
 
         Sanctum::actingAs($stranger);
-        $this->deleteJson("/api/v1/stories/{$story->id}")->assertForbidden();
+        $this->deleteJson("/api/stories/{$story->id}")->assertForbidden();
 
         Sanctum::actingAs($author);
-        $this->deleteJson("/api/v1/stories/{$story->id}")->assertOk();
+        $this->deleteJson("/api/stories/{$story->id}")->assertOk();
         $this->assertNull(Story::find($story->id));
     }
 
@@ -157,11 +157,11 @@ class ConnectionsApiTest extends TestCase
         $story = Story::create(['user_id' => $author->id, 'type' => 'image', 'media_url' => '/viewers.jpg', 'expires_at' => now()->addHours(20)]);
 
         Sanctum::actingAs($viewer);
-        $this->postJson("/api/v1/stories/{$story->id}/view")->assertOk();
-        $this->getJson("/api/v1/stories/{$story->id}/viewers")->assertForbidden();
+        $this->postJson("/api/stories/{$story->id}/view")->assertOk();
+        $this->getJson("/api/stories/{$story->id}/viewers")->assertForbidden();
 
         Sanctum::actingAs($author);
-        $this->getJson("/api/v1/stories/{$story->id}/viewers")
+        $this->getJson("/api/stories/{$story->id}/viewers")
             ->assertOk()
             ->assertJsonPath('data.viewers.0.id', $viewer->id);
     }

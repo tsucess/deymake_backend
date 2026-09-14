@@ -22,7 +22,7 @@ class AuthApiTest extends TestCase
     {
         Notification::fake();
 
-        $response = $this->postJson('/api/v1/auth/register', [
+        $response = $this->postJson('/api/auth/register', [
             'fullName' => 'Rise Network',
             'username' => 'rise.network',
             'email' => 'rise@example.com',
@@ -68,7 +68,7 @@ class AuthApiTest extends TestCase
             'password' => 'Password1',
         ]);
 
-        $response = $this->postJson('/api/v1/auth/login', [
+        $response = $this->postJson('/api/auth/login', [
             'identifier' => $user->username,
             'password' => 'Password1',
         ]);
@@ -94,7 +94,7 @@ class AuthApiTest extends TestCase
             'suspended_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ])
@@ -114,7 +114,7 @@ class AuthApiTest extends TestCase
             'password' => 'Password1',
         ]);
 
-        $response = $this->postJson('/api/v1/auth/login', [
+        $response = $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ]);
@@ -139,13 +139,13 @@ class AuthApiTest extends TestCase
         $token = $user->createToken('test-token')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/v1/auth/me')
+            ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.auth.me_retrieved'))
             ->assertJsonPath('data.user.email', $user->email);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/v1/auth/logout')
+            ->postJson('/api/auth/logout')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.auth.logout_success'));
 
@@ -166,7 +166,7 @@ class AuthApiTest extends TestCase
         $this->withHeaders([
             'Authorization' => 'Bearer '.$token,
             'X-User-Activity-At' => $activityAt,
-        ])->getJson('/api/v1/auth/me')
+        ])->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('data.user.isOnline', true);
 
@@ -190,7 +190,7 @@ class AuthApiTest extends TestCase
         ]);
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->postJson('/api/v1/auth/login', [
+            ->postJson('/api/auth/login', [
                 'identifier' => $user->email,
                 'password' => 'Password1',
             ])
@@ -198,7 +198,7 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.auth.login_success', [], 'yo'));
 
         $this->withHeaders(['X-Locale' => 'ha'])
-            ->postJson('/api/v1/auth/login', [
+            ->postJson('/api/auth/login', [
                 'identifier' => $user->email,
                 'password' => 'WrongPassword1',
             ])
@@ -207,7 +207,7 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('errors.identifier.0', trans('messages.auth.invalid_credentials_detail', [], 'ha'));
 
         $this->withHeaders(['X-Locale' => 'ig'])
-            ->postJson('/api/v1/auth/forgot-password', [
+            ->postJson('/api/auth/forgot-password', [
                 'email' => $user->email,
             ])
             ->assertOk()
@@ -226,7 +226,7 @@ class AuthApiTest extends TestCase
         );
 
         $this->withHeaders(['X-Locale' => 'ig'])
-            ->postJson('/api/v1/auth/reset-password', [
+            ->postJson('/api/auth/reset-password', [
                 'email' => $user->email,
                 'token' => $token,
                 'password' => 'NewPassword1',
@@ -242,7 +242,7 @@ class AuthApiTest extends TestCase
         config()->set('services.google.redirect', '');
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->getJson('/api/v1/auth/oauth/google/redirect')
+            ->getJson('/api/auth/oauth/google/redirect')
             ->assertStatus(503)
             ->assertJsonPath('message', trans('messages.auth.oauth.provider_not_configured', ['provider' => 'Google'], 'yo'))
             ->assertJsonPath('data.provider', 'google')
@@ -255,7 +255,7 @@ class AuthApiTest extends TestCase
             $mock->shouldReceive('send')->once();
         });
 
-        $response = $this->postJson('/api/v1/auth/send-phone-code', [
+        $response = $this->postJson('/api/auth/send-phone-code', [
             'phone' => '+2348012345678',
             'countryCode' => 'NG +234',
         ]);
@@ -282,7 +282,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $response = $this->postJson('/api/v1/auth/register-with-phone', [
+        $response = $this->postJson('/api/auth/register-with-phone', [
             'fullName' => 'Rise Network',
             'username' => 'rise.phone',
             'phone' => '+2348012345678',
@@ -319,7 +319,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/register-with-phone', [
+        $this->postJson('/api/auth/register-with-phone', [
             'fullName' => 'Rise Network',
             'username' => 'rise.phone',
             'phone' => '+2348012345678',
@@ -343,7 +343,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now()->subMinutes(15),
         ]);
 
-        $this->postJson('/api/v1/auth/register-with-phone', [
+        $this->postJson('/api/auth/register-with-phone', [
             'fullName' => 'Rise Network',
             'username' => 'rise.phone',
             'phone' => '+2348012345678',
@@ -359,7 +359,7 @@ class AuthApiTest extends TestCase
     {
         Notification::fake();
 
-        $this->postJson('/api/v1/auth/register', [
+        $this->postJson('/api/auth/register', [
             'fullName' => 'Rise Network',
             'username' => 'rise.dob',
             'email' => 'rise.dob@example.com',
@@ -378,7 +378,7 @@ class AuthApiTest extends TestCase
             'password' => 'Password1',
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ])
@@ -396,7 +396,7 @@ class AuthApiTest extends TestCase
             'suspended_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ])
@@ -414,7 +414,7 @@ class AuthApiTest extends TestCase
             'banned_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ])
@@ -435,13 +435,13 @@ class AuthApiTest extends TestCase
         ]);
 
         for ($i = 0; $i < 6; $i++) {
-            $this->postJson('/api/v1/auth/login', [
+            $this->postJson('/api/auth/login', [
                 'identifier' => 'throttle@example.com',
                 'password' => 'WrongPassword1',
             ])->assertStatus(422);
         }
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => 'throttle@example.com',
             'password' => 'Password1',
         ])
@@ -466,7 +466,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'Password1',
         ])->assertOk();
@@ -487,7 +487,7 @@ class AuthApiTest extends TestCase
             'phone_verified_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/send-phone-login-code', [
+        $this->postJson('/api/auth/send-phone-login-code', [
             'phone' => '+2348011112222',
         ])
             ->assertOk()
@@ -506,7 +506,7 @@ class AuthApiTest extends TestCase
             $mock->shouldNotReceive('send');
         });
 
-        $this->postJson('/api/v1/auth/send-phone-login-code', [
+        $this->postJson('/api/auth/send-phone-login-code', [
             'phone' => '+2340000000000',
         ])
             ->assertOk()
@@ -534,7 +534,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login-with-phone', [
+        $this->postJson('/api/auth/login-with-phone', [
             'phone' => '+2348022223333',
             'code' => '4321',
         ])
@@ -567,7 +567,7 @@ class AuthApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/login-with-phone', [
+        $this->postJson('/api/auth/login-with-phone', [
             'phone' => '+2348033334444',
             'code' => '0000',
         ])
@@ -583,7 +583,7 @@ class AuthApiTest extends TestCase
             'password' => 'Password1',
         ]);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => '+2348044445555',
             'password' => 'Password1',
         ])

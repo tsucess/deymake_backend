@@ -24,7 +24,7 @@ class AiAssistantApiTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->withHeaders(['X-Locale' => 'fr'])
-            ->postJson('/api/v1/ai/captions', [
+            ->postJson('/api/ai/captions', [
                 'topic' => 'campus dance challenge',
                 'categoryId' => $category->id,
                 'tone' => 'bold',
@@ -63,7 +63,7 @@ class AiAssistantApiTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->withHeaders(['X-Locale' => 'pcm'])
-            ->postJson('/api/v1/ai/ideas', [
+            ->postJson('/api/ai/ideas', [
                 'goal' => 'growth',
                 'format' => 'series',
                 'tone' => 'playful',

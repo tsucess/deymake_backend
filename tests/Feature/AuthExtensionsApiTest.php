@@ -25,7 +25,7 @@ class AuthExtensionsApiTest extends TestCase
             'password' => 'OldPassword1',
         ]);
 
-        $forgot = $this->postJson('/api/v1/auth/forgot-password', [
+        $forgot = $this->postJson('/api/auth/forgot-password', [
             'email' => $user->email,
         ]);
 
@@ -47,13 +47,13 @@ class AuthExtensionsApiTest extends TestCase
 
         $this->assertNotNull($token);
 
-        $this->postJson('/api/v1/auth/reset-password', [
+        $this->postJson('/api/auth/reset-password', [
             'email' => $user->email,
             'token' => $token,
             'password' => 'NewPassword1',
         ])->assertOk()->assertJsonPath('message', 'Password reset successful.');
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postJson('/api/auth/login', [
             'identifier' => $user->email,
             'password' => 'NewPassword1',
         ])->assertOk()->assertJsonPath('message', trans('messages.auth.login_success'));
@@ -63,7 +63,7 @@ class AuthExtensionsApiTest extends TestCase
     {
         Notification::fake();
 
-        $this->postJson('/api/v1/auth/forgot-password', [
+        $this->postJson('/api/auth/forgot-password', [
             'email' => 'nobody@example.com',
         ])
             ->assertOk()
@@ -90,7 +90,7 @@ class AuthExtensionsApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->postJson('/api/v1/auth/verify-email-code', [
+        $this->postJson('/api/auth/verify-email-code', [
             'email' => $user->email,
             'code' => '1234',
         ])
@@ -113,7 +113,7 @@ class AuthExtensionsApiTest extends TestCase
             'email' => 'verify@example.com',
         ]);
 
-        $this->postJson('/api/v1/auth/resend-verification-code', [
+        $this->postJson('/api/auth/resend-verification-code', [
             'email' => $user->email,
         ])
             ->assertOk()
@@ -138,12 +138,12 @@ class AuthExtensionsApiTest extends TestCase
         Config::set('services.facebook.client_secret', '');
         Config::set('services.facebook.redirect', '');
 
-        $this->getJson('/api/v1/auth/oauth/google/redirect')
+        $this->getJson('/api/auth/oauth/google/redirect')
             ->assertStatus(503)
             ->assertJsonPath('data.provider', 'google')
             ->assertJsonPath('data.configured', false);
 
-        $this->getJson('/api/v1/auth/oauth/facebook/callback')
+        $this->getJson('/api/auth/oauth/facebook/callback')
             ->assertStatus(503)
             ->assertJsonPath('data.provider', 'facebook')
             ->assertJsonPath('data.configured', false);
@@ -153,9 +153,9 @@ class AuthExtensionsApiTest extends TestCase
     {
         Config::set('services.google.client_id', 'google-client-id');
         Config::set('services.google.client_secret', 'google-client-secret');
-        Config::set('services.google.redirect', 'http://localhost:8000/api/v1/auth/oauth/google/callback');
+        Config::set('services.google.redirect', 'http://localhost:8000/api/auth/oauth/google/callback');
 
-        $response = $this->get('/api/v1/auth/oauth/google/redirect');
+        $response = $this->get('/api/auth/oauth/google/redirect');
 
         $response->assertRedirect();
 
@@ -172,7 +172,7 @@ class AuthExtensionsApiTest extends TestCase
         Config::set('app.frontend_url', 'http://localhost:5173');
         Config::set('services.google.client_id', 'google-client-id');
         Config::set('services.google.client_secret', 'google-client-secret');
-        Config::set('services.google.redirect', 'http://localhost:8000/api/v1/auth/oauth/google/callback');
+        Config::set('services.google.redirect', 'http://localhost:8000/api/auth/oauth/google/callback');
 
         Http::fake([
             'https://oauth2.googleapis.com/token' => Http::response([
@@ -188,11 +188,11 @@ class AuthExtensionsApiTest extends TestCase
             ]),
         ]);
 
-        $redirect = $this->get('/api/v1/auth/oauth/google/redirect');
+        $redirect = $this->get('/api/auth/oauth/google/redirect');
 
         parse_str((string) parse_url((string) $redirect->headers->get('Location'), PHP_URL_QUERY), $redirectQuery);
 
-        $callback = $this->get('/api/v1/auth/oauth/google/callback?code=test-code&state='.$redirectQuery['state']);
+        $callback = $this->get('/api/auth/oauth/google/callback?code=test-code&state='.$redirectQuery['state']);
 
         $callback->assertRedirect();
 
@@ -215,7 +215,7 @@ class AuthExtensionsApiTest extends TestCase
         $this->assertSame('google-refresh-token', User::query()->where('email', 'oauth@example.com')->value('provider_refresh_token'));
 
         $this->withHeader('Authorization', 'Bearer '.$fragment['token'])
-            ->getJson('/api/v1/auth/me')
+            ->getJson('/api/auth/me')
             ->assertOk()
             ->assertJsonPath('data.user.email', 'oauth@example.com');
     }

@@ -30,7 +30,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/v1/admin/dashboard')
+        $this->getJson('/api/admin/dashboard')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -136,7 +136,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/dashboard')
+        $this->getJson('/api/admin/dashboard')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.dashboard_retrieved'))
             ->assertJsonPath('data.summary.totalUsers', 3)
@@ -162,7 +162,7 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.charts.categories.0.name', 'Music')
             ->assertJsonPath('data.charts.categories.0.views', 500);
 
-        $this->getJson('/api/v1/admin/reports/videos?status=pending')
+        $this->getJson('/api/admin/reports/videos?status=pending')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.video_reports_retrieved'))
             ->assertJsonCount(1, 'data.reports')
@@ -171,7 +171,7 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.reports.0.reporter.fullName', 'Reporter User')
             ->assertJsonPath('meta.reports.total', 1);
 
-        $this->patchJson('/api/v1/admin/reports/videos/'.$pendingReport->id, [
+        $this->patchJson('/api/admin/reports/videos/'.$pendingReport->id, [
             'status' => 'escalated',
             'resolutionNotes' => 'Escalated for moderation review',
         ])
@@ -222,7 +222,7 @@ class AdminDashboardApiTest extends TestCase
         $creator->createToken('creator-test')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$adminToken)
-            ->getJson('/api/v1/admin/users?q=stream&role=creator')
+            ->getJson('/api/admin/users?q=stream&role=creator')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.users_retrieved'))
             ->assertJsonPath('data.users.0.id', $creator->id)
@@ -232,14 +232,14 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('meta.summary.creatorUsers', 1);
 
         $this->withHeader('Authorization', 'Bearer '.$adminToken)
-            ->getJson('/api/v1/admin/users/'.$creator->id)
+            ->getJson('/api/admin/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_retrieved'))
             ->assertJsonPath('data.user.id', $creator->id)
             ->assertJsonPath('data.user.stats.publishedVideosCount', 1);
 
         $this->withHeader('Authorization', 'Bearer '.$adminToken)
-            ->patchJson('/api/v1/admin/users/'.$creator->id, [
+            ->patchJson('/api/admin/users/'.$creator->id, [
                 'accountStatus' => 'suspended',
                 'accountStatusNotes' => 'Repeated impersonation reports.',
                 'clearSessions' => true,
@@ -265,21 +265,21 @@ class AdminDashboardApiTest extends TestCase
         Sanctum::actingAs($creator->fresh());
 
         $this
-            ->getJson('/api/v1/auth/me')
+            ->getJson('/api/auth/me')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.auth.account_suspended'));
 
         Sanctum::actingAs($admin->fresh());
 
         $this
-            ->patchJson('/api/v1/admin/users/'.$admin->id, [
+            ->patchJson('/api/admin/users/'.$admin->id, [
                 'isAdmin' => false,
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', trans('messages.admin.user_self_protection'));
 
         $this
-            ->patchJson('/api/v1/admin/users/'.$creator->id, [
+            ->patchJson('/api/admin/users/'.$creator->id, [
                 'accountStatus' => 'active',
                 'accountStatusNotes' => 'Suspension lifted after review.',
             ])
@@ -306,7 +306,7 @@ class AdminDashboardApiTest extends TestCase
         Sanctum::actingAs($admin);
 
         $this
-            ->patchJson('/api/v1/admin/users/'.$member->id, [
+            ->patchJson('/api/admin/users/'.$member->id, [
                 'accountStatus' => 'banned',
                 'accountStatusNotes' => 'Severe terms of service violation.',
             ])
@@ -333,14 +333,14 @@ class AdminDashboardApiTest extends TestCase
         Sanctum::actingAs($member->fresh());
 
         $this
-            ->getJson('/api/v1/auth/me')
+            ->getJson('/api/auth/me')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.auth.account_banned'));
 
         Sanctum::actingAs($admin->fresh());
 
         $this
-            ->patchJson('/api/v1/admin/users/'.$member->id, [
+            ->patchJson('/api/admin/users/'.$member->id, [
                 'accountStatus' => 'active',
                 'accountStatusNotes' => 'Ban lifted after appeal.',
             ])
@@ -452,7 +452,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/dashboard')
+        $this->getJson('/api/admin/dashboard')
             ->assertOk()
             ->assertJsonPath('data.summary.suspendedUsers', 1)
             ->assertJsonPath('data.summary.bannedUsers', 1)
@@ -492,7 +492,7 @@ class AdminDashboardApiTest extends TestCase
         $from = now()->subDays(2)->toDateString();
         $to = now()->toDateString();
 
-        $this->getJson('/api/v1/admin/dashboard?from='.$from.'&to='.$to)
+        $this->getJson('/api/admin/dashboard?from='.$from.'&to='.$to)
             ->assertOk()
             ->assertJsonCount(3, 'data.charts.labels')
             ->assertJsonCount(3, 'data.charts.growth.labels')
@@ -518,20 +518,20 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/users?verificationStatus=verified')
+        $this->getJson('/api/admin/users?verificationStatus=verified')
             ->assertOk()
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.id', $verified->id)
             ->assertJsonPath('meta.summary.verifiedUsers', 1)
             ->assertJsonPath('meta.summary.pendingVerificationUsers', 1);
 
-        $this->getJson('/api/v1/admin/users?verificationStatus=pending')
+        $this->getJson('/api/admin/users?verificationStatus=pending')
             ->assertOk()
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.id', $pending->id);
 
         // Unverified covers everyone whose status is not "approved" (admin, pending, member).
-        $this->getJson('/api/v1/admin/users?verificationStatus=unverified')
+        $this->getJson('/api/admin/users?verificationStatus=unverified')
             ->assertOk()
             ->assertJsonCount(3, 'data.users');
     }
@@ -570,24 +570,24 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id)
+        $this->getJson('/api/admin/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('data.user.stats.reportsAgainstCount', 1);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id.'/videos')
+        $this->getJson('/api/admin/users/'.$creator->id.'/videos')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_videos_retrieved'))
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $video->id);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id.'/reports')
+        $this->getJson('/api/admin/users/'.$creator->id.'/reports')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_reports_retrieved'))
             ->assertJsonCount(1, 'data.reports')
             ->assertJsonPath('data.reports.0.reason', 'spam')
             ->assertJsonPath('data.reports.0.video.id', $video->id);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id.'/activity')
+        $this->getJson('/api/admin/users/'.$creator->id.'/activity')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_activity_retrieved'))
             ->assertJsonCount(2, 'data.activity')
@@ -662,7 +662,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id)
+        $this->getJson('/api/admin/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_retrieved'))
             ->assertJsonPath('data.wallet.credited', 8000)
@@ -674,7 +674,7 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.moderation.total', 1)
             ->assertJsonPath('data.moderation.flagged', 1);
 
-        $this->getJson('/api/v1/admin/users/'.$creator->id.'/transactions')
+        $this->getJson('/api/admin/users/'.$creator->id.'/transactions')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.user_transactions_retrieved'))
             ->assertJsonCount(2, 'data.transactions')
@@ -692,7 +692,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/users/'.$creator->id, ['resetVerification' => true])
+        $this->patchJson('/api/admin/users/'.$creator->id, ['resetVerification' => true])
             ->assertOk()
             ->assertJsonPath('data.user.creatorVerificationStatus', 'unsubmitted')
             ->assertJsonPath('data.user.isVerifiedCreator', false)
@@ -719,7 +719,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/users/'.$member->id, ['isAdmin' => true])
+        $this->patchJson('/api/admin/users/'.$member->id, ['isAdmin' => true])
             ->assertOk()
             ->assertJsonPath('data.user.isAdmin', true);
 
@@ -729,7 +729,7 @@ class AdminDashboardApiTest extends TestCase
             'auditable_id' => $member->id,
         ]);
 
-        $this->patchJson('/api/v1/admin/users/'.$member->id, ['isAdmin' => false])
+        $this->patchJson('/api/admin/users/'.$member->id, ['isAdmin' => false])
             ->assertOk()
             ->assertJsonPath('data.user.isAdmin', false);
 
@@ -747,7 +747,7 @@ class AdminDashboardApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/users/'.$member->id, [
+        $this->patchJson('/api/admin/users/'.$member->id, [
             'accountStatus' => 'suspended',
             'accountStatusNotes' => 'Policy violation.',
         ])->assertOk();
@@ -759,7 +759,7 @@ class AdminDashboardApiTest extends TestCase
         ]);
 
         // The only administrator cannot remove their own admin access.
-        $this->patchJson('/api/v1/admin/users/'.$admin->id, ['isAdmin' => false])
+        $this->patchJson('/api/admin/users/'.$admin->id, ['isAdmin' => false])
             ->assertStatus(422)
             ->assertJsonPath('message', trans('messages.admin.user_self_protection'));
 

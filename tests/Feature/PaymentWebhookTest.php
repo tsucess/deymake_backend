@@ -24,7 +24,7 @@ class PaymentWebhookTest extends TestCase
         $body = json_encode($payload);
         $signature ??= hash_hmac('sha512', $body, self::SECRET);
 
-        return $this->call('POST', '/api/v1/payments/webhook/paystack', [], [], [], [
+        return $this->call('POST', '/api/payments/webhook/paystack', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
         ], $body);
@@ -63,7 +63,7 @@ class PaymentWebhookTest extends TestCase
     {
         Payment::factory()->pending()->create(['reference' => 'DMK_HOOK_M']);
 
-        $this->call('POST', '/api/v1/payments/webhook/paystack', [], [], [], [
+        $this->call('POST', '/api/payments/webhook/paystack', [], [], [], [
             'CONTENT_TYPE' => 'application/json',
         ], json_encode($this->chargeSuccessPayload('DMK_HOOK_M')))
             ->assertStatus(401);

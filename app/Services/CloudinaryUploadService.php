@@ -52,7 +52,7 @@ class CloudinaryUploadService
             'provider' => 'cloudinary',
             'resource_type' => $resourceType,
             'endpoint' => sprintf(
-                'https://api.cloudinary.com/v1_1/%s/%s/upload',
+                'https://api.cloudinary.com_1/%s/%s/upload',
                 $configuration['cloud_name'],
                 $resourceType,
             ),

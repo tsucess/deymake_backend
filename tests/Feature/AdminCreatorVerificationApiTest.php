@@ -32,7 +32,7 @@ class AdminCreatorVerificationApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/creator-verification-requests')
+        $this->getJson('/api/admin/creator-verification-requests')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -46,7 +46,7 @@ class AdminCreatorVerificationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/creator-verification-requests')
+        $this->getJson('/api/admin/creator-verification-requests')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.creator_verification.admin_requests_retrieved'))
             ->assertJsonPath('meta.requests.total', 3)
@@ -55,16 +55,16 @@ class AdminCreatorVerificationApiTest extends TestCase
             ->assertJsonPath('meta.summary.approved', 1)
             ->assertJsonPath('meta.summary.rejected', 1);
 
-        $this->getJson('/api/v1/admin/creator-verification-requests?q=ada')
+        $this->getJson('/api/admin/creator-verification-requests?q=ada')
             ->assertOk()
             ->assertJsonCount(1, 'data.requests')
             ->assertJsonPath('data.requests.0.id', $pending->id);
 
-        $this->getJson('/api/v1/admin/creator-verification-requests?status=rejected')
+        $this->getJson('/api/admin/creator-verification-requests?status=rejected')
             ->assertOk()
             ->assertJsonCount(1, 'data.requests');
 
-        $this->getJson('/api/v1/admin/creator-verification-requests?from=2026-04-01')
+        $this->getJson('/api/admin/creator-verification-requests?from=2026-04-01')
             ->assertOk()
             ->assertJsonCount(1, 'data.requests')
             ->assertJsonPath('data.requests.0.id', $pending->id);
@@ -77,7 +77,7 @@ class AdminCreatorVerificationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/creator-verification-requests/'.$request->id)
+        $this->getJson('/api/admin/creator-verification-requests/'.$request->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.creator_verification.admin_request_retrieved'))
             ->assertJsonPath('data.request.documentUrl', $request->document_url)
@@ -99,7 +99,7 @@ class AdminCreatorVerificationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/creator-verification-requests/'.$request->id, [
+        $this->patchJson('/api/admin/creator-verification-requests/'.$request->id, [
             'status' => 'approved',
             'reviewNotes' => 'Documents confirmed.',
         ])
@@ -128,8 +128,8 @@ class AdminCreatorVerificationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/creator-verification-requests/'.$rejected->id, ['status' => 'rejected'])->assertOk();
-        $this->patchJson('/api/v1/admin/creator-verification-requests/'.$needsInfo->id, ['status' => 'needs_more_info'])->assertOk();
+        $this->patchJson('/api/admin/creator-verification-requests/'.$rejected->id, ['status' => 'rejected'])->assertOk();
+        $this->patchJson('/api/admin/creator-verification-requests/'.$needsInfo->id, ['status' => 'needs_more_info'])->assertOk();
 
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.creator_verification_rejected', 'auditable_id' => $rejected->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.creator_verification_more_info_requested', 'auditable_id' => $needsInfo->id]);
@@ -142,7 +142,7 @@ class AdminCreatorVerificationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/creator-verification-requests/'.$request->id, ['status' => 'banned'])
+        $this->patchJson('/api/admin/creator-verification-requests/'.$request->id, ['status' => 'banned'])
             ->assertStatus(422);
     }
 

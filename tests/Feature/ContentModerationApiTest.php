@@ -32,7 +32,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($reporter);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/report', [
+        $this->postJson('/api/videos/'.$video->id.'/report', [
             'reason' => 'unsafe',
             'details' => 'Please review this clip manually.',
         ])
@@ -51,7 +51,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/moderation/cases?status=pending_review&contentType=video')
+        $this->getJson('/api/admin/moderation/cases?status=pending_review&contentType=video')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.moderation.queue_retrieved'))
             ->assertJsonCount(1, 'data.cases')
@@ -59,7 +59,7 @@ class ContentModerationApiTest extends TestCase
             ->assertJsonPath('data.cases.0.subject.id', $video->id)
             ->assertJsonPath('data.cases.0.reportCount', 1);
 
-        $this->patchJson('/api/v1/admin/moderation/cases/'.$moderationCase->id, [
+        $this->patchJson('/api/admin/moderation/cases/'.$moderationCase->id, [
             'action' => 'remove',
             'notes' => 'Removed after manual review.',
             'reason' => 'policy_violation',
@@ -75,7 +75,7 @@ class ContentModerationApiTest extends TestCase
         ]);
 
         Sanctum::actingAs($reporter);
-        $this->getJson('/api/v1/videos/'.$video->id)->assertNotFound();
+        $this->getJson('/api/videos/'.$video->id)->assertNotFound();
     }
 
     public function test_ai_scan_auto_restricts_risky_comment_and_admin_can_approve_it(): void
@@ -96,7 +96,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($commenter);
 
-        $createResponse = $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $createResponse = $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'FREE MONEY click here on telegram for xxx explicit content now',
         ]);
 
@@ -117,7 +117,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/moderation/cases?status=restricted&contentType=comment')
+        $this->getJson('/api/admin/moderation/cases?status=restricted&contentType=comment')
             ->assertOk()
             ->assertJsonCount(1, 'data.cases')
             ->assertJsonPath('data.cases.0.id', $moderationCase->id)
@@ -125,12 +125,12 @@ class ContentModerationApiTest extends TestCase
             ->assertJsonPath('data.cases.0.aiRiskLevel', 'high');
 
         Sanctum::actingAs($creator);
-        $this->getJson('/api/v1/videos/'.$video->id.'/comments')
+        $this->getJson('/api/videos/'.$video->id.'/comments')
             ->assertOk()
             ->assertJsonCount(0, 'data.comments');
 
         Sanctum::actingAs($admin);
-        $this->patchJson('/api/v1/admin/moderation/cases/'.$moderationCase->id, [
+        $this->patchJson('/api/admin/moderation/cases/'.$moderationCase->id, [
             'action' => 'approve',
             'notes' => 'Approved after manual review.',
         ])
@@ -139,7 +139,7 @@ class ContentModerationApiTest extends TestCase
             ->assertJsonPath('data.case.subject.moderationStatus', 'visible');
 
         Sanctum::actingAs($creator);
-        $this->getJson('/api/v1/videos/'.$video->id.'/comments')
+        $this->getJson('/api/videos/'.$video->id.'/comments')
             ->assertOk()
             ->assertJsonCount(1, 'data.comments')
             ->assertJsonPath('data.comments.0.id', $commentId);
@@ -163,7 +163,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($commenter);
 
-        $commentId = $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $commentId = $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'Absolutely lovely choreography showcase',
         ])->assertCreated()->json('data.comment.id');
 
@@ -174,7 +174,7 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/moderation/cases?contentType=comment&q=choreography')
+        $this->getJson('/api/admin/moderation/cases?contentType=comment&q=choreography')
             ->assertOk()
             ->assertJsonCount(1, 'data.cases')
             ->assertJsonPath('data.cases.0.id', $moderationCase->id)
@@ -183,11 +183,11 @@ class ContentModerationApiTest extends TestCase
             ->assertJsonPath('data.cases.0.subject.video.id', $video->id)
             ->assertJsonPath('meta.summary.total', 1);
 
-        $this->getJson('/api/v1/admin/moderation/cases?contentType=comment&q=nonexistentterm')
+        $this->getJson('/api/admin/moderation/cases?contentType=comment&q=nonexistentterm')
             ->assertOk()
             ->assertJsonCount(0, 'data.cases');
 
-        $this->patchJson('/api/v1/admin/moderation/cases/'.$moderationCase->id, [
+        $this->patchJson('/api/admin/moderation/cases/'.$moderationCase->id, [
             'action' => 'restrict',
             'notes' => 'Restricted after manual review.',
         ])
@@ -219,13 +219,13 @@ class ContentModerationApiTest extends TestCase
 
         Sanctum::actingAs($commenter);
 
-        $commentId = $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $commentId = $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'Great set tonight',
         ])->assertCreated()->json('data.comment.id');
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/moderation/comments/'.$commentId.'/rescan')
+        $this->postJson('/api/admin/moderation/comments/'.$commentId.'/rescan')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.moderation.comment_rescanned'))
             ->assertJsonPath('data.case.subject.id', $commentId);

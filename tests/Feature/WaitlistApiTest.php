@@ -11,7 +11,7 @@ class WaitlistApiTest extends TestCase
 
     public function test_health_endpoint_returns_ok_status(): void
     {
-        $this->getJson('/api/v1/health')
+        $this->getJson('/api/health')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.health.healthy'))
             ->assertJsonPath('data.status', 'ok');
@@ -19,7 +19,7 @@ class WaitlistApiTest extends TestCase
 
     public function test_waitlist_entry_can_be_created(): void
     {
-        $response = $this->postJson('/api/v1/waitlist', [
+        $response = $this->postJson('/api/waitlist', [
             'firstName' => 'Rise Network',
             'email' => 'waitlist@example.com',
             'phone' => '+2348000000000',
@@ -55,9 +55,9 @@ class WaitlistApiTest extends TestCase
             'agreed' => true,
         ];
 
-        $this->postJson('/api/v1/waitlist', $payload)->assertCreated();
+        $this->postJson('/api/waitlist', $payload)->assertCreated();
 
-        $this->postJson('/api/v1/waitlist', $payload)
+        $this->postJson('/api/waitlist', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
     }
@@ -65,12 +65,12 @@ class WaitlistApiTest extends TestCase
     public function test_health_and_waitlist_messages_honor_locale_headers(): void
     {
         $this->withHeaders(['X-Locale' => 'fr'])
-            ->getJson('/api/v1/health')
+            ->getJson('/api/health')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.health.healthy', [], 'fr'));
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->postJson('/api/v1/waitlist', [
+            ->postJson('/api/waitlist', [
                 'firstName' => 'Rise Network',
                 'email' => 'waitlist-yo@example.com',
                 'phone' => '+2348000000001',

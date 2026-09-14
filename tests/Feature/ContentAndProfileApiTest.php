@@ -71,32 +71,32 @@ class ContentAndProfileApiTest extends TestCase
             'body' => 'Love this track!',
         ]);
 
-        $this->getJson('/api/v1/home')
+        $this->getJson('/api/home')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.home.retrieved'))
             ->assertJsonPath('data.categories.0.slug', 'music');
 
-        $this->getJson('/api/v1/videos/trending')
+        $this->getJson('/api/videos/trending')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.trending_retrieved'))
             ->assertJsonCount(3, 'data.videos')
             ->assertJsonPath('meta.videos.total', 3)
             ->assertJsonPath('meta.videos.currentPage', 1);
 
-        $this->getJson('/api/v1/videos/trending?per_page=2&page=2')
+        $this->getJson('/api/videos/trending?per_page=2&page=2')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
             ->assertJsonPath('meta.videos.lastPage', 2)
             ->assertJsonPath('meta.videos.currentPage', 2);
 
-        $this->getJson('/api/v1/videos/live')
+        $this->getJson('/api/videos/live')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_retrieved'))
             ->assertJsonPath('data.videos.0.id', $liveVideo->id)
             ->assertJsonPath('meta.videos.total', 1);
 
-        $this->getJson('/api/v1/videos/'.$mainVideo->id)
+        $this->getJson('/api/videos/'.$mainVideo->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.retrieved'))
             ->assertJsonPath('data.video.author.fullName', 'Creator One')
@@ -110,28 +110,28 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertIsString($mainVideo->public_id);
         $this->assertNotSame('', $mainVideo->public_id);
 
-        $this->getJson('/api/v1/videos/'.$mainVideo->public_id)
+        $this->getJson('/api/videos/'.$mainVideo->public_id)
             ->assertOk()
             ->assertJsonPath('data.video.id', $mainVideo->id)
             ->assertJsonPath('data.video.publicId', $mainVideo->public_id);
 
-        $this->getJson('/api/v1/videos/'.$mainVideo->id.'/related')
+        $this->getJson('/api/videos/'.$mainVideo->id.'/related')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.related_retrieved'))
             ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
             ->assertJsonPath('meta.videos.total', 2);
 
-        $this->postJson('/api/v1/videos/'.$mainVideo->id.'/view')
+        $this->postJson('/api/videos/'.$mainVideo->id.'/view')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.view_recorded'))
             ->assertJsonPath('data.views', 501);
 
-        $this->postJson('/api/v1/videos/'.$mainVideo->id.'/share')
+        $this->postJson('/api/videos/'.$mainVideo->id.'/share')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.share_recorded'))
             ->assertJsonPath('data.shares', 1);
 
-        $this->getJson('/api/v1/search?q=Alpha')
+        $this->getJson('/api/search?q=Alpha')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.search.global_retrieved'))
             ->assertJsonPath('data.videos.0.id', $mainVideo->id)
@@ -141,13 +141,13 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.creators.total', 0)
             ->assertJsonPath('meta.categories.total', 0);
 
-        $this->getJson('/api/v1/leaderboard?period=monthly')
+        $this->getJson('/api/leaderboard?period=monthly')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
             ->assertJsonPath('data.standings.0.user.fullName', 'Creator One')
             ->assertJsonPath('data.standings.0.user.username', 'creator.one');
 
-        $this->getJson('/api/v1/users/search?q=Creator&per_page=1&page=2')
+        $this->getJson('/api/users/search?q=Creator&per_page=1&page=2')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.users.retrieved'))
             ->assertJsonCount(1, 'data.users')
@@ -156,14 +156,14 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.users.total', 2)
             ->assertJsonPath('meta.users.currentPage', 2);
 
-        $this->getJson('/api/v1/users/'.$creator->id)
+        $this->getJson('/api/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.users.profile_retrieved'))
             ->assertJsonPath('data.user.fullName', 'Creator One')
             ->assertJsonPath('data.user.username', 'creator.one')
             ->assertJsonPath('data.user.subscriberCount', 1);
 
-        $this->getJson('/api/v1/users/'.$creator->id.'/posts')
+        $this->getJson('/api/users/'.$creator->id.'/posts')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.users.posts_retrieved'))
             ->assertJsonCount(2, 'data.videos')
@@ -194,7 +194,7 @@ class ContentAndProfileApiTest extends TestCase
         $token = $viewer->createToken('leaderboard-token')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/v1/leaderboard?period=monthly')
+            ->getJson('/api/leaderboard?period=monthly')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.leaderboard.retrieved'))
             ->assertJsonPath('data.currentUserRank.userId', $viewer->id)
@@ -214,7 +214,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/me/subscribers')
+        $this->getJson('/api/me/subscribers')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.profile.subscribers_retrieved'))
             ->assertJsonPath('meta.subscribers.total', 2)
@@ -230,13 +230,13 @@ class ContentAndProfileApiTest extends TestCase
             $mock->shouldReceive('upload')->twice()->andReturn(
                 [
                     'disk' => 'cloudinary',
-                    'path' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
-                    'url' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
+                    'path' => 'https://res.cloudinary.com/demo/image/upload/deymake/uploads/images/user-2/poster.jpg',
+                    'url' => 'https://res.cloudinary.com/demo/image/upload/deymake/uploads/images/user-2/poster.jpg',
                 ],
                 [
                     'disk' => 'cloudinary',
-                    'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
-                    'url' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
+                    'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-2/live.mp4',
+                    'url' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-2/live.mp4',
                 ],
             );
         });
@@ -256,7 +256,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $uploadResponse = $this->postJson('/api/v1/uploads', [
+        $uploadResponse = $this->postJson('/api/uploads', [
             'file' => UploadedFile::fake()->image('poster.jpg'),
         ]);
 
@@ -267,13 +267,13 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertDatabaseHas('uploads', [
             'id' => $uploadId,
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/image/upload/v1/deymake/uploads/images/user-2/poster.jpg',
+            'path' => 'https://res.cloudinary.com/demo/image/upload/deymake/uploads/images/user-2/poster.jpg',
         ]);
 
         $expectedTaggedUsers = [$creator->id, $viewer->id, $featuredCreator->id];
         sort($expectedTaggedUsers);
 
-        $videoResponse = $this->postJson('/api/v1/videos', [
+        $videoResponse = $this->postJson('/api/videos', [
             'uploadId' => $uploadId,
             'categoryId' => $category->id,
             'type' => 'image',
@@ -290,17 +290,17 @@ class ContentAndProfileApiTest extends TestCase
         $videoId = $videoResponse->json('data.video.id');
         $this->assertSame($expectedTaggedUsers, Video::findOrFail($videoId)->tagged_users);
 
-        $this->patchJson('/api/v1/videos/'.$videoId, ['title' => 'Viewer Draft'])
+        $this->patchJson('/api/videos/'.$videoId, ['title' => 'Viewer Draft'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.updated'))
             ->assertJsonPath('data.video.title', 'Viewer Draft');
 
-        $this->postJson('/api/v1/videos/'.$videoId.'/publish')
+        $this->postJson('/api/videos/'.$videoId.'/publish')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.published'))
             ->assertJsonPath('data.video.isDraft', false);
 
-        $liveUploadResponse = $this->postJson('/api/v1/uploads', [
+        $liveUploadResponse = $this->postJson('/api/uploads', [
             'file' => UploadedFile::fake()->create('live.mp4', 1024, 'video/mp4'),
         ]);
 
@@ -311,10 +311,10 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertDatabaseHas('uploads', [
             'id' => $liveUploadId,
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-2/live.mp4',
         ]);
 
-        $liveVideoResponse = $this->postJson('/api/v1/videos', [
+        $liveVideoResponse = $this->postJson('/api/videos', [
             'uploadId' => $liveUploadId,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -328,12 +328,12 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.videos.created'))
             ->assertJsonPath('data.video.isLive', true)
             ->assertJsonPath('data.video.isDraft', false)
-            ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-2/live.mp4')
-            ->assertJsonPath('data.video.streamUrl', 'https://res.cloudinary.com/demo/video/upload/sp_auto/v1/deymake/uploads/videos/user-2/live.m3u8');
+            ->assertJsonPath('data.video.mediaUrl', 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-2/live.mp4')
+            ->assertJsonPath('data.video.streamUrl', 'https://res.cloudinary.com/demo/video/upload/sp_auto/deymake/uploads/videos/user-2/live.m3u8');
 
         $liveVideoId = $liveVideoResponse->json('data.video.id');
 
-        $this->getJson('/api/v1/videos/live')
+        $this->getJson('/api/videos/live')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_retrieved'))
             ->assertJsonPath('data.videos.0.id', $liveVideoId)
@@ -343,39 +343,39 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertIsString($liveVideoPublicId);
         $this->assertNotSame('', $liveVideoPublicId);
 
-        $this->postJson('/api/v1/videos/'.$liveVideoPublicId.'/share')
+        $this->postJson('/api/videos/'.$liveVideoPublicId.'/share')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.share_recorded'))
             ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/live/'.$liveVideoPublicId);
 
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/like')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.liked'));
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/like')
+        $this->deleteJson('/api/videos/'.$creatorVideo->id.'/like')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.like_removed'));
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/dislike')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.disliked'));
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/dislike')
+        $this->deleteJson('/api/videos/'.$creatorVideo->id.'/dislike')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.dislike_removed'));
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/save')
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/save')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.saved'));
-        $this->deleteJson('/api/v1/videos/'.$creatorVideo->id.'/save')
+        $this->deleteJson('/api/videos/'.$creatorVideo->id.'/save')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.save_removed'));
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/like')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/save')->assertOk();
-        $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/report', ['reason' => 'spam'])
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/like')->assertOk();
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/save')->assertOk();
+        $this->postJson('/api/videos/'.$creatorVideo->id.'/report', ['reason' => 'spam'])
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.videos.reported'));
-        $this->postJson('/api/v1/creators/'.$creator->id.'/subscribe')
+        $this->postJson('/api/creators/'.$creator->id.'/subscribe')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.subscriptions.created'));
 
-        $commentResponse = $this->postJson('/api/v1/videos/'.$creatorVideo->id.'/comments', [
+        $commentResponse = $this->postJson('/api/videos/'.$creatorVideo->id.'/comments', [
             'body' => 'Great post!',
         ]);
 
@@ -389,7 +389,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $commentId = $commentResponse->json('data.comment.id');
 
-        $this->getJson('/api/v1/videos/'.$creatorVideo->id)
+        $this->getJson('/api/videos/'.$creatorVideo->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.retrieved'))
             ->assertJsonPath('data.video.likes', 1)
@@ -400,40 +400,40 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.video.currentUserState.saved', true)
             ->assertJsonPath('data.video.currentUserState.subscribed', true);
 
-        $this->getJson('/api/v1/videos/'.$creatorVideo->id.'/comments')
+        $this->getJson('/api/videos/'.$creatorVideo->id.'/comments')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.retrieved'))
             ->assertJsonCount(1, 'data.comments')
             ->assertJsonPath('data.comments.0.repliesCount', 0)
             ->assertJsonPath('data.comments.0.currentUserState.liked', false);
 
-        $this->getJson('/api/v1/me/profile')
+        $this->getJson('/api/me/profile')
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer')
             ->assertJsonPath('data.profile.username', 'viewer.handle')
             ->assertJsonPath('data.profile.subscriberCount', 0)
             ->assertJsonPath('data.profile.currentUserState.subscribed', false);
 
-        $this->getJson('/api/v1/users/'.$creator->id)
+        $this->getJson('/api/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('data.user.fullName', 'Creator')
             ->assertJsonPath('data.user.username', 'creator.handle')
             ->assertJsonPath('data.user.subscriberCount', 1)
             ->assertJsonPath('data.user.currentUserState.subscribed', true);
 
-        $this->getJson('/api/v1/users/search?q=Creator')
+        $this->getJson('/api/users/search?q=Creator')
             ->assertOk()
             ->assertJsonPath('data.users.0.fullName', 'Creator')
             ->assertJsonPath('data.users.0.username', 'creator.handle')
             ->assertJsonPath('data.users.0.currentUserState.subscribed', true);
 
-        $this->getJson('/api/v1/search/creators?q=Creator')
+        $this->getJson('/api/search/creators?q=Creator')
             ->assertOk()
             ->assertJsonPath('data.creators.0.fullName', 'Creator')
             ->assertJsonPath('data.creators.0.username', 'creator.handle')
             ->assertJsonPath('data.creators.0.currentUserState.subscribed', true);
 
-        $this->patchJson('/api/v1/me/profile', ['fullName' => 'Viewer Updated', 'username' => 'viewer.updated', 'bio' => 'Updated bio'])
+        $this->patchJson('/api/me/profile', ['fullName' => 'Viewer Updated', 'username' => 'viewer.updated', 'bio' => 'Updated bio'])
             ->assertOk()
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated')
             ->assertJsonPath('data.profile.username', 'viewer.updated')
@@ -441,45 +441,45 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.profile.subscriberCount', 0)
             ->assertJsonPath('data.profile.currentUserState.subscribed', false);
 
-        $this->getJson('/api/v1/me/profile')
+        $this->getJson('/api/me/profile')
             ->assertOk()
             ->assertJsonPath('data.profile.bio', 'Updated bio')
             ->assertJsonPath('data.profile.fullName', 'Viewer Updated');
 
-        $this->getJson('/api/v1/me/posts?per_page=1&page=2')
+        $this->getJson('/api/me/posts?per_page=1&page=2')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('data.videos.0.title', fn ($value) => in_array($value, ['Viewer Draft', 'Viewer Live'], true))
             ->assertJsonPath('meta.videos.total', 2)
             ->assertJsonPath('meta.videos.currentPage', 2);
 
-        $this->getJson('/api/v1/me/liked')
+        $this->getJson('/api/me/liked')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('meta.videos.total', 1);
 
-        $this->getJson('/api/v1/me/saved')
+        $this->getJson('/api/me/saved')
             ->assertOk()
             ->assertJsonCount(1, 'data.videos')
             ->assertJsonPath('meta.videos.total', 1);
 
-        $this->getJson('/api/v1/me/drafts')
+        $this->getJson('/api/me/drafts')
             ->assertOk()
             ->assertJsonCount(0, 'data.videos')
             ->assertJsonPath('meta.videos.total', 0);
 
-        $this->getJson('/api/v1/users/'.$creator->id)
+        $this->getJson('/api/users/'.$creator->id)
             ->assertOk()
             ->assertJsonPath('data.user.subscriberCount', 1)
             ->assertJsonPath('data.user.currentUserState.subscribed', true);
 
-        $this->getJson('/api/v1/me/preferences')
+        $this->getJson('/api/me/preferences')
             ->assertOk()
             ->assertJsonPath('data.preferences.language', 'en')
             ->assertJsonPath('data.preferences.notificationSettings.inAppRealtime', true)
             ->assertJsonPath('data.preferences.notificationSettings.browserRealtime', true);
 
-        $this->patchJson('/api/v1/me/preferences', [
+        $this->patchJson('/api/me/preferences', [
             'language' => 'fr',
             'notificationSettings' => [
                 'inAppRealtime' => false,
@@ -493,24 +493,24 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/comments/'.$commentId.'/replies', ['body' => 'Thanks!'])
+        $this->postJson('/api/comments/'.$commentId.'/replies', ['body' => 'Thanks!'])
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.comments.reply_created'));
 
-        $this->postJson('/api/v1/comments/'.$commentId.'/like')
+        $this->postJson('/api/comments/'.$commentId.'/like')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.liked'));
-        $this->deleteJson('/api/v1/comments/'.$commentId.'/like')
+        $this->deleteJson('/api/comments/'.$commentId.'/like')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.like_removed'));
-        $this->postJson('/api/v1/comments/'.$commentId.'/dislike')
+        $this->postJson('/api/comments/'.$commentId.'/dislike')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.disliked'));
-        $this->deleteJson('/api/v1/comments/'.$commentId.'/dislike')
+        $this->deleteJson('/api/comments/'.$commentId.'/dislike')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.dislike_removed'));
 
-        $this->getJson('/api/v1/comments/'.$commentId.'/replies')
+        $this->getJson('/api/comments/'.$commentId.'/replies')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.replies_retrieved'))
             ->assertJsonCount(1, 'data.replies')
@@ -519,7 +519,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.replies.0.user.subscriberCount', 1)
             ->assertJsonPath('data.replies.0.currentUserState.liked', false);
 
-        $notifications = $this->getJson('/api/v1/notifications')
+        $notifications = $this->getJson('/api/notifications')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.retrieved'));
 
@@ -527,21 +527,21 @@ class ContentAndProfileApiTest extends TestCase
 
         $notificationId = $notifications->json('data.notifications.0.id');
 
-        $this->postJson('/api/v1/notifications/'.$notificationId.'/read')
+        $this->postJson('/api/notifications/'.$notificationId.'/read')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.marked_read'))
             ->assertJsonPath('data.notification.readAt', fn ($value) => $value !== null);
 
-        $this->postJson('/api/v1/notifications/read-all')
+        $this->postJson('/api/notifications/read-all')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.all_marked_read'));
-        $this->deleteJson('/api/v1/notifications/'.$notificationId)
+        $this->deleteJson('/api/notifications/'.$notificationId)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.deleted'));
 
         Sanctum::actingAs($viewer);
 
-        $viewerNotifications = $this->getJson('/api/v1/notifications')
+        $viewerNotifications = $this->getJson('/api/notifications')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.retrieved'));
 
@@ -556,12 +556,12 @@ class ContentAndProfileApiTest extends TestCase
         $this->assertContains(trans('messages.notifications.comment_dislike_title', [], 'fr'), $viewerNotificationTitles);
         $this->assertContains(trans('messages.notifications.comment_dislike_body', ['name' => 'Creator'], 'fr'), $viewerNotificationBodies);
 
-        $this->patchJson('/api/v1/comments/'.$commentId, ['body' => 'Edited comment'])
+        $this->patchJson('/api/comments/'.$commentId, ['body' => 'Edited comment'])
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.updated'))
             ->assertJsonPath('data.comment.body', 'Edited comment');
 
-        $this->deleteJson('/api/v1/comments/'.$commentId)
+        $this->deleteJson('/api/comments/'.$commentId)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.comments.deleted'));
         $this->assertDatabaseMissing('comments', ['id' => $commentId]);
@@ -607,7 +607,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/comments/'.$reply->id.'/replies', ['body' => 'Creator response'])
+        $this->postJson('/api/comments/'.$reply->id.'/replies', ['body' => 'Creator response'])
             ->assertCreated()
             ->assertJsonPath('data.reply.parentId', $reply->id);
 
@@ -648,7 +648,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Event::fake([UserNotificationChanged::class]);
 
-        $this->postJson('/api/v1/notifications/'.$first->id.'/read')
+        $this->postJson('/api/notifications/'.$first->id.'/read')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.marked_read'));
 
@@ -661,7 +661,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Event::fake([UserNotificationChanged::class]);
 
-        $this->postJson('/api/v1/notifications/read-all')
+        $this->postJson('/api/notifications/read-all')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.all_marked_read'));
 
@@ -674,7 +674,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Event::fake([UserNotificationChanged::class]);
 
-        $this->deleteJson('/api/v1/notifications/'.$second->id)
+        $this->deleteJson('/api/notifications/'.$second->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.notifications.deleted'));
 
@@ -699,7 +699,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($subscriber);
 
-        $this->postJson('/api/v1/creators/'.$recipient->id.'/subscribe')
+        $this->postJson('/api/creators/'.$recipient->id.'/subscribe')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.subscriptions.created'));
 
@@ -719,9 +719,9 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $response = $this->postJson('/api/v1/uploads', [
+        $response = $this->postJson('/api/uploads', [
             'type' => 'video',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-1/direct.mp4',
             'originalName' => 'direct.mp4',
             'mimeType' => 'video/mp4',
             'size' => 204800,
@@ -735,15 +735,15 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.upload.stored'))
             ->assertJsonPath('data.upload.type', 'video')
             ->assertJsonPath('data.upload.disk', 'cloudinary')
-            ->assertJsonPath('data.upload.path', 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4')
-            ->assertJsonPath('data.upload.processedUrl', 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/direct.mp4')
+            ->assertJsonPath('data.upload.path', 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-1/direct.mp4')
+            ->assertJsonPath('data.upload.processedUrl', 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/deymake/uploads/videos/user-1/direct.mp4')
             ->assertJsonPath('data.upload.processingStatus', 'completed');
 
         $this->assertDatabaseHas('uploads', [
             'user_id' => $creator->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/direct.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-1/direct.mp4',
             'original_name' => 'direct.mp4',
             'mime_type' => 'video/mp4',
             'size' => 204800,
@@ -766,7 +766,7 @@ class ContentAndProfileApiTest extends TestCase
             'is_draft' => false,
         ]);
 
-        $this->getJson('/api/v1/search?per_page=7')
+        $this->getJson('/api/search?per_page=7')
             ->assertOk()
             ->assertJsonCount(0, 'data.videos')
             ->assertJsonCount(0, 'data.creators')
@@ -776,7 +776,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.creators.total', 0)
             ->assertJsonPath('meta.categories.total', 0);
 
-        $this->getJson('/api/v1/search/suggestions?q=%20%20%20')
+        $this->getJson('/api/search/suggestions?q=%20%20%20')
             ->assertOk()
             ->assertJsonCount(0, 'data.videos')
             ->assertJsonCount(0, 'data.creators')
@@ -784,22 +784,22 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('meta.videos.total', 0)
             ->assertJsonPath('meta.videos.perPage', 5);
 
-        $this->getJson('/api/v1/search/videos?q=%20%20%20')
+        $this->getJson('/api/search/videos?q=%20%20%20')
             ->assertOk()
             ->assertJsonCount(0, 'data.videos')
             ->assertJsonPath('meta.videos.total', 0);
 
-        $this->getJson('/api/v1/search/creators?q=%20%20%20')
+        $this->getJson('/api/search/creators?q=%20%20%20')
             ->assertOk()
             ->assertJsonCount(0, 'data.creators')
             ->assertJsonPath('meta.creators.total', 0);
 
-        $this->getJson('/api/v1/search/categories?q=%20%20%20')
+        $this->getJson('/api/search/categories?q=%20%20%20')
             ->assertOk()
             ->assertJsonCount(0, 'data.categories')
             ->assertJsonPath('meta.categories.total', 0);
 
-        $this->getJson('/api/v1/users/search?q=%20%20%20&per_page=3')
+        $this->getJson('/api/users/search?q=%20%20%20&per_page=3')
             ->assertOk()
             ->assertJsonCount(0, 'data.users')
             ->assertJsonPath('meta.users.total', 0)
@@ -821,31 +821,31 @@ class ContentAndProfileApiTest extends TestCase
             'user_id' => $creator->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/original.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-1/original.mp4',
             'original_name' => 'original.mp4',
             'mime_type' => 'video/mp4',
             'size' => 1024,
             'processing_status' => 'completed',
-            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/original.mp4',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/deymake/uploads/videos/user-1/original.mp4',
         ]);
 
         $replacementUpload = Upload::create([
             'user_id' => $creator->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-1/replacement.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-1/replacement.mp4',
             'original_name' => 'replacement.mp4',
             'mime_type' => 'video/mp4',
             'size' => 2048,
             'processing_status' => 'completed',
-            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/user-1/replacement.mp4',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/deymake/uploads/videos/user-1/replacement.mp4',
         ]);
 
         Sanctum::actingAs($creator);
 
         $expectedOriginalThumbnail = app(CloudinaryUploadService::class)->thumbnailUrlFor($originalUpload->path);
 
-        $createResponse = $this->postJson('/api/v1/videos', [
+        $createResponse = $this->postJson('/api/videos', [
             'uploadId' => $originalUpload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -867,7 +867,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $expectedReplacementThumbnail = app(CloudinaryUploadService::class)->thumbnailUrlFor($replacementUpload->path);
 
-        $this->patchJson('/api/v1/videos/'.$videoId, [
+        $this->patchJson('/api/videos/'.$videoId, [
             'uploadId' => $replacementUpload->id,
         ])
             ->assertOk()
@@ -893,7 +893,7 @@ class ContentAndProfileApiTest extends TestCase
             'user_id' => $creator->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/live-processing.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/live-processing.mp4',
             'original_name' => 'live-processing.mp4',
             'mime_type' => 'video/mp4',
             'size' => 1024,
@@ -901,7 +901,7 @@ class ContentAndProfileApiTest extends TestCase
             'processed_url' => null,
         ]);
 
-        $this->postJson('/api/v1/videos', [
+        $this->postJson('/api/videos', [
             'uploadId' => $upload->id,
             'categoryId' => $category->id,
             'type' => 'video',
@@ -927,7 +927,7 @@ class ContentAndProfileApiTest extends TestCase
             'is_draft' => false,
         ]);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/start')
+        $this->postJson('/api/videos/'.$video->id.'/live/start')
             ->assertUnprocessable()
             ->assertJsonPath('message', trans('messages.videos.upload_must_finish_processing_for_live'));
 
@@ -938,20 +938,20 @@ class ContentAndProfileApiTest extends TestCase
 
         $upload->forceFill([
             'processing_status' => 'completed',
-            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/live-processing.mp4',
+            'processed_url' => 'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/deymake/uploads/videos/live-processing.mp4',
         ])->save();
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/start')
+        $this->postJson('/api/videos/'.$video->id.'/live/start')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_started'))
             ->assertJsonPath('data.video.isLive', true)
             ->assertJsonPath(
                 'data.video.mediaUrl',
-                'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/v1/deymake/uploads/videos/live-processing.mp4'
+                'https://res.cloudinary.com/demo/video/upload/q_auto:best,f_auto,vc_auto/deymake/uploads/videos/live-processing.mp4'
             )
             ->assertJsonPath(
                 'data.video.streamUrl',
-                'https://res.cloudinary.com/demo/video/upload/sp_auto/v1/deymake/uploads/videos/live-processing.m3u8'
+                'https://res.cloudinary.com/demo/video/upload/sp_auto/deymake/uploads/videos/live-processing.m3u8'
             );
     }
 
@@ -975,7 +975,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $offerResponse = $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $offerResponse = $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'type' => 'offer',
             'sdp' => 'viewer-offer-sdp',
         ]);
@@ -996,14 +996,14 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $creatorSignals = $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+        $creatorSignals = $this->getJson('/api/videos/'.$video->id.'/live/signals')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_signals_retrieved'))
             ->assertJsonPath('data.signals.0.type', 'offer')
             ->assertJsonPath('data.signals.0.senderId', $viewer->id)
             ->assertJsonPath('data.signals.0.payload.sdp', 'viewer-offer-sdp');
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'recipientId' => $viewer->id,
             'type' => 'answer',
             'sdp' => 'creator-answer-sdp',
@@ -1014,7 +1014,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $viewerSignals = $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+        $viewerSignals = $this->getJson('/api/videos/'.$video->id.'/live/signals')
             ->assertOk()
             ->assertJsonPath('data.signals.0.type', 'answer')
             ->assertJsonPath('data.signals.0.payload.sdp', 'creator-answer-sdp');
@@ -1023,7 +1023,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'recipientId' => $viewer->id,
             'type' => 'candidate',
             'candidate' => [
@@ -1036,7 +1036,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals?after='.$latestSignalId)
+        $this->getJson('/api/videos/'.$video->id.'/live/signals?after='.$latestSignalId)
             ->assertOk()
             ->assertJsonCount(1, 'data.signals')
             ->assertJsonPath('data.signals.0.type', 'candidate')
@@ -1044,7 +1044,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/stop')
+        $this->postJson('/api/videos/'.$video->id.'/live/stop')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_stopped'));
 
@@ -1058,7 +1058,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+        $this->getJson('/api/videos/'.$video->id.'/live/signals')
             ->assertStatus(409)
             ->assertJsonPath('message', trans('messages.videos.live_not_active'));
 
@@ -1087,7 +1087,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=audience')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=audience')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_session_retrieved'))
             ->assertJsonPath('data.session.appId', 'test-agora-app')
@@ -1095,13 +1095,13 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.session.uid', 'user-'.$viewer->id)
             ->assertJsonPath('data.session.role', 'audience');
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertOk()
             ->assertJsonPath('data.session.uid', 'user-'.$creator->id)
             ->assertJsonPath('data.session.role', 'host')
@@ -1130,7 +1130,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'type' => 'join_request',
         ])
             ->assertCreated()
@@ -1141,12 +1141,12 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/signals')
+        $this->getJson('/api/videos/'.$video->id.'/live/signals')
             ->assertOk()
             ->assertJsonPath('data.signals.0.type', 'join_request')
             ->assertJsonPath('data.signals.0.sender.fullName', $viewer->name);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'recipientId' => $viewer->id,
             'type' => 'join_request_accepted',
         ])
@@ -1156,28 +1156,28 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertOk()
             ->assertJsonPath('data.session.role', 'host');
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
             'sessionKey' => 'approved-cohost',
             'role' => 'host',
         ])
             ->assertOk()
             ->assertJsonPath('data.analytics.currentViewers', 0);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'type' => 'cohost_left',
         ])->assertCreated();
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'recipientId' => $viewer->id,
             'type' => 'join_invite',
         ])
@@ -1187,20 +1187,20 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'type' => 'join_invite_accepted',
         ])
             ->assertCreated()
             ->assertJsonPath('data.signal.type', 'join_invite_accepted')
             ->assertJsonPath('data.signal.recipientId', $creator->id);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertOk()
             ->assertJsonPath('data.session.role', 'host');
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'recipientId' => $viewer->id,
             'type' => 'cohost_left',
         ])
@@ -1210,11 +1210,11 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/session?role=host')
+        $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/signals', [
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
             'type' => 'join_request_accepted',
         ])
             ->assertStatus(422)
@@ -1242,7 +1242,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+        $this->postJson('/api/videos/'.$video->id.'/live/like')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.liked'))
             ->assertJsonPath('data.video.likes', 1)
@@ -1256,26 +1256,26 @@ class ContentAndProfileApiTest extends TestCase
                 && ($event->analytics['liveLikes'] ?? null) === 1;
         });
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+        $this->postJson('/api/videos/'.$video->id.'/live/like')
             ->assertOk()
             ->assertJsonPath('data.video.likes', 2)
             ->assertJsonPath('data.video.liveLikes', 2);
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')
+        $this->postJson('/api/videos/'.$video->id.'/live/like')
             ->assertOk()
             ->assertJsonPath('data.video.likes', 3)
             ->assertJsonPath('data.video.liveLikes', 3);
 
         $this->assertDatabaseCount('live_like_events', 3);
 
-        $this->getJson('/api/v1/videos/'.$video->id)
+        $this->getJson('/api/videos/'.$video->id)
             ->assertOk()
             ->assertJsonPath('data.video.likes', 3)
             ->assertJsonPath('data.video.liveLikes', 3);
 
-        $this->getJson('/api/v1/me/posts')
+        $this->getJson('/api/me/posts')
             ->assertOk()
             ->assertJsonPath('data.videos.0.id', $video->id)
             ->assertJsonPath('data.videos.0.likes', 3)
@@ -1304,7 +1304,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
             'sessionKey' => 'viewer-one',
             'role' => 'audience',
         ])
@@ -1312,7 +1312,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.analytics.currentViewers', 1)
             ->assertJsonPath('data.analytics.peakViewers', 1);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
             'sessionKey' => 'viewer-one-reload',
             'role' => 'audience',
         ])
@@ -1320,9 +1320,9 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.analytics.currentViewers', 1)
             ->assertJsonPath('data.analytics.peakViewers', 1);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/videos/'.$video->id.'/live/like')->assertOk();
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'This stream is amazing',
         ])
             ->assertCreated();
@@ -1334,14 +1334,14 @@ class ContentAndProfileApiTest extends TestCase
                 && ($event->comment['body'] ?? null) === 'This stream is amazing';
         });
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'Need an encore',
         ])
             ->assertCreated();
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
             'sessionKey' => 'host-one',
             'role' => 'host',
         ])
@@ -1351,7 +1351,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewerTwo);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
             'sessionKey' => 'viewer-two',
             'role' => 'audience',
         ])
@@ -1359,16 +1359,16 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.analytics.currentViewers', 2)
             ->assertJsonPath('data.analytics.peakViewers', 2);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/videos/'.$video->id.'/live/like')->assertOk();
+        $this->postJson('/api/videos/'.$video->id.'/live/like')->assertOk();
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'Best live today',
         ])
             ->assertCreated();
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/presence/leave', [
+        $this->postJson('/api/videos/'.$video->id.'/live/presence/leave', [
             'sessionKey' => 'viewer-two',
         ])
             ->assertOk()
@@ -1387,7 +1387,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/engagements?includeSummary=1')
+        $this->getJson('/api/videos/'.$video->id.'/live/engagements?includeSummary=1')
             ->assertOk()
             ->assertJsonFragment(['type' => 'comment', 'body' => 'This stream is amazing'])
             ->assertJsonFragment(['type' => 'like'])
@@ -1412,14 +1412,14 @@ class ContentAndProfileApiTest extends TestCase
                 ],
             ]);
 
-        $this->getJson('/api/v1/videos/'.$video->id)
+        $this->getJson('/api/videos/'.$video->id)
             ->assertOk()
             ->assertJsonPath('data.video.currentViewers', 1)
             ->assertJsonPath('data.video.liveAnalytics.peakViewers', 2)
             ->assertJsonPath('data.video.liveComments', 3)
             ->assertJsonPath('data.video.liveAnalytics.liveComments', 3);
 
-        $this->getJson('/api/v1/me/posts')
+        $this->getJson('/api/me/posts')
             ->assertOk()
             ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 2)
             ->assertJsonPath('data.videos.0.liveComments', 3);
@@ -1455,7 +1455,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/live/tips', [
+        $this->postJson('/api/videos/'.$video->id.'/live/tips', [
             'amount' => 1200,
             'currency' => 'NGN',
             'message' => 'Rose rain for the host!',
@@ -1482,7 +1482,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/engagements?includeSummary=1')
+        $this->getJson('/api/videos/'.$video->id.'/live/engagements?includeSummary=1')
             ->assertOk()
             ->assertJsonFragment(['type' => 'tip'])
             ->assertJsonPath('data.summary.topGifters.0.actor.fullName', 'Rose Fan')
@@ -1493,7 +1493,7 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.summary.totals.tips', 1)
             ->assertJsonPath('data.summary.totals.tipsAmount', 1200);
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.grossRevenue', 1200)
             ->assertJsonPath('data.summary.earnings.availableBalance', 1200);
@@ -1578,12 +1578,12 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/audience')
+        $this->getJson('/api/videos/'.$video->id.'/live/audience')
             ->assertForbidden();
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/videos/'.$video->id.'/live/audience')
+        $this->getJson('/api/videos/'.$video->id.'/live/audience')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.live_audience_retrieved'))
             ->assertJsonCount(2, 'data.audience')
@@ -1602,13 +1602,13 @@ class ContentAndProfileApiTest extends TestCase
         Sanctum::actingAs($user);
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->getJson('/api/v1/me/preferences')
+            ->getJson('/api/me/preferences')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.preferences.retrieved', [], 'yo'))
             ->assertJsonPath('data.preferences.language', 'yo');
 
         $this->withHeaders(['X-Locale' => 'ha'])
-            ->patchJson('/api/v1/me/preferences', [
+            ->patchJson('/api/me/preferences', [
                 'displayPreferences' => ['theme' => 'dark'],
                 'notificationSettings' => ['browserRealtime' => false],
             ])
@@ -1618,18 +1618,18 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.preferences.notificationSettings.browserRealtime', false);
 
         $this->withHeaders(['X-Locale' => 'en'])
-            ->patchJson('/api/v1/me/preferences', ['language' => 'invalid-locale'])
+            ->patchJson('/api/me/preferences', ['language' => 'invalid-locale'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['language'])
             ->assertJsonPath('errors.language.0', trans('messages.validation.language_supported'));
 
         $this->withHeaders(['X-Locale' => 'ig'])
-            ->getJson('/api/v1/home')
+            ->getJson('/api/home')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.home.retrieved', [], 'ig'));
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->getJson('/api/v1/leaderboard')
+            ->getJson('/api/leaderboard')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.leaderboard.retrieved', [], 'yo'));
     }
@@ -1651,38 +1651,38 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->postJson('/api/videos/'.$video->id.'/view')
             ->assertOk()
             ->assertJsonPath('data.views', 11);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->postJson('/api/videos/'.$video->id.'/view')
             ->assertOk()
             ->assertJsonPath('data.views', 11);
 
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
             ->withHeaders(['User-Agent' => 'Second Engagement Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/view')
+            ->postJson('/api/videos/'.$video->id.'/view')
             ->assertOk()
             ->assertJsonPath('data.views', 12);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
-            ->postJson('/api/v1/videos/'.$video->public_id.'/share')
+            ->postJson('/api/videos/'.$video->public_id.'/share')
             ->assertOk()
             ->assertJsonPath('data.shares', 1)
             ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/video/'.$video->public_id);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->postJson('/api/videos/'.$video->id.'/share')
             ->assertOk()
             ->assertJsonPath('data.shares', 1);
 
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
             ->withHeaders(['User-Agent' => 'Second Engagement Agent'])
-            ->postJson('/api/v1/videos/'.$video->id.'/share')
+            ->postJson('/api/videos/'.$video->id.'/share')
             ->assertOk()
             ->assertJsonPath('data.shares', 2);
 
@@ -1717,7 +1717,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($viewer);
 
-        $this->postJson('/api/v1/videos/'.$video->id.'/comments', [
+        $this->postJson('/api/videos/'.$video->id.'/comments', [
             'body' => 'Hey @mentioned.user great post, cc @silent.user and @creator.mentions',
         ])->assertCreated();
 
@@ -1741,7 +1741,7 @@ class ContentAndProfileApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->postJson('/api/v1/videos', [
+        $this->postJson('/api/videos', [
             'type' => 'video',
             'title' => 'Shoutout',
             'caption' => 'Big up @mentioned.user for the collab',

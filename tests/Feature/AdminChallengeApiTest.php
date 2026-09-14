@@ -54,7 +54,7 @@ class AdminChallengeApiTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/admin/challenges')
+        $this->getJson('/api/admin/challenges')
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.admin.access_denied'));
     }
@@ -69,24 +69,24 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/challenges')
+        $this->getJson('/api/admin/challenges')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.challenges_retrieved'))
             ->assertJsonPath('meta.summary.totalChallenges', 2)
             ->assertJsonPath('meta.summary.publishedChallenges', 1)
             ->assertJsonPath('meta.summary.draftChallenges', 1);
 
-        $this->getJson('/api/v1/admin/challenges?status=draft')
+        $this->getJson('/api/admin/challenges?status=draft')
             ->assertOk()
             ->assertJsonCount(1, 'data.challenges')
             ->assertJsonPath('data.challenges.0.title', 'Draft Song Contest');
 
-        $this->getJson('/api/v1/admin/challenges?q=Distinctive')
+        $this->getJson('/api/admin/challenges?q=Distinctive')
             ->assertOk()
             ->assertJsonCount(1, 'data.challenges')
             ->assertJsonPath('data.challenges.0.title', 'Distinctive Dance Battle');
 
-        $this->getJson('/api/v1/admin/challenges?category=Dance')
+        $this->getJson('/api/admin/challenges?category=Dance')
             ->assertOk()
             ->assertJsonCount(1, 'data.challenges')
             ->assertJsonPath('data.challenges.0.category', 'Dance');
@@ -98,7 +98,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->postJson('/api/v1/admin/challenges', [
+        $response = $this->postJson('/api/admin/challenges', [
             'title' => 'Admin Created Challenge',
             'summary' => 'Made by admin',
             'category' => 'Comedy',
@@ -138,7 +138,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/challenges/'.$challenge->id, [
+        $this->patchJson('/api/admin/challenges/'.$challenge->id, [
             'title' => 'Renamed Challenge',
             'summary' => 'Updated summary',
             'category' => 'Fitness',
@@ -172,7 +172,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->deleteJson('/api/v1/admin/challenges/'.$challenge->id)
+        $this->deleteJson('/api/admin/challenges/'.$challenge->id)
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.challenge_deleted'));
 
@@ -199,14 +199,14 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/challenges/'.$challenge->id.'/submissions')
+        $this->getJson('/api/admin/challenges/'.$challenge->id.'/submissions')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.challenge_submissions_retrieved'))
             ->assertJsonPath('meta.summary.total', 1)
             ->assertJsonPath('meta.summary.submitted', 1)
             ->assertJsonPath('data.submissions.0.user.fullName', 'Alan Turing');
 
-        $this->patchJson('/api/v1/admin/challenge-submissions/'.$submission->id, [
+        $this->patchJson('/api/admin/challenge-submissions/'.$submission->id, [
             'action' => 'approve',
             'notes' => 'Great entry',
         ])
@@ -242,7 +242,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/challenge-submissions/'.$submission->id, [
+        $this->patchJson('/api/admin/challenge-submissions/'.$submission->id, [
             'action' => 'reject',
             'notes' => 'Does not meet the rules',
         ])
@@ -278,7 +278,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/challenge-submissions/'.$submission->id, [
+        $this->patchJson('/api/admin/challenge-submissions/'.$submission->id, [
             'action' => 'request_changes',
             'notes' => 'Please add the required hashtag and resubmit',
         ])
@@ -314,7 +314,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/challenge-submissions/'.$submission->id, [
+        $this->patchJson('/api/admin/challenge-submissions/'.$submission->id, [
             'action' => 'banish',
         ])
             ->assertUnprocessable()
@@ -335,7 +335,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v1/admin/challenges/'.$challenge->id.'/submissions?status=changes_requested')
+        $this->getJson('/api/admin/challenges/'.$challenge->id.'/submissions?status=changes_requested')
             ->assertOk()
             ->assertJsonCount(1, 'data.submissions')
             ->assertJsonPath('data.submissions.0.id', $changesEntry->id)
@@ -344,7 +344,7 @@ class AdminChallengeApiTest extends TestCase
             ->assertJsonPath('meta.summary.approved', 1)
             ->assertJsonPath('meta.summary.changesRequested', 1);
 
-        $this->getJson('/api/v1/admin/challenges/'.$challenge->id.'/submissions?per_page=2&page=1')
+        $this->getJson('/api/admin/challenges/'.$challenge->id.'/submissions?per_page=2&page=1')
             ->assertOk()
             ->assertJsonCount(2, 'data.submissions')
             ->assertJsonPath('meta.submissions.perPage', 2)
@@ -363,7 +363,7 @@ class AdminChallengeApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/v1/admin/challenge-submissions/'.$submission->id.'/winner', [
+        $this->postJson('/api/admin/challenge-submissions/'.$submission->id.'/winner', [
             'isWinner' => true,
             'rank' => 1,
         ])
@@ -388,14 +388,14 @@ class AdminChallengeApiTest extends TestCase
             'title' => trans('messages.notifications.challenge_winner_title'),
         ]);
 
-        $this->getJson('/api/v1/admin/challenges/'.$challenge->id.'/analytics')
+        $this->getJson('/api/admin/challenges/'.$challenge->id.'/analytics')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.challenge_analytics_retrieved'))
             ->assertJsonPath('data.analytics.participants', 1)
             ->assertJsonPath('data.analytics.submissions.winners', 1)
             ->assertJsonPath('data.analytics.winners.0.id', $submission->id);
 
-        $this->getJson('/api/v1/admin/challenge-categories')
+        $this->getJson('/api/admin/challenge-categories')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.challenge_categories_retrieved'))
             ->assertJsonPath('data.categories.0.name', 'Art')

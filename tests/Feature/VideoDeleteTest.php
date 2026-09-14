@@ -21,7 +21,7 @@ class VideoDeleteTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->deleteJson('/api/v1/videos/'.$video->id)
+        $this->deleteJson('/api/videos/'.$video->id)
             ->assertOk()
             ->assertJsonStructure(['message']);
 
@@ -35,7 +35,7 @@ class VideoDeleteTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->deleteJson('/api/v1/videos/'.$video->id)->assertOk();
+        $this->deleteJson('/api/videos/'.$video->id)->assertOk();
 
         $this->assertDatabaseMissing('videos', ['id' => $video->id]);
     }
@@ -48,7 +48,7 @@ class VideoDeleteTest extends TestCase
 
         Sanctum::actingAs($intruder);
 
-        $this->deleteJson('/api/v1/videos/'.$video->id)->assertForbidden();
+        $this->deleteJson('/api/videos/'.$video->id)->assertForbidden();
 
         $this->assertDatabaseHas('videos', ['id' => $video->id]);
     }
@@ -58,7 +58,7 @@ class VideoDeleteTest extends TestCase
         $creator = User::factory()->create();
         $video = $this->makeVideo($creator, isDraft: true);
 
-        $this->deleteJson('/api/v1/videos/'.$video->id)->assertUnauthorized();
+        $this->deleteJson('/api/videos/'.$video->id)->assertUnauthorized();
 
         $this->assertDatabaseHas('videos', ['id' => $video->id]);
     }
@@ -70,7 +70,7 @@ class VideoDeleteTest extends TestCase
             'user_id' => $user->id,
             'type' => 'video',
             'disk' => 'cloudinary',
-            'path' => 'https://res.cloudinary.com/demo/video/upload/v1/deymake/uploads/videos/user-'.$user->id.'/clip.mp4',
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-'.$user->id.'/clip.mp4',
             'original_name' => 'clip.mp4',
             'mime_type' => 'video/mp4',
             'size' => 1024,

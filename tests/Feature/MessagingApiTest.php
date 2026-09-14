@@ -32,14 +32,14 @@ class MessagingApiTest extends TestCase
 
         Sanctum::actingAs($sender);
 
-        $this->getJson('/api/v1/conversations/suggested')
+        $this->getJson('/api/conversations/suggested')
             ->assertOk()
             ->assertJsonCount(2, 'data.users')
             ->assertJsonPath('data.users.0.fullName', $extra->name)
             ->assertJsonPath('data.users.1.fullName', $recipient->name)
             ->assertJsonPath('data.users.1.subscriberCount', 1);
 
-        $conversationResponse = $this->postJson('/api/v1/conversations', [
+        $conversationResponse = $this->postJson('/api/conversations', [
             'userId' => $recipient->id,
             'message' => 'Hello there',
         ]);
@@ -53,19 +53,19 @@ class MessagingApiTest extends TestCase
 
         $conversationId = $conversationResponse->json('data.conversation.id');
 
-        $this->getJson('/api/v1/conversations')
+        $this->getJson('/api/conversations')
             ->assertOk()
             ->assertJsonCount(1, 'data.conversations')
             ->assertJsonPath('data.conversations.0.participant.subscriberCount', 1)
             ->assertJsonPath('data.conversations.0.lastMessage.body', 'Hello there')
             ->assertJsonPath('data.conversations.0.lastMessage.sender.subscriberCount', 1);
 
-        $this->getJson('/api/v1/conversations/'.$conversationId.'/messages')
+        $this->getJson('/api/conversations/'.$conversationId.'/messages')
             ->assertOk()
             ->assertJsonCount(1, 'data.messages')
             ->assertJsonPath('data.messages.0.sender.subscriberCount', 1);
 
-        $this->postJson('/api/v1/conversations/'.$conversationId.'/messages', [
+        $this->postJson('/api/conversations/'.$conversationId.'/messages', [
             'body' => 'Second message',
         ])->assertCreated();
 
@@ -75,12 +75,12 @@ class MessagingApiTest extends TestCase
                 && $event->message->body === 'Second message';
         });
 
-        $this->postJson('/api/v1/conversations', [
+        $this->postJson('/api/conversations', [
             'userId' => $recipient->id,
             'message' => 'Third message',
         ])->assertCreated()->assertJsonPath('data.conversation.id', $conversationId);
 
-        $this->getJson('/api/v1/conversations/'.$conversationId.'/messages?after=1')
+        $this->getJson('/api/conversations/'.$conversationId.'/messages?after=1')
             ->assertOk()
             ->assertJsonCount(2, 'data.messages')
             ->assertJsonPath('data.messages.0.body', 'Second message')
@@ -88,7 +88,7 @@ class MessagingApiTest extends TestCase
 
         Sanctum::actingAs($recipient);
 
-        $this->getJson('/api/v1/conversations')
+        $this->getJson('/api/conversations')
             ->assertOk()
             ->assertJsonPath('data.conversations.0.unreadCount', 3)
             ->assertJsonPath('data.conversations.0.participant.fullName', $sender->name)
@@ -96,18 +96,18 @@ class MessagingApiTest extends TestCase
             ->assertJsonPath('data.conversations.0.lastMessage.body', 'Third message')
             ->assertJsonPath('data.conversations.0.lastMessage.sender.subscriberCount', 1);
 
-        $this->getJson('/api/v1/conversations/'.$conversationId.'/messages')
+        $this->getJson('/api/conversations/'.$conversationId.'/messages')
             ->assertOk()
             ->assertJsonCount(3, 'data.messages')
             ->assertJsonPath('data.messages.0.sender.subscriberCount', 1);
 
-        $this->postJson('/api/v1/conversations/'.$conversationId.'/read')->assertOk();
+        $this->postJson('/api/conversations/'.$conversationId.'/read')->assertOk();
 
-        $this->getJson('/api/v1/conversations')
+        $this->getJson('/api/conversations')
             ->assertOk()
             ->assertJsonPath('data.conversations.0.unreadCount', 0);
 
-        $notifications = $this->getJson('/api/v1/notifications')
+        $notifications = $this->getJson('/api/notifications')
             ->assertOk()
             ->assertJsonCount(3, 'data.notifications');
 
@@ -123,7 +123,7 @@ class MessagingApiTest extends TestCase
                 && data_get($event->notification?->data, 'conversationId') === $conversationId;
         });
 
-        $this->getJson('/api/v1/conversations/suggested')
+        $this->getJson('/api/conversations/suggested')
             ->assertOk()
             ->assertJsonCount(1, 'data.users')
             ->assertJsonPath('data.users.0.fullName', $extra->name);
@@ -140,7 +140,7 @@ class MessagingApiTest extends TestCase
         Sanctum::actingAs($sender);
 
         $conversation = $this->withHeaders(['X-Locale' => 'ha'])
-            ->postJson('/api/v1/conversations', [
+            ->postJson('/api/conversations', [
                 'userId' => $recipient->id,
             ])
             ->assertCreated()
@@ -150,20 +150,20 @@ class MessagingApiTest extends TestCase
         $conversationId = $conversation->json('data.conversation.id');
 
         $this->withHeaders(['X-Locale' => 'yo'])
-            ->getJson('/api/v1/conversations')
+            ->getJson('/api/conversations')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.conversations.retrieved', [], 'yo'))
             ->assertJsonPath('data.conversations.0.status', trans('messages.conversations.no_messages_yet', [], 'yo'));
 
         $this->withHeaders(['X-Locale' => 'ig'])
-            ->postJson('/api/v1/conversations/'.$conversationId.'/messages', [
+            ->postJson('/api/conversations/'.$conversationId.'/messages', [
                 'body' => 'Ndewo',
             ])
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.conversations.message_created', [], 'ig'));
 
         $status = $this->withHeaders(['X-Locale' => 'es'])
-            ->getJson('/api/v1/conversations')
+            ->getJson('/api/conversations')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.conversations.retrieved', [], 'es'))
             ->json('data.conversations.0.status');
@@ -202,7 +202,7 @@ class MessagingApiTest extends TestCase
 
         Sanctum::actingAs($sender);
 
-        $conversations = collect($this->getJson('/api/v1/conversations')
+        $conversations = collect($this->getJson('/api/conversations')
             ->assertOk()
             ->json('data.conversations'))
             ->keyBy(fn (array $conversation) => $conversation['participant']['fullName']);

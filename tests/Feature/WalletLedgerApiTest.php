@@ -29,13 +29,13 @@ class WalletLedgerApiTest extends TestCase
 
         Sanctum::actingAs($member);
 
-        $this->postJson('/api/v1/memberships/plans/'.$plan->id.'/subscribe')
+        $this->postJson('/api/memberships/plans/'.$plan->id.'/subscribe')
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.memberships.created'));
 
         Sanctum::actingAs($creator);
 
-        $this->putJson('/api/v1/monetization/payout-account', [
+        $this->putJson('/api/monetization/payout-account', [
             'accountName' => 'Ledger Creator',
             'accountReference' => '1234567890',
             'bankName' => 'Creator Bank',
@@ -43,7 +43,7 @@ class WalletLedgerApiTest extends TestCase
             'currency' => 'NGN',
         ])->assertOk();
 
-        $payoutResponse = $this->postJson('/api/v1/monetization/payouts', [
+        $payoutResponse = $this->postJson('/api/monetization/payouts', [
             'amount' => 1500,
             'notes' => 'Need working capital.',
         ]);
@@ -54,18 +54,18 @@ class WalletLedgerApiTest extends TestCase
 
         $payoutId = $payoutResponse->json('data.payout.id');
 
-        $this->getJson('/api/v1/monetization/transactions')
+        $this->getJson('/api/monetization/transactions')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.monetization.transactions_retrieved'))
             ->assertJsonCount(2, 'data.transactions');
 
-        $this->getJson('/api/v1/monetization/transactions?type=payout_debit')
+        $this->getJson('/api/monetization/transactions?type=payout_debit')
             ->assertOk()
             ->assertJsonCount(1, 'data.transactions')
             ->assertJsonPath('data.transactions.0.type', 'payout_debit')
             ->assertJsonPath('data.transactions.0.status', 'requested');
 
-        $this->getJson('/api/v1/monetization/transactions?type=membership_credit')
+        $this->getJson('/api/monetization/transactions?type=membership_credit')
             ->assertOk()
             ->assertJsonCount(1, 'data.transactions')
             ->assertJsonPath('data.transactions.0.type', 'membership_credit')
@@ -73,7 +73,7 @@ class WalletLedgerApiTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->patchJson('/api/v1/admin/payout-requests/'.$payoutId, [
+        $this->patchJson('/api/admin/payout-requests/'.$payoutId, [
             'status' => 'rejected',
             'notes' => 'Please confirm payout details.',
             'rejectionReason' => 'Account verification pending.',
@@ -83,7 +83,7 @@ class WalletLedgerApiTest extends TestCase
 
         Sanctum::actingAs($creator);
 
-        $this->getJson('/api/v1/monetization/summary')
+        $this->getJson('/api/monetization/summary')
             ->assertOk()
             ->assertJsonPath('data.summary.earnings.grossRevenue', 4000)
             ->assertJsonPath('data.summary.earnings.pendingPayouts', 0)
@@ -91,7 +91,7 @@ class WalletLedgerApiTest extends TestCase
             ->assertJsonPath('data.summary.earnings.availableBalance', 4000)
             ->assertJsonPath('data.summary.ledger.transactionsCount', 2);
 
-        $this->getJson('/api/v1/monetization/transactions?status=rejected')
+        $this->getJson('/api/monetization/transactions?status=rejected')
             ->assertOk()
             ->assertJsonCount(1, 'data.transactions')
             ->assertJsonPath('data.transactions.0.payoutRequestId', $payoutId)
