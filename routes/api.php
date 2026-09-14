@@ -65,7 +65,7 @@ use App\Http\Middleware\RecordUserActivity;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function (): void {
+// Route::prefix()->group(function (): void {
     // Locale negotiation wraps the entire versioned API. Authentication is
     // added below only where an endpoint changes user-owned state.
     Route::middleware(SetLocale::class)->group(function (): void {
@@ -462,4 +462,4 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'storeMessage']);
         Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
     });
-});
+// });
