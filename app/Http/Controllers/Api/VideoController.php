@@ -84,8 +84,8 @@ class VideoController extends Controller
                 }
 
                 $query->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $category));
-            })
-            ->latest(), $request);
+            }), $request);
+            // ->latest(), $request);
 
         return $this->videoResponse($request, __('messages.videos.list_retrieved'), $videos);
     }
