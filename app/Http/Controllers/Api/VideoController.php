@@ -135,6 +135,8 @@ class VideoController extends Controller
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
             'isDraft' => ['sometimes', 'boolean'],
+            'postContentDisclosure' => ['sometimes', 'boolean'],
+            'aiGeneratedContent' => ['sometimes', 'boolean'],
             'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
             'allowGifts' => ['sometimes', 'boolean'],
         ]);
@@ -184,6 +186,8 @@ class VideoController extends Controller
             'thumbnail_url' => $thumbnailUrl,
             'is_live' => $isLiveRequested,
             'is_draft' => $validated['isDraft'] ?? ! $isLiveRequested,
+            'post_content_disclosure' => (bool) ($validated['postContentDisclosure'] ?? false),
+            'ai_generated_content' => (bool) ($validated['aiGeneratedContent'] ?? false),
             'visibility' => $validated['visibility'] ?? 'everyone',
             'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : true,
         ]);
@@ -303,6 +307,8 @@ class VideoController extends Controller
             'thumbnailUrl' => ['nullable', 'string', 'max:2048'],
             'isLive' => ['sometimes', 'boolean'],
             'isDraft' => ['sometimes', 'boolean'],
+            'postContentDisclosure' => ['sometimes', 'boolean'],
+            'aiGeneratedContent' => ['sometimes', 'boolean'],
             'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
             'allowGifts' => ['sometimes', 'boolean'],
         ]);
@@ -371,6 +377,12 @@ class VideoController extends Controller
             'media_url' => $mediaUrl,
             'thumbnail_url' => $thumbnailUrl,
             'is_draft' => $validated['isDraft'] ?? $video->is_draft,
+            'post_content_disclosure' => array_key_exists('postContentDisclosure', $validated)
+                ? (bool) $validated['postContentDisclosure']
+                : $video->post_content_disclosure,
+            'ai_generated_content' => array_key_exists('aiGeneratedContent', $validated)
+                ? (bool) $validated['aiGeneratedContent']
+                : $video->ai_generated_content,
             'visibility' => $validated['visibility'] ?? $video->visibility,
             'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : $video->allow_gifts,
         ])->save();
