@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoReport;
 use App\Models\WalletTransaction;
+use App\Services\CloudinaryUploadService;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
 use Illuminate\Database\Eloquent\Builder;
@@ -114,7 +115,10 @@ class AdminDashboardController extends Controller
             ])
             ->values();
         $recentVideos = Video::query()
-            ->with(['user' => fn ($query) => $query->withProfileAggregates($request->user())])
+            ->with([
+                'user' => fn ($query) => $query->withProfileAggregates($request->user()),
+                'upload',
+            ])
             ->latest()
             ->limit(5)
             ->get()
@@ -122,7 +126,7 @@ class AdminDashboardController extends Controller
                 'id' => $video->id,
                 'title' => $video->title,
                 'caption' => $video->caption,
-                'thumbnailUrl' => $video->thumbnail_url,
+                'thumbnailUrl' => $this->resolveVideoThumbnail($video),
                 'isDraft' => (bool) $video->is_draft,
                 'isLive' => (bool) $video->is_live,
                 'createdAt' => $video->created_at?->toISOString(),
@@ -141,6 +145,7 @@ class AdminDashboardController extends Controller
             'moderationAlerts' => $this->moderationAlerts($from, $to),
             'creatorGrowth' => $this->creatorGrowth($from, $to),
             'topChallenges' => $this->topChallenges(),
+            'topChallengers' => $this->topChallengers(),
             'topRegions' => $this->topRegions($from, $to),
             'recentUsers' => UserResource::collection($recentUsers),
             'recentVideos' => $recentVideos,
@@ -515,6 +520,68 @@ class AdminDashboardController extends Controller
                 'entries' => (int) ($challenge->submissions_count ?? 0),
                 'thumbnailUrl' => $challenge->thumbnail_url,
                 'status' => $challenge->lifecycleStatus(),
+            ])
+            ->values();
+    }
+
+    /**
+     * Resolve a displayable thumbnail for a trending-video card: prefer the
+     * stored thumbnail, fall back to the image itself for photo posts, and
+     * derive a poster frame from managed (Cloudinary) sources for videos.
+     * Returns null when no image thumbnail can be produced so the frontend
+     * can render its placeholder.
+     */
+    private function resolveVideoThumbnail(Video $video): ?string
+    {
+        if (is_string($video->thumbnail_url) && $video->thumbnail_url !== '') {
+            return $video->thumbnail_url;
+        }
+
+        if ($video->type !== 'video') {
+            return $video->upload?->url ?: ($video->media_url ?: null);
+        }
+
+        $source = $video->upload?->path ?: $video->media_url;
+
+        if (! is_string($source) || $source === '') {
+            return null;
+        }
+
+        $cloudinary = app(CloudinaryUploadService::class);
+
+        return $cloudinary->isManagedUrl($source)
+            ? $cloudinary->thumbnailUrlFor($source)
+            : null;
+    }
+
+    /**
+     * Top challengers ranked by challenge wins (winning submissions), with
+     * follower (subscriber) counts and verified status for the
+     * "Top Challengers" card.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function topChallengers(): Collection
+    {
+        return User::query()
+            ->whereHas('challengeSubmissions', fn (Builder $query) => $query->where('is_winner', true))
+            ->withCount([
+                'challengeSubmissions as wins_count' => fn (Builder $query) => $query->where('is_winner', true),
+                'subscribers as subscribers_count',
+            ])
+            ->orderByDesc('wins_count')
+            ->orderByDesc('subscribers_count')
+            ->limit(4)
+            ->get()
+            ->map(fn (User $challenger) => [
+                'id' => $challenger->id,
+                'fullName' => $challenger->name,
+                'username' => $challenger->username,
+                'avatarUrl' => $challenger->avatar_url,
+                'wins' => (int) ($challenger->wins_count ?? 0),
+                'followersCount' => (int) ($challenger->subscribers_count ?? 0),
+                'isVerifiedCreator' => $challenger->creator_verification_status === 'approved',
+                'role' => $challenger->is_admin ? 'admin' : 'creator',
             ])
             ->values();
     }

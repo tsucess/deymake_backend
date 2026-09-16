@@ -477,7 +477,30 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.topCreators.0.earnings', 5000)
             ->assertJsonPath('data.recentVerificationRequests.0.status', 'pending')
             ->assertJsonPath('data.recentVerificationRequests.0.creator.id', $reporter->id)
-            ->assertJsonPath('data.recentVerificationRequests.0.creator.username', 'report.author');
+            ->assertJsonPath('data.recentVerificationRequests.0.creator.username', 'report.author')
+            ->assertJsonPath('data.recentVideos.0.thumbnailUrl', 'https://cdn.example.com/live.jpg');
+    }
+
+    public function test_trending_videos_use_media_as_thumbnail_when_stored_thumbnail_is_missing(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'thumb.admin']);
+        $creator = User::factory()->create(['username' => 'thumb.creator']);
+
+        // Image post without an explicit thumbnail: the image itself is the thumbnail.
+        Video::query()->create([
+            'user_id' => $creator->id,
+            'type' => 'image',
+            'title' => 'Cover Shot',
+            'media_url' => 'https://cdn.example.com/cover.jpg',
+            'is_draft' => false,
+            'is_live' => false,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.recentVideos.0.thumbnailUrl', 'https://cdn.example.com/cover.jpg');
     }
 
     public function test_admin_dashboard_respects_date_range_filter(): void
@@ -579,8 +602,12 @@ class AdminDashboardApiTest extends TestCase
             'video_id' => $firstVideoId,
             'title' => 'Entry',
             'status' => 'submitted',
+            'is_winner' => true,
+            'winner_rank' => 1,
             'submitted_at' => now(),
         ]);
+
+        $ngCreatorB->subscribers()->attach($ghCreator->id);
 
         Sanctum::actingAs($admin);
 
@@ -608,6 +635,12 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.topChallenges.0.title', 'Dance with Deymake')
             ->assertJsonPath('data.topChallenges.0.entries', 1)
             ->assertJsonPath('data.topChallenges.0.status', 'active')
+            // Top challengers: only ng.creator.b won a challenge, with one follower.
+            ->assertJsonCount(1, 'data.topChallengers')
+            ->assertJsonPath('data.topChallengers.0.username', 'ng.creator.b')
+            ->assertJsonPath('data.topChallengers.0.wins', 1)
+            ->assertJsonPath('data.topChallengers.0.followersCount', 1)
+            ->assertJsonPath('data.topChallengers.0.role', 'creator')
             // Top regions by DAU: NG (2 active) ranks above GH (1 active).
             ->assertJsonPath('data.topRegions.0.code', 'NG')
             ->assertJsonPath('data.topRegions.0.region', 'Nigeria')
