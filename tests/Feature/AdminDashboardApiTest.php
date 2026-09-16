@@ -499,6 +499,123 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonCount(3, 'data.charts.revenue.revenue');
     }
 
+    public function test_admin_dashboard_returns_dynamic_engagement_sections(): void
+    {
+        $admin = User::factory()->admin()->create(['username' => 'sections.admin']);
+
+        $ngCreatorA = User::factory()->create([
+            'username' => 'ng.creator.a',
+            'country_code' => 'NG',
+            'last_active_at' => now(),
+            'creator_verification_status' => 'approved',
+            'creator_verified_at' => now(),
+        ]);
+        $ngCreatorB = User::factory()->create([
+            'username' => 'ng.creator.b',
+            'country_code' => 'NG',
+            'last_active_at' => now()->subHour(),
+        ]);
+        $ghCreator = User::factory()->create([
+            'username' => 'gh.creator',
+            'country_code' => 'GH',
+            'last_active_at' => now()->subHours(2),
+        ]);
+
+        $firstVideoId = null;
+        foreach ([$ngCreatorA, $ngCreatorB, $ghCreator] as $creator) {
+            $video = Video::query()->create([
+                'user_id' => $creator->id,
+                'type' => 'video',
+                'title' => 'Clip '.$creator->username,
+                'media_url' => 'https://cdn.example.com/'.$creator->username.'.mp4',
+                'is_draft' => false,
+                'is_live' => false,
+            ]);
+            $firstVideoId ??= $video->id;
+        }
+
+        foreach (['violence', 'nudity', 'copyright'] as $reason) {
+            VideoReport::query()->create([
+                'video_id' => $firstVideoId,
+                'user_id' => $ghCreator->id,
+                'reason' => $reason,
+                'status' => 'pending',
+            ]);
+        }
+
+        WalletTransaction::query()->create([
+            'user_id' => $ngCreatorA->id,
+            'type' => 'membership_credit',
+            'direction' => 'credit',
+            'status' => 'posted',
+            'amount' => 250000,
+            'currency' => 'NGN',
+            'occurred_at' => now(),
+        ]);
+
+        FanTip::query()->create([
+            'creator_id' => $ngCreatorA->id,
+            'fan_id' => $ghCreator->id,
+            'video_id' => $firstVideoId,
+            'amount' => 90000,
+            'currency' => 'NGN',
+            'status' => 'posted',
+            'tipped_at' => now(),
+        ]);
+
+        $challenge = Challenge::query()->create([
+            'host_id' => $ngCreatorA->id,
+            'title' => 'Dance with Deymake',
+            'submission_starts_at' => now()->subDay(),
+            'submission_ends_at' => now()->addDays(3),
+            'status' => 'published',
+            'published_at' => now()->subHour(),
+            'thumbnail_url' => 'https://cdn.example.com/challenge.jpg',
+        ]);
+
+        ChallengeSubmission::query()->create([
+            'challenge_id' => $challenge->id,
+            'user_id' => $ngCreatorB->id,
+            'video_id' => $firstVideoId,
+            'title' => 'Entry',
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/dashboard')
+            ->assertOk()
+            // Moderation alerts: five fixed categories, in order.
+            ->assertJsonCount(5, 'data.moderationAlerts')
+            ->assertJsonPath('data.moderationAlerts.0.key', 'violent_content')
+            ->assertJsonPath('data.moderationAlerts.0.value', 1)
+            ->assertJsonPath('data.moderationAlerts.1.key', 'nudity_sexual')
+            ->assertJsonPath('data.moderationAlerts.1.value', 1)
+            ->assertJsonPath('data.moderationAlerts.4.key', 'copyright')
+            ->assertJsonPath('data.moderationAlerts.4.value', 1)
+            // Creator growth: three fresh creators, one verified, money in kobo.
+            ->assertJsonPath('data.creatorGrowth.0.key', 'new_creators')
+            ->assertJsonPath('data.creatorGrowth.0.value', 3)
+            ->assertJsonPath('data.creatorGrowth.1.key', 'verified_creators')
+            ->assertJsonPath('data.creatorGrowth.1.value', 1)
+            ->assertJsonPath('data.creatorGrowth.2.key', 'creator_earnings')
+            ->assertJsonPath('data.creatorGrowth.2.value', 250000)
+            ->assertJsonPath('data.creatorGrowth.2.isMoney', true)
+            ->assertJsonPath('data.creatorGrowth.3.key', 'revenue_shared')
+            ->assertJsonPath('data.creatorGrowth.3.value', 90000)
+            // Top challenges.
+            ->assertJsonPath('data.topChallenges.0.title', 'Dance with Deymake')
+            ->assertJsonPath('data.topChallenges.0.entries', 1)
+            ->assertJsonPath('data.topChallenges.0.status', 'active')
+            // Top regions by DAU: NG (2 active) ranks above GH (1 active).
+            ->assertJsonPath('data.topRegions.0.code', 'NG')
+            ->assertJsonPath('data.topRegions.0.region', 'Nigeria')
+            ->assertJsonPath('data.topRegions.0.value', 2)
+            ->assertJsonPath('data.topRegions.1.code', 'GH')
+            ->assertJsonPath('data.topRegions.1.value', 1);
+    }
+
     public function test_admin_can_filter_managed_users_by_verification_status(): void
     {
         $admin = User::factory()->admin()->create(['username' => 'verify.admin']);

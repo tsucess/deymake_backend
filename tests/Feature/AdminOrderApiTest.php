@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\AuditLog;
 use App\Models\MerchOrder;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -109,5 +109,50 @@ class AdminOrderApiTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
         $this->assertStringContainsString('PaymentStatus', $response->streamedContent());
+    }
+
+    public function test_admin_can_refund_order_restoring_inventory_and_payment(): void
+    {
+        $admin = $this->admin();
+        Http::fake([
+            'api.paystack.co/refund' => Http::response([
+                'status' => true,
+                'data' => ['status' => 'processed'],
+            ], 200),
+        ]);
+
+        $order = MerchOrder::factory()->create(['status' => 'fulfilled', 'quantity' => 3]);
+        $inventoryBefore = $order->product->inventory_count;
+        $payment = Payment::factory()->create([
+            'purpose' => 'merch_order',
+            'purpose_id' => $order->id,
+            'status' => 'successful',
+            'amount' => $order->total_amount,
+        ]);
+
+        $this->postJson('/api/admin/orders/'.$order->id.'/refund', ['reason' => 'Damaged item'])
+            ->assertOk()
+            ->assertJsonPath('data.order.status', 'refunded');
+
+        $this->assertDatabaseHas('merch_orders', ['id' => $order->id, 'status' => 'refunded']);
+        $this->assertSame($inventoryBefore + 3, $order->product->fresh()->inventory_count);
+        $this->assertDatabaseHas('payments', ['id' => $payment->id, 'status' => 'refunded']);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'admin.merch_order_refunded',
+            'user_id' => $admin->id,
+            'auditable_id' => $order->id,
+        ]);
+    }
+
+    public function test_refund_rejected_for_pending_order(): void
+    {
+        $this->admin();
+        $order = MerchOrder::factory()->create(['status' => 'pending']);
+
+        $this->postJson('/api/admin/orders/'.$order->id.'/refund')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+
+        $this->assertDatabaseHas('merch_orders', ['id' => $order->id, 'status' => 'pending']);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -71,7 +72,7 @@ class MerchOrderResource extends JsonResource
         };
     }
 
-    private function latestPayment(): ?\App\Models\Payment
+    private function latestPayment(): ?Payment
     {
         if (! $this->relationLoaded('payments')) {
             return null;

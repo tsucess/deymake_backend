@@ -43,6 +43,45 @@ use Illuminate\Support\Collection;
  */
 class AdminDashboardController extends Controller
 {
+    /**
+     * ISO country-code to display-name map for the "Top Regions by DAU" card.
+     * Unknown codes fall back to the raw (upper-cased) code.
+     *
+     * @var array<string, string>
+     */
+    private const REGION_NAMES = [
+        'NG' => 'Nigeria',
+        'GH' => 'Ghana',
+        'CM' => 'Cameroon',
+        'BJ' => 'Benin',
+        'KE' => 'Kenya',
+        'ZA' => 'South Africa',
+        'TZ' => 'Tanzania',
+        'UG' => 'Uganda',
+        'CI' => "Côte d'Ivoire",
+        'SN' => 'Senegal',
+        'ET' => 'Ethiopia',
+        'EG' => 'Egypt',
+        'US' => 'United States',
+        'GB' => 'United Kingdom',
+        'CA' => 'Canada',
+    ];
+
+    /**
+     * Reason groupings for the "Moderation Alerts" card, keyed by the fixed
+     * frontend category slots. Reasons not listed here are not surfaced on the
+     * dashboard card.
+     *
+     * @var array<string, list<string>>
+     */
+    private const MODERATION_CATEGORIES = [
+        'violent_content' => ['violence', 'graphic_violence', 'terrorism', 'threat', 'threats'],
+        'nudity_sexual' => ['nudity', 'sexual_content', 'csam', 'child_safety'],
+        'hate_speech' => ['hate', 'hate_speech'],
+        'spam' => ['spam', 'scam', 'misinformation'],
+        'copyright' => ['copyright', 'impersonation'],
+    ];
+
     public function dashboard(Request $request): JsonResponse
     {
         SupportedLocales::apply($request);
@@ -99,6 +138,10 @@ class AdminDashboardController extends Controller
             'summary' => $this->summary(),
             'charts' => $this->charts($from, $to),
             'topCreators' => $this->topCreators(),
+            'moderationAlerts' => $this->moderationAlerts($from, $to),
+            'creatorGrowth' => $this->creatorGrowth($from, $to),
+            'topChallenges' => $this->topChallenges(),
+            'topRegions' => $this->topRegions($from, $to),
             'recentUsers' => UserResource::collection($recentUsers),
             'recentVideos' => $recentVideos,
             'recentChallenges' => ChallengeResource::collection($recentChallenges),
@@ -365,6 +408,264 @@ class AdminDashboardController extends Controller
             'categories' => $categories,
             'totalViews' => (int) Video::query()->where('is_draft', false)->sum('views_count'),
         ];
+    }
+
+    /**
+     * Moderation-alert counts per fixed category over the reporting window, with
+     * a period-over-period percent change. A rise in reports is the "bad"
+     * direction, so `isLow` is set when the current period exceeds the previous.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function moderationAlerts(Carbon $from, Carbon $to): array
+    {
+        [$prevFrom, $prevTo] = $this->previousRange($from, $to);
+
+        $current = $this->reportCountsByReason($from, $to);
+        $previous = $this->reportCountsByReason($prevFrom, $prevTo);
+
+        $items = [];
+
+        foreach (self::MODERATION_CATEGORIES as $key => $reasons) {
+            $currentTotal = $this->sumReasons($current, $reasons);
+            $previousTotal = $this->sumReasons($previous, $reasons);
+
+            $items[] = [
+                'key' => $key,
+                'value' => $currentTotal,
+                'percent' => $this->percentLabel($currentTotal, $previousTotal),
+                'isLow' => $currentTotal > $previousTotal,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Creator-growth metrics over the reporting window with period-over-period
+     * change. For growth metrics a decline is the "bad" direction, so `isLow`
+     * is set when the current period falls below the previous.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function creatorGrowth(Carbon $from, Carbon $to): array
+    {
+        [$prevFrom, $prevTo] = $this->previousRange($from, $to);
+
+        $newCreators = $this->newCreatorsCount($from, $to);
+        $newCreatorsPrev = $this->newCreatorsCount($prevFrom, $prevTo);
+
+        $verified = $this->verifiedCreatorsCount($from, $to);
+        $verifiedPrev = $this->verifiedCreatorsCount($prevFrom, $prevTo);
+
+        $earnings = $this->creatorEarnings($from, $to);
+        $earningsPrev = $this->creatorEarnings($prevFrom, $prevTo);
+
+        $shared = $this->revenueShared($from, $to);
+        $sharedPrev = $this->revenueShared($prevFrom, $prevTo);
+
+        return [
+            [
+                'key' => 'new_creators',
+                'value' => $newCreators,
+                'percent' => $this->percentLabel($newCreators, $newCreatorsPrev),
+                'isLow' => $newCreators < $newCreatorsPrev,
+            ],
+            [
+                'key' => 'verified_creators',
+                'value' => $verified,
+                'percent' => $this->percentLabel($verified, $verifiedPrev),
+                'isLow' => $verified < $verifiedPrev,
+            ],
+            [
+                'key' => 'creator_earnings',
+                'value' => $earnings,
+                'isMoney' => true,
+                'percent' => $this->percentLabel($earnings, $earningsPrev),
+                'isLow' => $earnings < $earningsPrev,
+            ],
+            [
+                'key' => 'revenue_shared',
+                'value' => $shared,
+                'isMoney' => true,
+                'percent' => $this->percentLabel($shared, $sharedPrev),
+                'isLow' => $shared < $sharedPrev,
+            ],
+        ];
+    }
+
+    /**
+     * Top three published challenges ranked by (non-withdrawn) entry count for
+     * the dashboard "Top Challenges" card.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function topChallenges(): Collection
+    {
+        return Challenge::query()
+            ->where('status', '!=', 'draft')
+            ->withCount(['submissions as submissions_count' => fn (Builder $query) => $query->where('status', '!=', 'withdrawn')])
+            ->orderByDesc('submissions_count')
+            ->latest('published_at')
+            ->limit(3)
+            ->get()
+            ->map(fn (Challenge $challenge) => [
+                'id' => $challenge->id,
+                'title' => $challenge->title,
+                'entries' => (int) ($challenge->submissions_count ?? 0),
+                'thumbnailUrl' => $challenge->thumbnail_url,
+                'status' => $challenge->lifecycleStatus(),
+            ])
+            ->values();
+    }
+
+    /**
+     * Top regions by daily-active users (unique users with recent activity),
+     * grouped by ISO country code, with period-over-period change.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function topRegions(Carbon $from, Carbon $to): Collection
+    {
+        [$prevFrom, $prevTo] = $this->previousRange($from, $to);
+
+        $current = $this->regionDau($from, $to);
+        $previous = $this->regionDau($prevFrom, $prevTo);
+
+        return $current
+            ->take(4)
+            ->map(function ($dau, $code) use ($previous): array {
+                $currentDau = (int) $dau;
+                $previousDau = (int) $previous->get($code, 0);
+
+                return [
+                    'code' => $code,
+                    'region' => $this->regionName((string) $code),
+                    'value' => $currentDau,
+                    'percent' => $this->percentLabel($currentDau, $previousDau),
+                    'isLow' => $currentDau < $previousDau,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Report counts keyed by reason over a window.
+     *
+     * @return Collection<string, int>
+     */
+    private function reportCountsByReason(Carbon $from, Carbon $to): Collection
+    {
+        return VideoReport::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('reason, COUNT(*) as total')
+            ->groupBy('reason')
+            ->pluck('total', 'reason');
+    }
+
+    /**
+     * @param  Collection<string, int>  $counts
+     * @param  list<string>  $reasons
+     */
+    private function sumReasons(Collection $counts, array $reasons): int
+    {
+        $total = 0;
+
+        foreach ($reasons as $reason) {
+            $total += (int) $counts->get($reason, 0);
+        }
+
+        return $total;
+    }
+
+    private function newCreatorsCount(Carbon $from, Carbon $to): int
+    {
+        return User::query()
+            ->has('videos')
+            ->whereBetween('created_at', [$from, $to])
+            ->count();
+    }
+
+    private function verifiedCreatorsCount(Carbon $from, Carbon $to): int
+    {
+        return User::query()
+            ->where('creator_verification_status', 'approved')
+            ->whereBetween('creator_verified_at', [$from, $to])
+            ->count();
+    }
+
+    private function creatorEarnings(Carbon $from, Carbon $to): int
+    {
+        return (int) WalletTransaction::query()
+            ->where('direction', 'credit')
+            ->where('status', 'posted')
+            ->whereBetween('created_at', [$from, $to])
+            ->sum('amount');
+    }
+
+    private function revenueShared(Carbon $from, Carbon $to): int
+    {
+        return (int) FanTip::query()
+            ->where('status', 'posted')
+            ->whereBetween('created_at', [$from, $to])
+            ->sum('amount');
+    }
+
+    /**
+     * Unique daily-active users per country code over a window.
+     *
+     * @return Collection<string, int>
+     */
+    private function regionDau(Carbon $from, Carbon $to): Collection
+    {
+        return User::query()
+            ->whereNotNull('country_code')
+            ->where('country_code', '!=', '')
+            ->whereBetween('last_active_at', [$from, $to])
+            ->selectRaw('country_code, COUNT(*) as dau')
+            ->groupBy('country_code')
+            ->orderByDesc('dau')
+            ->pluck('dau', 'country_code');
+    }
+
+    private function regionName(string $code): string
+    {
+        $upper = mb_strtoupper($code);
+
+        return self::REGION_NAMES[$upper] ?? $upper;
+    }
+
+    /**
+     * The equal-length window immediately preceding the given range, used for
+     * period-over-period comparisons.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function previousRange(Carbon $from, Carbon $to): array
+    {
+        $days = $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) + 1;
+        $prevTo = $from->copy()->subDay()->endOfDay();
+        $prevFrom = $from->copy()->subDays($days)->startOfDay();
+
+        return [$prevFrom, $prevTo];
+    }
+
+    /**
+     * Signed percent-change label (e.g. "+12%", "-5%", "+0%") between two
+     * values, treating a zero baseline with a positive current as +100%.
+     */
+    private function percentLabel(float $current, float $previous): string
+    {
+        if ($previous <= 0.0) {
+            $pct = $current > 0.0 ? 100.0 : 0.0;
+        } else {
+            $pct = (($current - $previous) / $previous) * 100.0;
+        }
+
+        $rounded = round($pct, 1);
+        $number = $rounded == (int) $rounded ? (string) (int) $rounded : (string) $rounded;
+
+        return ($rounded > 0 ? '+' : '').$number.'%';
     }
 
     public function videoReports(Request $request): JsonResponse
