@@ -73,6 +73,7 @@ class VideoResource extends JsonResource
             'aiGeneratedContent' => (bool) $this->ai_generated_content,
             'visibility' => $this->visibility ?? 'everyone',
             'allowGifts' => (bool) ($this->allow_gifts ?? true),
+            'allowDownload' => (bool) ($this->allow_download ?? false),
             'liveStartedAt' => $this->live_started_at?->toISOString(),
             'liveEndedAt' => $this->live_ended_at?->toISOString(),
             'liveAnalytics' => [

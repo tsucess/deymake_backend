@@ -855,7 +855,8 @@ class ContentAndProfileApiTest extends TestCase
 
         $createResponse
             ->assertCreated()
-            ->assertJsonPath('data.video.thumbnailUrl', $expectedOriginalThumbnail);
+            ->assertJsonPath('data.video.thumbnailUrl', $expectedOriginalThumbnail)
+            ->assertJsonPath('data.video.allowDownload', false);
 
         $videoId = $createResponse->json('data.video.id');
 
@@ -863,20 +864,24 @@ class ContentAndProfileApiTest extends TestCase
             'id' => $videoId,
             'upload_id' => $originalUpload->id,
             'thumbnail_url' => $expectedOriginalThumbnail,
+            'allow_download' => false,
         ]);
 
         $expectedReplacementThumbnail = app(CloudinaryUploadService::class)->thumbnailUrlFor($replacementUpload->path);
 
         $this->patchJson('/api/videos/'.$videoId, [
             'uploadId' => $replacementUpload->id,
+            'allowDownload' => true,
         ])
             ->assertOk()
-            ->assertJsonPath('data.video.thumbnailUrl', $expectedReplacementThumbnail);
+            ->assertJsonPath('data.video.thumbnailUrl', $expectedReplacementThumbnail)
+            ->assertJsonPath('data.video.allowDownload', true);
 
         $this->assertDatabaseHas('videos', [
             'id' => $videoId,
             'upload_id' => $replacementUpload->id,
             'thumbnail_url' => $expectedReplacementThumbnail,
+            'allow_download' => true,
         ]);
     }
 

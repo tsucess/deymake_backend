@@ -139,6 +139,7 @@ class VideoController extends Controller
             'aiGeneratedContent' => ['sometimes', 'boolean'],
             'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
             'allowGifts' => ['sometimes', 'boolean'],
+            'allowDownload' => ['sometimes', 'boolean'],
         ]);
 
         $isLiveRequested = (bool) ($validated['isLive'] ?? false);
@@ -190,6 +191,7 @@ class VideoController extends Controller
             'ai_generated_content' => (bool) ($validated['aiGeneratedContent'] ?? false),
             'visibility' => $validated['visibility'] ?? 'everyone',
             'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : true,
+            'allow_download' => array_key_exists('allowDownload', $validated) ? (bool) $validated['allowDownload'] : false,
         ]);
 
         if ($isLiveRequested) {
@@ -311,6 +313,7 @@ class VideoController extends Controller
             'aiGeneratedContent' => ['sometimes', 'boolean'],
             'visibility' => ['sometimes', 'in:everyone,followers,friends,close_friends,only_me'],
             'allowGifts' => ['sometimes', 'boolean'],
+            'allowDownload' => ['sometimes', 'boolean'],
         ]);
 
         $requestedLive = array_key_exists('isLive', $validated) ? (bool) $validated['isLive'] : null;
@@ -385,6 +388,7 @@ class VideoController extends Controller
                 : $video->ai_generated_content,
             'visibility' => $validated['visibility'] ?? $video->visibility,
             'allow_gifts' => array_key_exists('allowGifts', $validated) ? (bool) $validated['allowGifts'] : $video->allow_gifts,
+            'allow_download' => array_key_exists('allowDownload', $validated) ? (bool) $validated['allowDownload'] : $video->allow_download,
         ])->save();
 
         if ($requestedLive === true) {
