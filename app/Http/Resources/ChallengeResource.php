@@ -17,6 +17,7 @@ class ChallengeResource extends JsonResource
 
         return [
             'id' => $challenge->id,
+            'publicId' => $challenge->public_id,
             'title' => $challenge->title,
             'slug' => $challenge->slug,
             'summary' => $challenge->summary,

@@ -13,6 +13,8 @@ class Challenge extends Model
 {
     use HasFactory;
 
+    protected const PUBLIC_ID_LENGTH = 12;
+
     protected $fillable = [
         'host_id',
         'title',
@@ -56,7 +58,33 @@ class Challenge extends Model
             if (! $challenge->slug) {
                 $challenge->slug = self::generateUniqueSlug($challenge->title ?: 'challenge');
             }
+
+            if (! filled($challenge->public_id)) {
+                $challenge->public_id = static::generateUniquePublicId();
+            }
         });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field !== null && $field !== $this->getRouteKeyName()) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $resolvedValue = (string) $value;
+
+        return static::query()
+            ->where('public_id', $resolvedValue)
+            ->when(
+                ctype_digit($resolvedValue),
+                fn (Builder $query) => $query->orWhere($this->getQualifiedKeyName(), (int) $resolvedValue)
+            )
+            ->first();
     }
 
     public function host(): BelongsTo
@@ -158,5 +186,14 @@ class Challenge extends Model
         }
 
         return $slug;
+    }
+
+    protected static function generateUniquePublicId(): string
+    {
+        do {
+            $publicId = Str::lower(Str::random(self::PUBLIC_ID_LENGTH));
+        } while (static::query()->where('public_id', $publicId)->exists());
+
+        return $publicId;
     }
 }

@@ -21,6 +21,8 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected const PUBLIC_ID_LENGTH = 12;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -108,7 +110,42 @@ class User extends Authenticatable
                     ->exists(),
                 $fallback !== '' ? $fallback : 'user',
             );
+
+            if (! filled($user->public_id)) {
+                $user->public_id = static::generateUniquePublicId();
+            }
         });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field !== null && $field !== $this->getRouteKeyName()) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $resolvedValue = (string) $value;
+
+        return static::query()
+            ->where('public_id', $resolvedValue)
+            ->when(
+                ctype_digit($resolvedValue),
+                fn (Builder $query) => $query->orWhere($this->getQualifiedKeyName(), (int) $resolvedValue)
+            )
+            ->first();
+    }
+
+    protected static function generateUniquePublicId(): string
+    {
+        do {
+            $publicId = Str::lower(Str::random(self::PUBLIC_ID_LENGTH));
+        } while (static::query()->where('public_id', $publicId)->exists());
+
+        return $publicId;
     }
 
     public function videos(): HasMany
