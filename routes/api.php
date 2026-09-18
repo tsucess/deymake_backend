@@ -457,6 +457,7 @@ use Illuminate\Support\Facades\Route;
 
         Route::get('/conversations', [ConversationController::class, 'index']);
         Route::get('/conversations/suggested', [ConversationController::class, 'suggested']);
+        Route::get('/conversations/share-targets', [ConversationController::class, 'shareTargets']);
         Route::post('/conversations', [ConversationController::class, 'store']);
         Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
         Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'storeMessage']);

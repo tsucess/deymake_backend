@@ -583,6 +583,7 @@ return [
     'conversations' => [
         'retrieved' => 'Conversations retrieved successfully.',
         'suggested_retrieved' => 'Suggested conversations retrieved successfully.',
+        'share_targets_retrieved' => 'Share targets retrieved successfully.',
         'self_not_allowed' => 'You cannot start a conversation with yourself.',
         'ready' => 'Conversation ready.',
         'messages_retrieved' => 'Messages retrieved successfully.',

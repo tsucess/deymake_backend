@@ -72,6 +72,77 @@ class ConversationController extends Controller
         ]);
     }
 
+    /**
+     * Ordered list of users to share content with.
+     *
+     * Ranking (highest first): frequent DM partners, then mutuals,
+     * then subscribed creators (following), then general audience.
+     * Optional `q` filters by name or username across all tiers.
+     */
+    public function shareTargets(Request $request): JsonResponse
+    {
+        $viewer = $request->user();
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $search = trim((string) ($validated['q'] ?? ''));
+
+        // Recent DM partners, most recent conversation first.
+        $frequentIds = $viewer->conversations()
+            ->latest('conversations.updated_at')
+            ->with('participants:id')
+            ->get()
+            ->flatMap(fn (Conversation $conversation) => $conversation->participants->pluck('id'))
+            ->reject(fn ($id) => (int) $id === (int) $viewer->id)
+            ->unique()
+            ->values();
+
+        $mutualIds = $viewer->mutuals()->pluck('users.id');
+        $followingIds = $viewer->subscribedCreators()->pluck('creator_id');
+
+        // Rank map: lower rank sorts first.
+        $rank = [];
+        foreach ($frequentIds as $id) {
+            $rank[(int) $id] = $rank[(int) $id] ?? 0;
+        }
+        foreach ($mutualIds as $id) {
+            $rank[(int) $id] = min($rank[(int) $id] ?? PHP_INT_MAX, 1);
+        }
+        foreach ($followingIds as $id) {
+            $rank[(int) $id] = min($rank[(int) $id] ?? PHP_INT_MAX, 2);
+        }
+
+        $frequentOrder = $frequentIds->values()->flip();
+
+        $users = User::query()
+            ->withProfileAggregates($viewer)
+            ->where('id', '!=', $viewer->id)
+            ->when($search !== '', function ($query) use ($search): void {
+                $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
+                $query->where(function ($inner) use ($like): void {
+                    $inner->where('name', 'like', $like)
+                        ->orWhere('username', 'like', $like);
+                });
+            })
+            ->limit(80)
+            ->get();
+
+        $sorted = $users->sortBy([
+            fn (User $user) => $rank[(int) $user->id] ?? 3,
+            fn (User $user) => $frequentOrder[(int) $user->id] ?? PHP_INT_MAX,
+            fn (User $user) => mb_strtolower((string) $user->name),
+        ])->values();
+
+        return response()->json([
+            'message' => __('messages.conversations.share_targets_retrieved'),
+            'data' => [
+                'users' => ProfileResource::collection($sorted),
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
