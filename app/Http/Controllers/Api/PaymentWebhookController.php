@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\PaymentWebhookEvent;
 use App\Http\Controllers\Api\CoinWalletController;
-use App\Services\Payments\PaymentGatewayContract;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\MerchOrderPaymentService;
 use App\Support\UserNotifier;
 use Illuminate\Database\QueryException;
@@ -26,12 +26,12 @@ use Illuminate\Support\Facades\DB;
  */
 class PaymentWebhookController extends Controller
 {
-    public function paystack(Request $request, PaymentGatewayContract $gateway, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): JsonResponse
+    public function paystack(Request $request, PaymentGatewayManager $gateways, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): JsonResponse
     {
+        $gateway = $gateways->gateway('paystack');
         $rawBody = $request->getContent();
-        $signature = $request->header('x-paystack-signature');
 
-        if (! $gateway->verifyWebhookSignature($rawBody, $signature)) {
+        if (! $gateway->verifyWebhookSignature($rawBody, $request->header('x-paystack-signature'))) {
             return response()->json(['message' => __('messages.payment.invalid_signature')], 401);
         }
 
@@ -46,9 +46,56 @@ class PaymentWebhookController extends Controller
         $reference = (string) ($eventData['reference'] ?? '');
         $dedupeKey = $eventType.':'.($eventData['id'] ?? $reference ?: uniqid('evt_', true));
 
+        return $this->ingestAndProcess($gateway->name(), $eventType, $reference, $eventData, $dedupeKey, $payload, $merchOrderPayments, $coinWallet);
+    }
+
+    public function flutterwave(Request $request, PaymentGatewayManager $gateways, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): JsonResponse
+    {
+        $gateway = $gateways->gateway('flutterwave');
+        $rawBody = $request->getContent();
+
+        if (! $gateway->verifyWebhookSignature($rawBody, $request->header('verif-hash'))) {
+            return response()->json(['message' => __('messages.payment.invalid_signature')], 401);
+        }
+
+        $payload = json_decode($rawBody, true);
+        $providerEvent = is_array($payload) ? (string) ($payload['event'] ?? '') : '';
+
+        if (! is_array($payload) || $providerEvent === '') {
+            return response()->json(['message' => __('messages.payment.webhook_received')], 200);
+        }
+
+        $data = (array) ($payload['data'] ?? []);
+        $reference = (string) ($data['tx_ref'] ?? '');
+        $status = mb_strtolower((string) ($data['status'] ?? ''));
+        $eventType = $this->flutterwaveEventType($providerEvent, $status);
+
+        // Normalize Flutterwave's payload into the canonical shape process() consumes.
+        $eventData = array_filter([
+            'reference' => isset($data['id']) ? (string) $data['id'] : ($reference ?: null),
+            'channel' => $data['payment_type'] ?? null,
+            'gateway_response' => $data['processor_response'] ?? $data['narration'] ?? null,
+            'fees' => isset($data['app_fee']) ? (int) round(((float) $data['app_fee']) * 100) : null,
+            'paid_at' => $data['created_at'] ?? null,
+        ], fn ($value) => $value !== null);
+
+        $dedupeKey = $providerEvent.':'.($data['id'] ?? $reference ?: uniqid('evt_', true));
+
+        return $this->ingestAndProcess($gateway->name(), $eventType, $reference, $eventData, $dedupeKey, $payload, $merchOrderPayments, $coinWallet);
+    }
+
+    /**
+     * Record the webhook event once (idempotent) and process it. A redelivery is
+     * rejected by the unique (provider, dedupe_key) index and treated as a no-op.
+     *
+     * @param  array<string, mixed>  $eventData
+     * @param  array<string, mixed>  $payload
+     */
+    private function ingestAndProcess(string $provider, string $eventType, string $reference, array $eventData, string $dedupeKey, array $payload, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet): JsonResponse
+    {
         try {
             $event = PaymentWebhookEvent::query()->create([
-                'provider' => $gateway->name(),
+                'provider' => $provider,
                 'event_type' => $eventType,
                 'reference' => $reference ?: null,
                 'dedupe_key' => $dedupeKey,
@@ -63,6 +110,23 @@ class PaymentWebhookController extends Controller
         $this->process($eventType, $reference, $eventData, $event, $merchOrderPayments, $coinWallet);
 
         return response()->json(['message' => __('messages.payment.webhook_received')], 200);
+    }
+
+    /**
+     * Translate a Flutterwave event + transaction status into the canonical event
+     * vocabulary process() understands (charge.success/charge.failed/refund.processed).
+     */
+    private function flutterwaveEventType(string $event, string $status): string
+    {
+        if (str_contains(mb_strtolower($event), 'refund')) {
+            return 'refund.processed';
+        }
+
+        return match ($status) {
+            'successful', 'success' => 'charge.success',
+            'failed' => 'charge.failed',
+            default => 'charge.pending',
+        };
     }
 
     /**

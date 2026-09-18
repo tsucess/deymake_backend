@@ -76,4 +76,16 @@ return [
         'callback_url' => env('PAYSTACK_CALLBACK_URL'),
     ],
 
+    'flutterwave' => [
+        'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
+        'public_key' => env('FLUTTERWAVE_PUBLIC_KEY'),
+        'secret_hash' => env('FLUTTERWAVE_SECRET_HASH'),
+        'base_url' => env('FLUTTERWAVE_BASE_URL', 'https://api.flutterwave.com/v3'),
+        'callback_url' => env('FLUTTERWAVE_CALLBACK_URL'),
+    ],
+
+    'payments' => [
+        'default' => env('PAYMENTS_DEFAULT_PROVIDER', 'paystack'),
+    ],
+
 ];

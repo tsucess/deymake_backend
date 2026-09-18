@@ -8,8 +8,8 @@ use App\Http\Resources\CoinPurchaseResource;
 use App\Models\CoinPackage;
 use App\Models\CoinPurchase;
 use App\Models\Payment;
-use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,11 +35,15 @@ class CoinWalletController extends Controller
         ]]);
     }
 
-    public function purchase(Request $request, PaymentGatewayContract $gateway): JsonResponse
+    public function purchase(Request $request, PaymentGatewayManager $gateways): JsonResponse
     {
-        $data = $request->validate(['packageId' => ['required', 'integer', 'exists:coin_packages,id']]);
+        $data = $request->validate([
+            'packageId' => ['required', 'integer', 'exists:coin_packages,id'],
+            'provider' => ['nullable', \Illuminate\Validation\Rule::in(PaymentGatewayManager::PROVIDERS)],
+        ]);
         $package = CoinPackage::query()->where('is_active', true)->findOrFail($data['packageId']);
         $user = $request->user();
+        $gateway = $gateways->gateway($data['provider'] ?? null);
         abort_unless($gateway->isConfigured(), 503, 'Payment provider is not configured.');
         $payment = Payment::query()->where('user_id', $user->id)
             ->where('purpose', 'coin_purchase')->where('purpose_id', $package->id)
@@ -48,7 +52,7 @@ class CoinWalletController extends Controller
         if (! $payment) {
             $payment = Payment::query()->create([
                 'reference' => 'DMK_COIN_'.str()->upper(str()->random(20)),
-                'provider' => 'paystack',
+                'provider' => $gateway->name(),
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'purpose' => 'coin_purchase',
@@ -58,10 +62,12 @@ class CoinWalletController extends Controller
                 'status' => 'pending',
                 'metadata' => ['coins' => $package->coins + $package->bonus_coins],
             ]);
+        } elseif ($payment->provider !== $gateway->name()) {
+            $payment->update(['provider' => $gateway->name()]);
         }
 
         try {
-            $result = $gateway->initialize($payment, config('services.paystack.callback_url'));
+            $result = $gateway->initialize($payment, $gateways->callbackUrl($gateway->name()));
         } catch (PaymentGatewayException $exception) {
             $payment->update(['status' => 'failed', 'gateway_response' => $exception->getMessage()]);
             return response()->json(['message' => 'Payment provider could not initialize the checkout.'], 422);

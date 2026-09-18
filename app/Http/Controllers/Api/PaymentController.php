@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PaymentResource;
 use App\Models\MerchOrder;
 use App\Models\Payment;
-use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Services\Payments\MerchOrderPaymentService;
 use App\Support\SupportedLocales;
 use Illuminate\Http\JsonResponse;
@@ -32,23 +32,26 @@ class PaymentController extends Controller
 {
     private const PURPOSES = ['coin_purchase', 'wallet_topup', 'membership', 'merch_order', 'general'];
 
-    public function initialize(Request $request, PaymentGatewayContract $gateway): JsonResponse
+    public function initialize(Request $request, PaymentGatewayManager $gateways): JsonResponse
     {
         SupportedLocales::apply($request);
-
-        if (! $gateway->isConfigured()) {
-            return response()->json(['message' => __('messages.payment.not_configured')], 503);
-        }
 
         $data = $request->validate([
             'amount' => ['required', 'integer', 'min:100'],
             'purpose' => ['nullable', Rule::in(self::PURPOSES)],
+            'provider' => ['nullable', Rule::in(PaymentGatewayManager::PROVIDERS)],
             'currency' => ['nullable', 'string', 'size:3'],
             'email' => ['nullable', 'email'],
             'callbackUrl' => ['nullable', 'url'],
             'metadata' => ['nullable', 'array'],
             'purposeId' => ['nullable', 'integer'],
         ]);
+
+        $gateway = $gateways->gateway($data['provider'] ?? null);
+
+        if (! $gateway->isConfigured()) {
+            return response()->json(['message' => __('messages.payment.not_configured')], 503);
+        }
 
         $user = $request->user();
 
@@ -74,7 +77,7 @@ class PaymentController extends Controller
         try {
             $result = $gateway->initialize(
                 $payment,
-                $data['callbackUrl'] ?? config('services.paystack.callback_url')
+                $data['callbackUrl'] ?? $gateways->callbackUrl($gateway->name())
             );
         } catch (PaymentGatewayException $exception) {
             $payment->status = 'failed';
@@ -100,7 +103,7 @@ class PaymentController extends Controller
         ], 201);
     }
 
-    public function verify(Request $request, PaymentGatewayContract $gateway, MerchOrderPaymentService $merchOrderPayments, string $reference): JsonResponse
+    public function verify(Request $request, PaymentGatewayManager $gateways, MerchOrderPaymentService $merchOrderPayments, string $reference): JsonResponse
     {
         SupportedLocales::apply($request);
 
@@ -108,6 +111,8 @@ class PaymentController extends Controller
             ->where('reference', $reference)
             ->where('user_id', $request->user()?->id)
             ->firstOrFail();
+
+        $gateway = $gateways->for($payment);
 
         try {
             $result = $gateway->verify($payment->provider_reference ?: $payment->reference);

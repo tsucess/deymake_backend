@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Contracts\SmsSender;
 use App\Services\Payments\PaymentGatewayContract;
-use App\Services\Payments\PaystackGateway;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\Sms\LogSmsSender;
 use App\Support\Sms\TwilioSmsSender;
 use Illuminate\Support\ServiceProvider;
@@ -32,14 +32,12 @@ class AppServiceProvider extends ServiceProvider
             return new LogSmsSender;
         });
 
-        $this->app->bind(PaymentGatewayContract::class, function ($app) {
-            $paystack = $app['config']->get('services.paystack', []);
+        $this->app->singleton(PaymentGatewayManager::class, fn ($app) => new PaymentGatewayManager($app['config']));
 
-            return new PaystackGateway(
-                (string) ($paystack['secret_key'] ?? ''),
-                (string) ($paystack['base_url'] ?? 'https://api.paystack.co'),
-            );
-        });
+        // Default contract binding resolves the configured default provider so
+        // legacy method injection keeps working; provider-aware call sites use
+        // PaymentGatewayManager to select Paystack or Flutterwave explicitly.
+        $this->app->bind(PaymentGatewayContract::class, fn ($app) => $app->make(PaymentGatewayManager::class)->gateway());
     }
 
     /**

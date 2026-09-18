@@ -7,6 +7,7 @@ use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
 use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\AuditLogger;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
@@ -88,11 +89,11 @@ class AdminPaymentController extends Controller
      * provider's authoritative result. This is the only admin path that can
      * promote a payment to successful, and only when the provider confirms it.
      */
-    public function verify(Request $request, PaymentGatewayContract $gateway, Payment $payment): JsonResponse
+    public function verify(Request $request, PaymentGatewayManager $gateways, Payment $payment): JsonResponse
     {
         SupportedLocales::apply($request);
 
-        $result = $this->verifyWithProvider($gateway, $payment);
+        $result = $this->verifyWithProvider($gateways->for($payment), $payment);
 
         $payment = DB::transaction(function () use ($payment, $result): Payment {
             $locked = Payment::query()->lockForUpdate()->findOrFail($payment->id);
@@ -119,12 +120,12 @@ class AdminPaymentController extends Controller
      * Reconcile a payment: fetch the provider's authoritative status, correct the
      * local record if it drifted, and stamp the reconciliation with an outcome note.
      */
-    public function reconcile(Request $request, PaymentGatewayContract $gateway, Payment $payment): JsonResponse
+    public function reconcile(Request $request, PaymentGatewayManager $gateways, Payment $payment): JsonResponse
     {
         SupportedLocales::apply($request);
 
         $before = $payment->status;
-        $result = $this->verifyWithProvider($gateway, $payment);
+        $result = $this->verifyWithProvider($gateways->for($payment), $payment);
         $matched = $result['status'] === $before;
 
         $payment = DB::transaction(function () use ($payment, $result, $matched): Payment {
@@ -153,9 +154,11 @@ class AdminPaymentController extends Controller
         ]);
     }
 
-    public function refund(Request $request, PaymentGatewayContract $gateway, Payment $payment): JsonResponse
+    public function refund(Request $request, PaymentGatewayManager $gateways, Payment $payment): JsonResponse
     {
         SupportedLocales::apply($request);
+
+        $gateway = $gateways->for($payment);
 
         $data = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],

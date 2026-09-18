@@ -89,8 +89,9 @@ use Illuminate\Support\Facades\Route;
 
         Route::post('/waitlist', [WaitlistController::class, 'store']);
 
-        // Provider webhook: authenticated by HMAC signature, not a session/token.
+        // Provider webhooks: authenticated by the provider signature, not a session/token.
         Route::post('/payments/webhook/paystack', [PaymentWebhookController::class, 'paystack']);
+        Route::post('/payments/webhook/flutterwave', [PaymentWebhookController::class, 'flutterwave']);
 
         Route::get('/home', [HomeController::class, 'index']);
         Route::get('/categories', [HomeController::class, 'categories']);

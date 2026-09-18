@@ -7,8 +7,8 @@ use App\Http\Resources\RefundRequestResource;
 use App\Models\MerchOrder;
 use App\Models\Payment;
 use App\Models\RefundRequest;
-use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\AuditLogger;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
@@ -96,7 +96,7 @@ class AdminRefundController extends Controller
         ]);
     }
 
-    public function process(Request $request, PaymentGatewayContract $gateway, RefundRequest $refundRequest): JsonResponse
+    public function process(Request $request, PaymentGatewayManager $gateways, RefundRequest $refundRequest): JsonResponse
     {
         SupportedLocales::apply($request);
 
@@ -106,17 +106,19 @@ class AdminRefundController extends Controller
             ]);
         }
 
-        if (! $gateway->isConfigured()) {
-            throw ValidationException::withMessages([
-                'gateway' => ['The payment provider is not configured for refunds.'],
-            ]);
-        }
-
         $payment = $this->resolveOrderPayment($refundRequest);
 
         if ($payment === null) {
             throw ValidationException::withMessages([
                 'payment' => ['No successful payment could be found for this refund request.'],
+            ]);
+        }
+
+        $gateway = $gateways->for($payment);
+
+        if (! $gateway->isConfigured()) {
+            throw ValidationException::withMessages([
+                'gateway' => ['The payment provider is not configured for refunds.'],
             ]);
         }
 

@@ -7,8 +7,8 @@ use App\Http\Resources\MerchOrderResource;
 use App\Models\MerchOrder;
 use App\Models\MerchProduct;
 use App\Models\Payment;
-use App\Services\Payments\PaymentGatewayContract;
 use App\Services\Payments\PaymentGatewayException;
+use App\Services\Payments\PaymentGatewayManager;
 use App\Support\AuditLogger;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
@@ -155,7 +155,7 @@ class AdminOrderController extends Controller
      * inventory, and mark the order refunded. Only paid or fulfilled orders can be
      * refunded.
      */
-    public function refund(Request $request, PaymentGatewayContract $gateway, MerchOrder $merchOrder): JsonResponse
+    public function refund(Request $request, PaymentGatewayManager $gateways, MerchOrder $merchOrder): JsonResponse
     {
         SupportedLocales::apply($request);
 
@@ -186,7 +186,7 @@ class AdminOrderController extends Controller
         }
 
         try {
-            $gateway->refund($payment->provider_reference ?: $payment->reference, $data['amount'] ?? null);
+            $gateways->for($payment)->refund($payment->provider_reference ?: $payment->reference, $data['amount'] ?? null);
         } catch (PaymentGatewayException $exception) {
             throw ValidationException::withMessages([
                 'gateway' => [__('messages.admin.order_refund_failed').' '.$exception->getMessage()],
