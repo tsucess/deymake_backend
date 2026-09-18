@@ -121,7 +121,9 @@ class AdminUserManagementController extends Controller
 
         $nextStatus = $validated['accountStatus'] ?? $previousStatus;
         $nextIsAdmin = array_key_exists('isAdmin', $validated) ? (bool) $validated['isAdmin'] : $previousIsAdmin;
+        $verify = (bool) ($validated['verify'] ?? false);
         $resetVerification = (bool) ($validated['resetVerification'] ?? false);
+        $previousVerificationStatus = $user->creator_verification_status ?: 'unsubmitted';
 
         $willBlock = in_array($nextStatus, ['suspended', 'banned'], true);
         $willDemote = $previousIsAdmin && ! $nextIsAdmin;
@@ -149,7 +151,12 @@ class AdminUserManagementController extends Controller
             'is_online' => $willBlock ? false : $user->is_online,
         ]);
 
-        if ($resetVerification) {
+        if ($verify) {
+            $user->forceFill([
+                'creator_verification_status' => 'approved',
+                'creator_verified_at' => now(),
+            ]);
+        } elseif ($resetVerification) {
             $user->forceFill([
                 'creator_verification_status' => 'unsubmitted',
                 'creator_verified_at' => null,
@@ -168,6 +175,9 @@ class AdminUserManagementController extends Controller
             'nextStatus' => $nextStatus,
             'previousIsAdmin' => $previousIsAdmin,
             'nextIsAdmin' => $nextIsAdmin,
+            'previousVerificationStatus' => $previousVerificationStatus,
+            'nextVerificationStatus' => $user->creator_verification_status ?: 'unsubmitted',
+            'verify' => $verify,
             'resetVerification' => $resetVerification,
             'notes' => $validated['accountStatusNotes'] ?? null,
         ]);

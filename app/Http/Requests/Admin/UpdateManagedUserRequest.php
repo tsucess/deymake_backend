@@ -22,6 +22,7 @@ class UpdateManagedUserRequest extends FormRequest
             'accountStatusNotes' => ['nullable', 'string', 'max:1000'],
             'isAdmin' => ['sometimes', 'boolean'],
             'clearSessions' => ['sometimes', 'boolean'],
+            'verify' => ['sometimes', 'boolean'],
             'resetVerification' => ['sometimes', 'boolean'],
         ];
     }
