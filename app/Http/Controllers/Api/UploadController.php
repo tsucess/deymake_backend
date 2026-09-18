@@ -95,12 +95,27 @@ class UploadController extends Controller
 
     private function storeServerUpload(Request $request, CloudinaryUploadService $cloudinaryUploadService): JsonResponse
     {
+        $extension = strtolower((string) ($request->file('file')?->getClientOriginalExtension() ?? ''));
+        $isLottie = in_array($extension, ['json', 'lottie'], true);
+
         $validated = $request->validate([
-            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/gif,video/mp4,video/quicktime,video/x-msvideo'],
+            'file' => $isLottie
+                ? ['required', 'file', 'mimetypes:application/json,text/plain,application/zip,application/octet-stream', 'max:10240']
+                : ['required', 'file', 'mimetypes:image/jpeg,image/png,image/gif,video/mp4,video/quicktime,video/x-msvideo'],
         ]);
 
         /** @var UploadedFile $file */
         $file = $validated['file'];
+
+        if ($extension === 'json' && ! $this->isValidJsonFile($file)) {
+            return response()->json([
+                'message' => __('messages.upload.failed'),
+                'errors' => [
+                    'file' => [__('messages.upload.failed_detail')],
+                ],
+            ], 422);
+        }
+
         $type = $this->detectType($file);
 
         try {
@@ -203,9 +218,15 @@ class UploadController extends Controller
 
     private function detectType(UploadedFile $file): string
     {
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+
+        if (in_array($extension, ['json', 'lottie'], true)) {
+            return 'lottie';
+        }
+
         $mimeType = $file->getMimeType() ?: '';
 
-        if ($file->getClientOriginalExtension() === 'gif' || $mimeType === 'image/gif') {
+        if ($extension === 'gif' || $mimeType === 'image/gif') {
             return 'gif';
         }
 
@@ -214,5 +235,18 @@ class UploadController extends Controller
         }
 
         return 'video';
+    }
+
+    private function isValidJsonFile(UploadedFile $file): bool
+    {
+        $contents = @file_get_contents($file->getRealPath());
+
+        if ($contents === false) {
+            return false;
+        }
+
+        json_decode($contents);
+
+        return json_last_error() === JSON_ERROR_NONE;
     }
 }

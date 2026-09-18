@@ -93,6 +93,10 @@ class CloudinaryUploadService
 
     public function processedUrlFor(string $secureUrl, string $type): string
     {
+        if ($type === 'lottie') {
+            return $secureUrl;
+        }
+
         $transformation = $type === 'video'
             ? 'q_auto:best,f_auto,vc_auto'
             : 'q_auto,f_auto';

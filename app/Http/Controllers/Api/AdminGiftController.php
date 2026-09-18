@@ -66,6 +66,10 @@ class AdminGiftController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'icon' => ['nullable', 'string', 'max:255'],
             'imageUrl' => ['nullable', 'string', 'max:2048'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'animationUrl' => ['nullable', 'string', 'max:2048'],
+            'rarity' => ['nullable', 'string', 'in:common,rare,epic,legendary'],
+            'launchAt' => ['nullable', 'date'],
             'coinCost' => ['required', 'integer', 'min:1'],
             'priceAmount' => ['nullable', 'integer', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'],
@@ -78,6 +82,10 @@ class AdminGiftController extends Controller
             'slug' => $this->uniqueSlug($data['name']),
             'icon' => $data['icon'] ?? null,
             'image_url' => $data['imageUrl'] ?? null,
+            'description' => $data['description'] ?? null,
+            'animation_url' => $data['animationUrl'] ?? null,
+            'rarity' => $data['rarity'] ?? null,
+            'launch_at' => $data['launchAt'] ?? null,
             'coin_cost' => $data['coinCost'],
             'price_amount' => $data['priceAmount'] ?? 0,
             'currency' => strtoupper($data['currency'] ?? 'NGN'),
@@ -101,6 +109,10 @@ class AdminGiftController extends Controller
             'name' => ['sometimes', 'string', 'max:120'],
             'icon' => ['sometimes', 'nullable', 'string', 'max:255'],
             'imageUrl' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'animationUrl' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'rarity' => ['sometimes', 'nullable', 'string', 'in:common,rare,epic,legendary'],
+            'launchAt' => ['sometimes', 'nullable', 'date'],
             'coinCost' => ['sometimes', 'integer', 'min:1'],
             'priceAmount' => ['sometimes', 'integer', 'min:0'],
             'currency' => ['sometimes', 'string', 'size:3'],
@@ -116,6 +128,18 @@ class AdminGiftController extends Controller
         }
         if (array_key_exists('imageUrl', $data)) {
             $gift->image_url = $data['imageUrl'];
+        }
+        if (array_key_exists('description', $data)) {
+            $gift->description = $data['description'];
+        }
+        if (array_key_exists('animationUrl', $data)) {
+            $gift->animation_url = $data['animationUrl'];
+        }
+        if (array_key_exists('rarity', $data)) {
+            $gift->rarity = $data['rarity'];
+        }
+        if (array_key_exists('launchAt', $data)) {
+            $gift->launch_at = $data['launchAt'];
         }
         if (array_key_exists('coinCost', $data)) {
             $gift->coin_cost = $data['coinCost'];

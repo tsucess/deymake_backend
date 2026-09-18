@@ -15,6 +15,10 @@ class Gift extends Model
         'slug',
         'icon',
         'image_url',
+        'description',
+        'animation_url',
+        'rarity',
+        'launch_at',
         'coin_cost',
         'price_amount',
         'currency',
@@ -29,6 +33,7 @@ class Gift extends Model
             'price_amount' => 'integer',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
+            'launch_at' => 'datetime',
         ];
     }
 
