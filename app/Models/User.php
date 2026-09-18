@@ -130,6 +130,12 @@ class User extends Authenticatable
 
         $resolvedValue = (string) $value;
 
+        if (str_starts_with($resolvedValue, '@')) {
+            return static::query()
+                ->where('username', ltrim($resolvedValue, '@'))
+                ->first();
+        }
+
         return static::query()
             ->where('public_id', $resolvedValue)
             ->when(

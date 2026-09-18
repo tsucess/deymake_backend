@@ -621,6 +621,7 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonPath('data.moderationAlerts.1.value', 1)
             ->assertJsonPath('data.moderationAlerts.4.key', 'copyright')
             ->assertJsonPath('data.moderationAlerts.4.value', 1)
+            
             // Creator growth: three fresh creators, one verified, money in kobo.
             ->assertJsonPath('data.creatorGrowth.0.key', 'new_creators')
             ->assertJsonPath('data.creatorGrowth.0.value', 3)
