@@ -617,21 +617,36 @@ class AdminDashboardApiTest extends TestCase
             ->assertJsonCount(5, 'data.moderationAlerts')
             ->assertJsonPath('data.moderationAlerts.0.key', 'violent_content')
             ->assertJsonPath('data.moderationAlerts.0.value', 1)
+            // Percent is a proportion: 1 violent report out of 3 published contents.
+            ->assertJsonPath('data.moderationAlerts.0.percent', '33.3%')
             ->assertJsonPath('data.moderationAlerts.1.key', 'nudity_sexual')
             ->assertJsonPath('data.moderationAlerts.1.value', 1)
+            ->assertJsonPath('data.moderationAlerts.1.percent', '33.3%')
+            // Hate speech is measured out of total comments; none exist, so 0%.
+            ->assertJsonPath('data.moderationAlerts.2.key', 'hate_speech')
+            ->assertJsonPath('data.moderationAlerts.2.percent', '0%')
             ->assertJsonPath('data.moderationAlerts.4.key', 'copyright')
             ->assertJsonPath('data.moderationAlerts.4.value', 1)
-            
+            ->assertJsonPath('data.moderationAlerts.4.percent', '33.3%')
+
             // Creator growth: three fresh creators, one verified, money in kobo.
             ->assertJsonPath('data.creatorGrowth.0.key', 'new_creators')
             ->assertJsonPath('data.creatorGrowth.0.value', 3)
+            // 3 new creators this week out of 3 in the trailing year.
+            ->assertJsonPath('data.creatorGrowth.0.percent', '100%')
             ->assertJsonPath('data.creatorGrowth.1.key', 'verified_creators')
             ->assertJsonPath('data.creatorGrowth.1.value', 1)
+            // 1 verified creator out of 4 total users.
+            ->assertJsonPath('data.creatorGrowth.1.percent', '25%')
             ->assertJsonPath('data.creatorGrowth.2.key', 'creator_earnings')
             ->assertJsonPath('data.creatorGrowth.2.value', 250000)
             ->assertJsonPath('data.creatorGrowth.2.isMoney', true)
+            // Weekly earnings equal the month's only credit, so 100%.
+            ->assertJsonPath('data.creatorGrowth.2.percent', '100%')
             ->assertJsonPath('data.creatorGrowth.3.key', 'revenue_shared')
             ->assertJsonPath('data.creatorGrowth.3.value', 90000)
+            // 90,000 shared out of 250,000 all-time platform earnings.
+            ->assertJsonPath('data.creatorGrowth.3.percent', '36%')
             // Top challenges.
             ->assertJsonPath('data.topChallenges.0.title', 'Dance with Deymake')
             ->assertJsonPath('data.topChallenges.0.entries', 1)

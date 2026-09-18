@@ -417,8 +417,11 @@ class AdminDashboardController extends Controller
 
     /**
      * Moderation-alert counts per fixed category over the reporting window, with
-     * a period-over-period percent change. A rise in reports is the "bad"
-     * direction, so `isLow` is set when the current period exceeds the previous.
+     * a proportion of the relevant denominator: content-violation categories
+     * (violent, nudity, spam, copyright) are expressed out of total platform
+     * contents (published videos), while hate speech is expressed out of total
+     * platform comments. `isLow` still tracks the "bad" direction (a
+     * period-over-period rise in reports).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -429,6 +432,18 @@ class AdminDashboardController extends Controller
         $current = $this->reportCountsByReason($from, $to);
         $previous = $this->reportCountsByReason($prevFrom, $prevTo);
 
+        $totalContents = $this->totalContentsCount();
+        $totalComments = $this->totalCommentsCount();
+
+        // Denominator per category: content-based versus comment-based reports.
+        $denominators = [
+            'violent_content' => $totalContents,
+            'nudity_sexual' => $totalContents,
+            'hate_speech' => $totalComments,
+            'spam' => $totalContents,
+            'copyright' => $totalContents,
+        ];
+
         $items = [];
 
         foreach (self::MODERATION_CATEGORIES as $key => $reasons) {
@@ -438,7 +453,7 @@ class AdminDashboardController extends Controller
             $items[] = [
                 'key' => $key,
                 'value' => $currentTotal,
-                'percent' => $this->percentLabel($currentTotal, $previousTotal),
+                'percent' => $this->proportionLabel($currentTotal, $denominators[$key] ?? 0),
                 'isLow' => $currentTotal > $previousTotal,
             ];
         }
@@ -447,9 +462,12 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Creator-growth metrics over the reporting window with period-over-period
-     * change. For growth metrics a decline is the "bad" direction, so `isLow`
-     * is set when the current period falls below the previous.
+     * Creator-growth metrics over the reporting window. Each percent is now a
+     * proportion of a wider whole: weekly new creators out of new creators in
+     * the trailing year, verified creators out of all users, weekly creator
+     * earnings out of the calendar-month earnings, and weekly revenue shared
+     * out of all-time platform earnings. `isLow` still tracks the "bad"
+     * direction (a period-over-period decline).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -459,41 +477,45 @@ class AdminDashboardController extends Controller
 
         $newCreators = $this->newCreatorsCount($from, $to);
         $newCreatorsPrev = $this->newCreatorsCount($prevFrom, $prevTo);
+        $newCreatorsYear = $this->newCreatorsCount($to->copy()->subYear(), $to);
 
         $verified = $this->verifiedCreatorsCount($from, $to);
         $verifiedPrev = $this->verifiedCreatorsCount($prevFrom, $prevTo);
+        $totalUsers = $this->totalUsersCount();
 
         $earnings = $this->creatorEarnings($from, $to);
         $earningsPrev = $this->creatorEarnings($prevFrom, $prevTo);
+        $earningsMonth = $this->creatorEarnings($to->copy()->startOfMonth(), $to->copy()->endOfMonth());
 
         $shared = $this->revenueShared($from, $to);
         $sharedPrev = $this->revenueShared($prevFrom, $prevTo);
+        $totalEarnings = $this->totalPlatformEarnings();
 
         return [
             [
                 'key' => 'new_creators',
                 'value' => $newCreators,
-                'percent' => $this->percentLabel($newCreators, $newCreatorsPrev),
+                'percent' => $this->proportionLabel($newCreators, $newCreatorsYear),
                 'isLow' => $newCreators < $newCreatorsPrev,
             ],
             [
                 'key' => 'verified_creators',
                 'value' => $verified,
-                'percent' => $this->percentLabel($verified, $verifiedPrev),
+                'percent' => $this->proportionLabel($verified, $totalUsers),
                 'isLow' => $verified < $verifiedPrev,
             ],
             [
                 'key' => 'creator_earnings',
                 'value' => $earnings,
                 'isMoney' => true,
-                'percent' => $this->percentLabel($earnings, $earningsPrev),
+                'percent' => $this->proportionLabel($earnings, $earningsMonth),
                 'isLow' => $earnings < $earningsPrev,
             ],
             [
                 'key' => 'revenue_shared',
                 'value' => $shared,
                 'isMoney' => true,
-                'percent' => $this->percentLabel($shared, $sharedPrev),
+                'percent' => $this->proportionLabel($shared, $totalEarnings),
                 'isLow' => $shared < $sharedPrev,
             ],
         ];
@@ -679,6 +701,44 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * Total platform contents: all published (non-draft) videos. Used as the
+     * denominator for content-violation moderation categories.
+     */
+    private function totalContentsCount(): int
+    {
+        return Video::query()->where('is_draft', false)->count();
+    }
+
+    /**
+     * Total platform comments. Denominator for comment-violation moderation
+     * categories (hate speech, spam).
+     */
+    private function totalCommentsCount(): int
+    {
+        return Comment::query()->count();
+    }
+
+    /**
+     * Total registered users. Denominator for the verified-creators proportion.
+     */
+    private function totalUsersCount(): int
+    {
+        return User::query()->count();
+    }
+
+    /**
+     * All-time platform earnings: every posted credit across creator wallets.
+     * Denominator for the revenue-shared proportion.
+     */
+    private function totalPlatformEarnings(): int
+    {
+        return (int) WalletTransaction::query()
+            ->where('direction', 'credit')
+            ->where('status', 'posted')
+            ->sum('amount');
+    }
+
+    /**
      * Unique daily-active users per country code over a window.
      *
      * @return Collection<string, int>
@@ -733,6 +793,20 @@ class AdminDashboardController extends Controller
         $number = $rounded == (int) $rounded ? (string) (int) $rounded : (string) $rounded;
 
         return ($rounded > 0 ? '+' : '').$number.'%';
+    }
+
+    /**
+     * Unsigned proportion label (e.g. "12%", "3.5%", "0%") expressing a part as
+     * a percentage of a whole. A zero (or missing) denominator yields "0%".
+     */
+    private function proportionLabel(float $part, float $whole): string
+    {
+        $pct = $whole > 0.0 ? ($part / $whole) * 100.0 : 0.0;
+
+        $rounded = round($pct, 1);
+        $number = $rounded == (int) $rounded ? (string) (int) $rounded : (string) $rounded;
+
+        return $number.'%';
     }
 
     public function videoReports(Request $request): JsonResponse
