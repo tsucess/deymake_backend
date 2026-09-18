@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\CreatorVerificationUpdated;
+use App\Events\UserAccountUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CreatorVerificationRequestResource;
 use App\Models\CreatorVerificationRequest;
@@ -206,6 +208,9 @@ class CreatorVerificationController extends Controller
             'creator_verified_at' => $status === 'approved' ? now() : null,
             'creator_verification_notes' => $validated['reviewNotes'] ?? null,
         ])->save();
+
+        UserAccountUpdated::dispatch($creatorVerificationRequest->user);
+        CreatorVerificationUpdated::dispatch($creatorVerificationRequest->user);
 
         UserNotifier::sendTranslated(
             $creatorVerificationRequest->user_id,

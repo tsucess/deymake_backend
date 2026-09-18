@@ -34,6 +34,14 @@ Broadcast::channel('notifications.{targetUserId}', function (User $user, int $ta
     return $user->id === $targetUserId;
 });
 
+Broadcast::channel('admin.users', function (User $user): bool {
+    return $user->isAdmin();
+});
+
+Broadcast::channel('users.{targetUserId}', function (User $user, int $targetUserId): bool {
+    return $user->id === $targetUserId;
+});
+
 Broadcast::channel('live.videos.{videoId}.users.{targetUserId}', function (User $user, int $videoId, int $targetUserId): bool {
     if ($user->id !== $targetUserId) {
         return false;

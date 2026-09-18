@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Events\CreatorVerificationUpdated;
+use App\Events\ManagedUserUpdated;
+use App\Events\UserAccountUpdated;
 use App\Http\Requests\Admin\UpdateManagedUserRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Http\Resources\ContentModerationCaseResource;
@@ -183,6 +186,10 @@ class AdminUserManagementController extends Controller
         ]);
 
         $user->loadCount($this->managementCounts());
+
+        ManagedUserUpdated::dispatch($user);
+        UserAccountUpdated::dispatch($user);
+        CreatorVerificationUpdated::dispatch($user);
 
         return response()->json([
             'message' => __('messages.admin.user_updated'),
