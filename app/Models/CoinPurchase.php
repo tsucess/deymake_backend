@@ -46,11 +46,6 @@ class CoinPurchase extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function package(): BelongsTo
-    {
-        return $this->belongsTo(CoinPackage::class, 'coin_package_id');
-    }
-
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');

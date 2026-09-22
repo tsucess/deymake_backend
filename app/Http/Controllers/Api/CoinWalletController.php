@@ -3,9 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\CoinPackageResource;
 use App\Http\Resources\CoinPurchaseResource;
-use App\Models\CoinPackage;
 use App\Models\CoinPurchase;
 use App\Models\Gift;
 use App\Models\Payment;
@@ -17,14 +15,6 @@ use Illuminate\Support\Facades\DB;
 
 class CoinWalletController extends Controller
 {
-    public function packages(): JsonResponse
-    {
-        $packages = CoinPackage::query()->where('is_active', true)->orderBy('sort_order')->orderBy('price_amount')->get();
-
-        return response()->json(['data' => ['packages' => CoinPackageResource::collection($packages)]]);
-    }
- 
-    
     public function overview(Request $request): JsonResponse
     {
         $purchases = CoinPurchase::query()->where('user_id', $request->user()->id)->latest('created_at')->get();
@@ -57,7 +47,7 @@ class CoinWalletController extends Controller
                 'user_id' => $user->id,
                 'email' => $user->email,
                 'purpose' => 'coin_purchase',
-                'purpose_id' => $package->id,
+                'purpose_id' => $coin->id,
                 'amount' => $coin->price_amount,
                 'currency' => $coin->currency,
                 'status' => 'pending',
@@ -88,15 +78,10 @@ class CoinWalletController extends Controller
 
         DB::transaction(function () use ($payment): void {
             if (CoinPurchase::query()->where('payment_reference', $payment->reference)->lockForUpdate()->exists()) return;
-            if (data_get($payment->metadata, 'catalog') === 'gift') {
-                $coin = Gift::query()->find($payment->purpose_id);
-                if (! $coin) return;
-                $coinAmount = (int) $coin->coin_cost;
-            } else {
-                $package = CoinPackage::query()->find($payment->purpose_id);
-                if (! $package) return;
-                $coinAmount = (int) $package->coins + (int) $package->bonus_coins;
-            }
+            if (data_get($payment->metadata, 'catalog') !== 'gift') return;
+            $coin = Gift::query()->find($payment->purpose_id);
+            if (! $coin) return;
+            $coinAmount = (int) $coin->coin_cost;
             CoinPurchase::query()->create([
                 'user_id' => $payment->user_id,
                 'coin_package_id' => null,

@@ -18,7 +18,6 @@ class CoinPurchaseResource extends JsonResource
         return [
             'id' => $this->id,
             'userId' => (int) $this->user_id,
-            'coinPackageId' => $this->coin_package_id,
             'coins' => (int) $this->coins,
             'amount' => (int) $this->amount,
             'currency' => $this->currency,
@@ -33,7 +32,6 @@ class CoinPurchaseResource extends JsonResource
             'purchasedAt' => $this->purchased_at?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
             'user' => $this->whenLoaded('user', fn () => new ProfileResource($this->user)),
-            'package' => $this->whenLoaded('package', fn () => $this->package ? new CoinPackageResource($this->package) : null),
         ];
     }
 }

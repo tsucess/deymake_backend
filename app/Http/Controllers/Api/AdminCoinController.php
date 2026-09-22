@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\CoinPackageResource;
 use App\Http\Resources\CoinPurchaseResource;
 use App\Http\Resources\ProfileResource;
-use App\Models\CoinPackage;
 use App\Models\CoinPurchase;
 use App\Models\GiftTransaction;
 use App\Models\User;
@@ -18,19 +16,18 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Admin coin controller.
  *
  * Operator oversight of the virtual-currency economy: coin-purchase revenue,
- * coin package configuration, purchase records, refunds, and fraud review, plus
+ * purchase records, refunds, and fraud review, plus
  * the aggregate overview + time series that power the Coins & Gifts console.
  *
  * Routes: under the admin prefix in routes/api.php (/admin/coins/*).
  * Frontend consumer: Admin/Pages/CoinsAndGifts.jsx.
- * Related: AdminGiftController, CoinPackage, CoinPurchase, GiftTransaction.
+ * Related: AdminGiftController, CoinPurchase, GiftTransaction.
  */
 class AdminCoinController extends Controller
 {
@@ -222,120 +219,6 @@ class AdminCoinController extends Controller
         return response()->json([
             'message' => __('messages.admin.coin_top_senders_retrieved'),
             'data' => ['senders' => $senders],
-        ]);
-    }
-
-    public function packages(Request $request): JsonResponse
-    {
-        SupportedLocales::apply($request);
-
-        $packages = CoinPackage::query()
-            ->withCount(['purchases as sales_count' => fn (Builder $q) => $q->where('status', self::COMPLETED)])
-            ->withSum(['purchases as revenue_amount' => fn (Builder $q) => $q->where('status', self::COMPLETED)], 'amount')
-            ->withSum(['purchases as coins_sold' => fn (Builder $q) => $q->where('status', self::COMPLETED)], 'coins')
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
-
-        return response()->json([
-            'message' => __('messages.admin.coin_packages_retrieved'),
-            'data' => ['packages' => CoinPackageResource::collection($packages)],
-        ]);
-    }
-
-    public function storePackage(Request $request): JsonResponse
-    {
-        SupportedLocales::apply($request);
-
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'coins' => ['required', 'integer', 'min:1'],
-            'bonusCoins' => ['nullable', 'integer', 'min:0'],
-            'priceAmount' => ['required', 'integer', 'min:0'],
-            'currency' => ['nullable', 'string', 'size:3'],
-            'isActive' => ['nullable', 'boolean'],
-            'sortOrder' => ['nullable', 'integer', 'min:0'],
-        ]);
-
-        $package = CoinPackage::query()->create([
-            'name' => $data['name'],
-            'slug' => $this->uniqueSlug(CoinPackage::class, $data['name'], 'package'),
-            'coins' => $data['coins'],
-            'bonus_coins' => $data['bonusCoins'] ?? 0,
-            'price_amount' => $data['priceAmount'],
-            'currency' => strtoupper($data['currency'] ?? 'NGN'),
-            'is_active' => $data['isActive'] ?? true,
-            'sort_order' => $data['sortOrder'] ?? 0,
-        ]);
-
-        AuditLogger::record('admin.coin_package_created', $package, $request->user()?->id, ['name' => $package->name], $request->ip());
-
-        return response()->json([
-            'message' => __('messages.admin.coin_package_created'),
-            'data' => ['package' => new CoinPackageResource($package)],
-        ], 201);
-    }
-
-    public function updatePackage(Request $request, CoinPackage $coinPackage): JsonResponse
-    {
-        SupportedLocales::apply($request);
-
-        $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'coins' => ['sometimes', 'integer', 'min:1'],
-            'bonusCoins' => ['sometimes', 'integer', 'min:0'],
-            'priceAmount' => ['sometimes', 'integer', 'min:0'],
-            'currency' => ['sometimes', 'string', 'size:3'],
-            'isActive' => ['sometimes', 'boolean'],
-            'sortOrder' => ['sometimes', 'integer', 'min:0'],
-        ]);
-
-        $coinPackage->fill(array_filter([
-            'name' => $data['name'] ?? null,
-            'coins' => $data['coins'] ?? null,
-            'bonus_coins' => $data['bonusCoins'] ?? null,
-            'price_amount' => $data['priceAmount'] ?? null,
-            'currency' => isset($data['currency']) ? strtoupper($data['currency']) : null,
-            'sort_order' => $data['sortOrder'] ?? null,
-        ], fn ($value) => $value !== null));
-
-        if (array_key_exists('isActive', $data)) {
-            $coinPackage->is_active = $data['isActive'];
-        }
-
-        $coinPackage->save();
-
-        AuditLogger::record('admin.coin_package_updated', $coinPackage, $request->user()?->id, ['changed' => array_keys($data)], $request->ip());
-
-        return response()->json([
-            'message' => __('messages.admin.coin_package_updated'),
-            'data' => ['package' => new CoinPackageResource($coinPackage)],
-        ]);
-    }
-
-    public function destroyPackage(Request $request, CoinPackage $coinPackage): JsonResponse
-    {
-        SupportedLocales::apply($request);
-
-        AuditLogger::record('admin.coin_package_deleted', $coinPackage, $request->user()?->id, ['name' => $coinPackage->name], $request->ip());
-        $coinPackage->delete();
-
-        return response()->json(['message' => __('messages.admin.coin_package_deleted')]);
-    }
-
-    public function togglePackage(Request $request, CoinPackage $coinPackage): JsonResponse
-    {
-        SupportedLocales::apply($request);
-
-        $coinPackage->is_active = ! $coinPackage->is_active;
-        $coinPackage->save();
-        $action = $coinPackage->is_active ? 'activated' : 'deactivated';
-
-        AuditLogger::record("admin.coin_package_{$action}", $coinPackage, $request->user()?->id, [], $request->ip());
-
-        return response()->json([
-            'message' => __("messages.admin.coin_package_{$action}"),
-            'data' => ['package' => new CoinPackageResource($coinPackage)],
         ]);
     }
 
@@ -618,16 +501,4 @@ class AdminCoinController extends Controller
         };
     }
 
-    private function uniqueSlug(string $modelClass, string $name, string $fallback): string
-    {
-        $base = Str::slug($name) ?: $fallback;
-        $slug = $base;
-        $suffix = 1;
-
-        while ($modelClass::query()->where('slug', $slug)->exists()) {
-            $slug = $base.'-'.(++$suffix);
-        }
-
-        return $slug;
-    }
 }

@@ -320,7 +320,6 @@ use Illuminate\Support\Facades\Route;
 
         Route::prefix('wallet')->group(function (): void {
             Route::get('/', [CoinWalletController::class, 'overview']);
-            Route::get('/packages', [CoinWalletController::class, 'packages']);
             Route::post('/purchases', [CoinWalletController::class, 'purchase']);
         });
 
@@ -398,11 +397,6 @@ use Illuminate\Support\Facades\Route;
             Route::get('/coins/top-senders', [AdminCoinController::class, 'topSenders']);
             Route::get('/coins/transactions', [AdminCoinController::class, 'transactions']);
             Route::get('/coins/export', [AdminCoinController::class, 'exportCsv']);
-            Route::get('/coins/packages', [AdminCoinController::class, 'packages']);
-            Route::post('/coins/packages', [AdminCoinController::class, 'storePackage']);
-            Route::patch('/coins/packages/{coinPackage}', [AdminCoinController::class, 'updatePackage']);
-            Route::delete('/coins/packages/{coinPackage}', [AdminCoinController::class, 'destroyPackage']);
-            Route::post('/coins/packages/{coinPackage}/toggle', [AdminCoinController::class, 'togglePackage']);
             Route::get('/coins/purchases', [AdminCoinController::class, 'purchases']);
             Route::post('/coins/purchases/{coinPurchase}/refund', [AdminCoinController::class, 'refundPurchase']);
             Route::post('/coins/purchases/{coinPurchase}/review', [AdminCoinController::class, 'reviewPurchase']);
