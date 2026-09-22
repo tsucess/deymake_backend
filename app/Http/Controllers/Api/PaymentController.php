@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\CoinWalletController;
 use App\Http\Resources\PaymentResource;
 use App\Models\MerchOrder;
 use App\Models\Payment;
@@ -103,7 +104,7 @@ class PaymentController extends Controller
         ], 201);
     }
 
-    public function verify(Request $request, PaymentGatewayManager $gateways, MerchOrderPaymentService $merchOrderPayments, string $reference): JsonResponse
+    public function verify(Request $request, PaymentGatewayManager $gateways, MerchOrderPaymentService $merchOrderPayments, CoinWalletController $coinWallet, string $reference): JsonResponse
     {
         SupportedLocales::apply($request);
 
@@ -145,6 +146,7 @@ class PaymentController extends Controller
         });
 
         $merchOrderPayments->settle($payment);
+        $coinWallet->settlePayment($payment);
 
         return response()->json([
             'message' => __('messages.payment.verified'),
