@@ -7,6 +7,7 @@ use App\Http\Resources\CoinPackageResource;
 use App\Http\Resources\CoinPurchaseResource;
 use App\Models\CoinPackage;
 use App\Models\CoinPurchase;
+use App\Models\Gift;
 use App\Models\Payment;
 use App\Services\Payments\PaymentGatewayException;
 use App\Services\Payments\PaymentGatewayManager;
@@ -38,15 +39,15 @@ class CoinWalletController extends Controller
     public function purchase(Request $request, PaymentGatewayManager $gateways): JsonResponse
     {
         $data = $request->validate([
-            'packageId' => ['required', 'integer', 'exists:coin_packages,id'],
+            'coinId' => ['required', 'integer', 'exists:gifts,id'],
             'provider' => ['nullable', \Illuminate\Validation\Rule::in(PaymentGatewayManager::PROVIDERS)],
         ]);
-        $package = CoinPackage::query()->where('is_active', true)->findOrFail($data['packageId']);
+        $coin = Gift::query()->where('is_active', true)->findOrFail($data['coinId']);
         $user = $request->user();
         $gateway = $gateways->gateway($data['provider'] ?? null);
         abort_unless($gateway->isConfigured(), 503, 'Payment provider is not configured.');
         $payment = Payment::query()->where('user_id', $user->id)
-            ->where('purpose', 'coin_purchase')->where('purpose_id', $package->id)
+            ->where('purpose', 'coin_purchase')->where('purpose_id', $coin->id)
             ->whereIn('status', ['pending', 'processing'])->latest()->first();
 
         if (! $payment) {
@@ -57,10 +58,10 @@ class CoinWalletController extends Controller
                 'email' => $user->email,
                 'purpose' => 'coin_purchase',
                 'purpose_id' => $package->id,
-                'amount' => $package->price_amount,
-                'currency' => $package->currency,
+                'amount' => $coin->price_amount,
+                'currency' => $coin->currency,
                 'status' => 'pending',
-                'metadata' => ['coins' => $package->coins + $package->bonus_coins],
+                'metadata' => ['coins' => $coin->coin_cost, 'catalog' => 'gift'],
             ]);
         } elseif ($payment->provider !== $gateway->name()) {
             $payment->update(['provider' => $gateway->name()]);
@@ -87,12 +88,19 @@ class CoinWalletController extends Controller
 
         DB::transaction(function () use ($payment): void {
             if (CoinPurchase::query()->where('payment_reference', $payment->reference)->lockForUpdate()->exists()) return;
-            $package = CoinPackage::query()->find($payment->purpose_id);
-            if (! $package) return;
+            if (data_get($payment->metadata, 'catalog') === 'gift') {
+                $coin = Gift::query()->find($payment->purpose_id);
+                if (! $coin) return;
+                $coinAmount = (int) $coin->coin_cost;
+            } else {
+                $package = CoinPackage::query()->find($payment->purpose_id);
+                if (! $package) return;
+                $coinAmount = (int) $package->coins + (int) $package->bonus_coins;
+            }
             CoinPurchase::query()->create([
                 'user_id' => $payment->user_id,
-                'coin_package_id' => $package->id,
-                'coins' => $package->coins + $package->bonus_coins,
+                'coin_package_id' => null,
+                'coins' => $coinAmount,
                 'amount' => $payment->amount,
                 'currency' => $payment->currency,
                 'status' => 'completed',
