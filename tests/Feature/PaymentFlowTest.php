@@ -94,6 +94,45 @@ class PaymentFlowTest extends TestCase
         $this->assertNotNull($payment->fresh()->paid_at);
     }
 
+    public function test_coin_payment_can_be_verified_when_callback_user_differs_from_payer(): void
+    {
+        $payer = User::factory()->create();
+        $callbackUser = User::factory()->create();
+        $coin = Gift::factory()->create(['coin_cost' => 250, 'price_amount' => 50000]);
+        $payment = Payment::factory()->pending()->for($payer)->create([
+            'reference' => 'DMK_COIN_OTHER_USER_1',
+            'purpose' => 'coin_purchase',
+            'purpose_id' => $coin->id,
+            'amount' => 50000,
+            'metadata' => ['coins' => 250, 'catalog' => 'gift'],
+        ]);
+
+        Http::fake([
+            'api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'data' => [
+                    'status' => 'success',
+                    'reference' => $payment->reference,
+                    'amount' => $payment->amount,
+                    'currency' => 'NGN',
+                    'paid_at' => now()->toIso8601String(),
+                ],
+            ], 200),
+        ]);
+
+        Sanctum::actingAs($callbackUser);
+
+        $this->getJson('/api/payments/verify/'.$payment->reference)
+            ->assertOk()
+            ->assertJsonPath('data.payment.status', 'successful');
+
+        $this->assertDatabaseHas('coin_purchases', [
+            'user_id' => $payer->id,
+            'payment_reference' => $payment->reference,
+            'status' => 'completed',
+        ]);
+    }
+
     public function test_verifying_a_coin_payment_creates_the_coin_purchase(): void
     {
         $user = User::factory()->create();

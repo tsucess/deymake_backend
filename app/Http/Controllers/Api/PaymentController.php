@@ -110,7 +110,6 @@ class PaymentController extends Controller
 
         $payment = Payment::query()
             ->where('reference', $reference)
-            ->where('user_id', $request->user()?->id)
             ->firstOrFail();
 
         $gateway = $gateways->for($payment);
