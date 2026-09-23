@@ -10,6 +10,7 @@ use App\Http\Resources\VideoResource;
 use App\Models\Category;
 use App\Models\Comment;
 use App\Models\FanTip;
+use App\Models\GiftTransaction;
 use App\Models\LiveLikeEvent;
 use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
@@ -1049,9 +1050,21 @@ class VideoController extends Controller
             ->get()
             ->keyBy('fan_id');
 
+        $giftCounts = GiftTransaction::query()
+            ->where('video_id', $video->id)
+            ->where('status', 'completed')
+            ->when($video->live_started_at, fn ($query) => $query->where('sent_at', '>=', $video->live_started_at))
+            ->when($video->live_ended_at, fn ($query) => $query->where('sent_at', '<=', $video->live_ended_at))
+            ->select('sender_id', DB::raw('COUNT(*) as gifts_count'), DB::raw('SUM(coin_amount) as gifts_amount'), DB::raw('MAX(sent_at) as last_gifted_at'))
+            ->whereNotNull('sender_id')
+            ->groupBy('sender_id')
+            ->get()
+            ->keyBy('sender_id');
+
         $userIds = $likeCounts->keys()
             ->merge($commentCounts->keys())
             ->merge($tipCounts->keys())
+            ->merge($giftCounts->keys())
             ->filter()
             ->unique()
             ->values();
@@ -1162,8 +1175,10 @@ class VideoController extends Controller
             ->take(self::LIVE_ANALYTICS_LEADERBOARD_LIMIT)
             ->values();
 
-        $topGifters = $tipCounts
-            ->map(function ($row, $userId) use ($users): ?array {
+        $topGifters = $tipCounts->keys()
+            ->merge($giftCounts->keys())
+            ->unique()
+            ->map(function ($userId) use ($users, $tipCounts, $giftCounts): ?array {
                 $user = $users->get($userId);
 
                 if (! $user) {
@@ -1172,19 +1187,26 @@ class VideoController extends Controller
 
                 return [
                     'actor' => $this->formatLiveEngagementActor($user),
-                    'tipsCount' => (int) ($row->tips_count ?? 0),
-                    'tipsAmount' => (int) ($row->tips_amount ?? 0),
-                    'lastTippedAt' => $row->last_tipped_at ? Carbon::parse((string) $row->last_tipped_at)->toISOString() : null,
+                    'tipsCount' => (int) ($tipCounts->get($userId)?->tips_count ?? 0),
+                    'tipsAmount' => (int) ($tipCounts->get($userId)?->tips_amount ?? 0),
+                    'giftsCount' => (int) ($giftCounts->get($userId)?->gifts_count ?? 0),
+                    'giftsAmount' => (int) ($giftCounts->get($userId)?->gifts_amount ?? 0),
+                    'lastTippedAt' => $this->latestLiveEngagementTimestamp(
+                        $tipCounts->get($userId)?->last_tipped_at,
+                        $giftCounts->get($userId)?->last_gifted_at,
+                    ),
                 ];
             })
             ->filter()
             ->sort(function (array $left, array $right): int {
                 return [
                     $right['tipsAmount'],
+                    $right['giftsAmount'],
                     $right['tipsCount'],
                     $right['lastTippedAt'] ?? '',
                 ] <=> [
                     $left['tipsAmount'],
+                    $left['giftsAmount'],
                     $left['tipsCount'],
                     $left['lastTippedAt'] ?? '',
                 ];
@@ -1217,6 +1239,13 @@ class VideoController extends Controller
                 'uniqueFans' => $users->count(),
             ],
         ];
+    }
+
+    private function latestLiveEngagementTimestamp(?string $tipTimestamp, ?string $giftTimestamp): ?string
+    {
+        $latest = max($tipTimestamp ?? '', $giftTimestamp ?? '');
+
+        return $latest !== '' ? Carbon::parse($latest)->toISOString() : null;
     }
 
     private function buildLiveAnalyticsTimeline(Video $video, Carbon $startedAt, Carbon $endedAt): array
