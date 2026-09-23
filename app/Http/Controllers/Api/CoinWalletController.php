@@ -60,9 +60,19 @@ class CoinWalletController extends Controller
         $result = null;
         $lastGatewayError = null;
 
-        // Providers can transiently reject the first initialization request. Retry
-        // the same payment reference once so we do not create duplicate charges.
+        // Providers can transiently reject the first initialization request. Keep
+        // one local payment row, but rotate the provider reference before retrying
+        // because gateways reject a second initialization with the same reference.
         for ($attempt = 1; $attempt <= 2; $attempt++) {
+            if ($attempt === 2) {
+                $payment->update([
+                    'reference' => 'DMK_COIN_'.str()->upper(str()->random(20)),
+                    'provider_reference' => null,
+                    'gateway_response' => null,
+                ]);
+                $payment->refresh();
+            }
+
             try {
                 $result = $gateway->initialize($payment, $gateways->callbackUrl($gateway->name()));
                 break;

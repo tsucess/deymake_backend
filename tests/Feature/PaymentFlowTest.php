@@ -165,6 +165,13 @@ class PaymentFlowTest extends TestCase
             'purpose_id' => $coin->id,
             'status' => 'pending',
         ]);
+
+        $references = collect(Http::recorded())
+            ->map(fn (array $record) => $record[0]->data()['reference'] ?? null)
+            ->filter()
+            ->values();
+        $this->assertCount(2, $references);
+        $this->assertNotSame($references[0], $references[1]);
     }
 
     public function test_verify_keeps_payment_unpaid_when_provider_not_successful(): void
