@@ -1108,7 +1108,7 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertOk()
-            ->assertJsonPath('data.session.uid', 'user-'.$creator->id)
+            ->assertJsonPath('data.session.uid', $creator->id)
             ->assertJsonPath('data.session.role', 'host')
             ->assertJsonPath('data.session.token', fn (string $token) => $token !== '');
     }

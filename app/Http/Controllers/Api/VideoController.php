@@ -494,9 +494,9 @@ class VideoController extends Controller
         abort_if($appId === '' || $appCertificate === '', 503, 'Agora live streaming is not configured.');
 
         $channelName = $this->buildLiveChannelName($video);
-        $userAccount = sprintf('user-%s', $viewer->id);
+        $userAccount = (int) $viewer->id;
         $expiresAt = now()->addSeconds($ttlSeconds);
-        $token = RtcTokenBuilder::buildTokenWithUserAccount(
+        $token = RtcTokenBuilder::buildTokenWithUid(
             $appId,
             $appCertificate,
             $channelName,

@@ -27,6 +27,18 @@ class GiftController extends Controller
 
     public function send(Request $request, Gift $gift, WalletLedgerService $ledger): JsonResponse
     {
+        // Older live-room clients send the public video ID from the URL. Keep
+        // the validated payload integer-based while accepting that identifier.
+        if ($request->filled('videoId') && ! is_numeric($request->input('videoId'))) {
+            $numericVideoId = Video::query()
+                ->where('public_id', $request->input('videoId'))
+                ->value('id');
+
+            if ($numericVideoId !== null) {
+                $request->merge(['videoId' => $numericVideoId]);
+            }
+        }
+
         $data = $request->validate([
             'recipientId' => ['required', 'integer', 'exists:users,id'],
             'quantity' => ['sometimes', 'integer', 'min:1', 'max:99'],
