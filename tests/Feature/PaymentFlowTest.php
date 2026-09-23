@@ -133,6 +133,40 @@ class PaymentFlowTest extends TestCase
             ->assertJsonPath('data.balance', 250);
     }
 
+    public function test_coin_purchase_retries_a_transient_gateway_initialization_failure(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        $coin = Gift::factory()->create(['coin_cost' => 250, 'price_amount' => 50000]);
+
+        Http::fake([
+            'api.paystack.co/transaction/initialize' => Http::sequence()
+                ->push(['status' => false, 'message' => 'Temporary provider failure'], 422)
+                ->push([
+                    'status' => true,
+                    'data' => [
+                        'authorization_url' => 'https://checkout.paystack.com/retried',
+                        'reference' => 'DMK_RETRIED',
+                    ],
+                ], 200),
+        ]);
+
+        $this->postJson('/api/wallet/purchases', [
+            'coinId' => $coin->id,
+            'provider' => 'paystack',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.authorizationUrl', 'https://checkout.paystack.com/retried');
+
+        $this->assertDatabaseCount('payments', 1);
+        $this->assertDatabaseHas('payments', [
+            'user_id' => $user->id,
+            'purpose' => 'coin_purchase',
+            'purpose_id' => $coin->id,
+            'status' => 'pending',
+        ]);
+    }
+
     public function test_verify_keeps_payment_unpaid_when_provider_not_successful(): void
     {
         $user = User::factory()->create();

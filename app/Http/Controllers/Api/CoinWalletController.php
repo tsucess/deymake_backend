@@ -57,11 +57,27 @@ class CoinWalletController extends Controller
             $payment->update(['provider' => $gateway->name()]);
         }
 
-        try {
-            $result = $gateway->initialize($payment, $gateways->callbackUrl($gateway->name()));
-        } catch (PaymentGatewayException $exception) {
-            $payment->update(['status' => 'failed', 'gateway_response' => $exception->getMessage()]);
-            return response()->json(['message' => 'Payment provider could not initialize the checkout.'], 422);
+        $result = null;
+        $lastGatewayError = null;
+
+        // Providers can transiently reject the first initialization request. Retry
+        // the same payment reference once so we do not create duplicate charges.
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            try {
+                $result = $gateway->initialize($payment, $gateways->callbackUrl($gateway->name()));
+                break;
+            } catch (PaymentGatewayException $exception) {
+                $lastGatewayError = $exception;
+            }
+        }
+
+        if ($result === null) {
+            // Keep the provider response on the payment row for server-side
+            // diagnosis, while returning a useful message to the client.
+            $payment->update(['status' => 'failed', 'gateway_response' => $lastGatewayError?->getMessage()]);
+            return response()->json([
+                'message' => $lastGatewayError?->getMessage() ?: 'Payment provider could not initialize the checkout.',
+            ], 422);
         }
 
         $payment->update([
