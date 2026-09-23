@@ -96,4 +96,33 @@ class GiftApiTest extends TestCase
             ->assertStatus(422);
         $this->getJson('/api/gifts/sent')->assertOk()->assertJsonCount(1, 'data.transactions');
     }
+
+    public function test_received_gifts_are_added_to_wallet_coin_balance(): void
+    {
+        $host = User::factory()->create();
+        $sender = User::factory()->create();
+        CoinPurchase::factory()->create([
+            'user_id' => $host->id,
+            'coins' => 100,
+            'status' => 'completed',
+        ]);
+        GiftTransaction::factory()->create([
+            'sender_id' => $sender->id,
+            'recipient_id' => $host->id,
+            'coin_amount' => 25,
+            'status' => 'completed',
+        ]);
+        GiftTransaction::factory()->create([
+            'sender_id' => $host->id,
+            'recipient_id' => $sender->id,
+            'coin_amount' => 10,
+            'status' => 'completed',
+        ]);
+
+        Sanctum::actingAs($host);
+
+        $this->getJson('/api/wallet')
+            ->assertOk()
+            ->assertJsonPath('data.balance', 115);
+    }
 }

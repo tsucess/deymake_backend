@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CoinPurchaseResource;
 use App\Models\CoinPurchase;
 use App\Models\Gift;
+use App\Models\GiftTransaction;
 use App\Models\Payment;
 use App\Services\Payments\PaymentGatewayException;
 use App\Services\Payments\PaymentGatewayManager;
@@ -19,9 +20,17 @@ class CoinWalletController extends Controller
     {
         $purchases = CoinPurchase::query()->where('user_id', $request->user()->id)->latest('created_at')->get();
         $completed = $purchases->where('status', 'completed');
+        $receivedGiftCoins = GiftTransaction::query()
+            ->where('recipient_id', $request->user()->id)
+            ->where('status', 'completed')
+            ->sum('coin_amount');
+        $sentGiftCoins = GiftTransaction::query()
+            ->where('sender_id', $request->user()->id)
+            ->where('status', 'completed')
+            ->sum('coin_amount');
 
         return response()->json(['data' => [
-            'balance' => (int) $completed->sum('coins'),
+            'balance' => max(0, (int) $completed->sum('coins') + (int) $receivedGiftCoins - (int) $sentGiftCoins),
             'purchases' => CoinPurchaseResource::collection($purchases),
         ]]);
     }
