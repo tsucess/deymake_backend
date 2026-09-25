@@ -6,8 +6,10 @@ use App\Models\Category;
 use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
+use App\Services\CloudinaryUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Mockery;
 use Tests\TestCase;
 
 class VideoDeleteTest extends TestCase
@@ -38,6 +40,30 @@ class VideoDeleteTest extends TestCase
         $this->deleteJson('/api/videos/'.$video->id)->assertOk();
 
         $this->assertDatabaseMissing('videos', ['id' => $video->id]);
+    }
+
+    public function test_deleting_video_removes_an_orphaned_cloudinary_upload(): void
+    {
+        $creator = User::factory()->create();
+        $video = $this->makeVideo($creator, isDraft: true);
+        $upload = $video->upload;
+        $upload->update([
+            'path' => 'https://res.cloudinary.com/demo/video/upload/deymake/uploads/videos/user-'.$creator->id.'/clip.mp4',
+        ]);
+
+        $cloudinary = Mockery::mock(CloudinaryUploadService::class);
+        $cloudinary->shouldReceive('deleteAsset')
+            ->once()
+            ->with(Mockery::on(fn (Upload $candidate): bool => $candidate->is($upload)))
+            ->andReturnTrue();
+        app()->instance(CloudinaryUploadService::class, $cloudinary);
+
+        Sanctum::actingAs($creator);
+
+        $this->deleteJson('/api/videos/'.$video->id)->assertOk();
+
+        $this->assertDatabaseMissing('videos', ['id' => $video->id]);
+        $this->assertDatabaseMissing('uploads', ['id' => $upload->id]);
     }
 
     public function test_non_owner_cannot_delete_video(): void

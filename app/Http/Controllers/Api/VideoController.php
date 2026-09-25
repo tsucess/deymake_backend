@@ -432,11 +432,28 @@ class VideoController extends Controller
     {
         abort_if($video->user_id !== $request->user()->id, 403);
 
+        $upload = $video->upload;
         $video->delete();
+        $this->deleteOrphanedUpload($upload);
 
         return response()->json([
             'message' => __('messages.videos.deleted'),
         ]);
+    }
+
+    private function deleteOrphanedUpload(?Upload $upload): void
+    {
+        if (! $upload || $upload->videos()->exists() || $upload->stories()->exists()) {
+            return;
+        }
+
+        try {
+            if (app(CloudinaryUploadService::class)->deleteAsset($upload)) {
+                $upload->delete();
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     public function startLive(Request $request, Video $video): JsonResponse

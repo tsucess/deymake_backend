@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProfileResource;
 use App\Http\Resources\StoryResource;
 use App\Models\Story;
+use App\Models\Upload;
+use App\Services\CloudinaryUploadService;
 use App\Support\SupportedLocales;
 use App\Support\UserNotifier;
 use Illuminate\Http\JsonResponse;
@@ -121,7 +124,7 @@ class StoryController extends Controller
 
         return response()->json([
             'message' => 'Story viewers retrieved.',
-            'data' => ['viewers' => \App\Http\Resources\ProfileResource::collection($viewers)],
+            'data' => ['viewers' => ProfileResource::collection($viewers)],
         ]);
     }
 
@@ -129,10 +132,27 @@ class StoryController extends Controller
     {
         abort_unless($story->user_id === $request->user()->id, 403, __('messages.stories.not_owner'));
 
+        $upload = $story->upload;
         $story->delete();
+        $this->deleteOrphanedUpload($upload);
 
         return response()->json([
             'message' => __('messages.stories.deleted'),
         ]);
+    }
+
+    private function deleteOrphanedUpload(?Upload $upload): void
+    {
+        if (! $upload || $upload->videos()->exists() || $upload->stories()->exists()) {
+            return;
+        }
+
+        try {
+            if (app(CloudinaryUploadService::class)->deleteAsset($upload)) {
+                $upload->delete();
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 }

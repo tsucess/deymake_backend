@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Upload;
 use Cloudinary\Cloudinary;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -52,7 +53,7 @@ class CloudinaryUploadService
             'provider' => 'cloudinary',
             'resource_type' => $resourceType,
             'endpoint' => sprintf(
-                'https://api.cloudinary.com/%s/%s/upload',
+                'https://api.cloudinary.com/v1_1/%s/%s/upload',
                 $configuration['cloud_name'],
                 $resourceType,
             ),
@@ -73,6 +74,27 @@ class CloudinaryUploadService
 
         return $host === 'res.cloudinary.com'
             && str_starts_with($path, trim($configuration['cloud_name'], '/').'/');
+    }
+
+    public function deleteAsset(Upload $upload): bool
+    {
+        if ($upload->disk !== 'cloudinary' || ! $this->isManagedUrl($upload->path)) {
+            return false;
+        }
+
+        $publicId = $this->publicIdFor($upload->path, $upload->type);
+
+        if ($publicId === null) {
+            return false;
+        }
+
+        $this->client()->uploadApi()->destroy($publicId, [
+            'resource_type' => $this->resourceTypeFor($upload->type),
+            'type' => 'upload',
+            'invalidate' => true,
+        ]);
+
+        return true;
     }
 
     protected function client(): Cloudinary
@@ -117,6 +139,23 @@ class CloudinaryUploadService
     protected function resourceTypeFor(string $type): string
     {
         return $type === 'video' ? 'video' : 'image';
+    }
+
+    protected function publicIdFor(string $secureUrl, string $type): ?string
+    {
+        $path = trim((string) parse_url($secureUrl, PHP_URL_PATH), '/');
+        $marker = '/'.$this->resourceTypeFor($type).'/upload/';
+        $markerPosition = strpos('/'.$path, $marker);
+
+        if ($markerPosition === false) {
+            return null;
+        }
+
+        $publicId = substr('/'.$path, $markerPosition + strlen($marker));
+        $publicId = preg_replace('/^v\d+\//', '', $publicId) ?: $publicId;
+        $publicId = preg_replace('/\.[^\/\.]+$/', '', $publicId) ?: $publicId;
+
+        return $publicId !== '' ? $publicId : null;
     }
 
     protected function configuration(): array

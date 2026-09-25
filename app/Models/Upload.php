@@ -47,6 +47,11 @@ class Upload extends Model
         return $this->hasMany(Video::class);
     }
 
+    public function stories(): HasMany
+    {
+        return $this->hasMany(Story::class);
+    }
+
     public function getUrlAttribute(): string
     {
         if ($this->disk === 'cloudinary') {
