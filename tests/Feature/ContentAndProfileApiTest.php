@@ -1455,7 +1455,7 @@ class ContentAndProfileApiTest extends TestCase
             'role' => 'audience',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.newConnectedUsers', 1)
+            ->assertJsonPath('data.analytics.newFollowers', 0)
             ->assertJsonPath('data.analytics.liveLikes', 0)
             ->assertJsonPath('data.analytics.newFollowers', 0);
 
@@ -1464,7 +1464,7 @@ class ContentAndProfileApiTest extends TestCase
             'role' => 'audience',
         ])
             ->assertOk()
-            ->assertJsonPath('data.analytics.newConnectedUsers', 1);
+            ->assertJsonPath('data.analytics.newFollowers', 0);
 
         $this->postJson('/api/videos/'.$video->id.'/live/like')
             ->assertOk();
@@ -1475,7 +1475,6 @@ class ContentAndProfileApiTest extends TestCase
         Event::assertDispatched(LiveAnalyticsUpdated::class, function (LiveAnalyticsUpdated $event) use ($video): bool {
             return $event->videoId === $video->id
                 && ($event->analytics['liveLikes'] ?? null) === 1
-                && ($event->analytics['newConnectedUsers'] ?? null) === 1
                 && ($event->analytics['newFollowers'] ?? null) === 1;
         });
     }

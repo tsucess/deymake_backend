@@ -7,7 +7,6 @@ use App\Events\LiveEngagementCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\LiveLikeEvent;
-use App\Models\LivePresenceSession;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\UserNotifier;
@@ -271,13 +270,6 @@ class VideoInteractionController extends Controller
                 ->where('video_id', $video->id)
                 ->whereBetween('created_at', [$startedAt, $endedAt])
                 ->count(),
-            'newConnectedUsers' => (int) LivePresenceSession::query()
-                ->where('video_id', $video->id)
-                ->where('role', 'audience')
-                ->whereNotNull('user_id')
-                ->whereBetween('joined_at', [$startedAt, $endedAt])
-                ->distinct('user_id')
-                ->count('user_id'),
             'newFollowers' => (int) DB::table('subscriptions')
                 ->where('creator_id', $video->user_id)
                 ->whereBetween('created_at', [$startedAt, $endedAt])

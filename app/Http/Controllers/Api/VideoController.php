@@ -1243,6 +1243,10 @@ class VideoController extends Controller
         $totalComments = (int) $commentCounts->sum('comments_count');
         $totalTips = (int) $tipCounts->sum('tips_count');
         $totalTipsAmount = (int) $tipCounts->sum('tips_amount');
+        $newFollowers = (int) DB::table('subscriptions')
+            ->where('creator_id', $video->user_id)
+            ->whereBetween('created_at', [$startedAt, $endedAt])
+            ->count();
 
         return [
             'topFans' => $topFans,
@@ -1253,6 +1257,7 @@ class VideoController extends Controller
             'viewerTrend' => $viewerTrend,
             'peakMoments' => $peakMoments,
             'retention' => $retention,
+            'newFollowers' => $newFollowers,
             'totals' => [
                 'likes' => $totalLikes,
                 'comments' => $totalComments,
@@ -1489,13 +1494,6 @@ class VideoController extends Controller
         $resolvedCurrentViewers = $currentViewers ?? $this->activePresenceCount($video);
         [$startedAt, $endedAt] = $this->resolveLiveAnalyticsWindow($video);
         $liveLikes = $this->liveLikeEventsQuery($video)->count();
-        $newConnectedUsers = LivePresenceSession::query()
-            ->where('video_id', $video->id)
-            ->where('role', 'audience')
-            ->whereNotNull('user_id')
-            ->whereBetween('joined_at', [$startedAt, $endedAt])
-            ->distinct('user_id')
-            ->count('user_id');
         $newFollowers = DB::table('subscriptions')
             ->where('creator_id', $video->user_id)
             ->whereBetween('created_at', [$startedAt, $endedAt])
@@ -1505,7 +1503,6 @@ class VideoController extends Controller
             'currentViewers' => $resolvedCurrentViewers,
             'peakViewers' => max($resolvedCurrentViewers, (int) $video->fresh()->live_peak_viewers_count),
             'liveLikes' => $liveLikes,
-            'newConnectedUsers' => $newConnectedUsers,
             'newFollowers' => $newFollowers,
         ];
     }
