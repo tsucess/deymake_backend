@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\LiveAudienceUpdated;
+use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEngagementCreated;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
@@ -1428,6 +1429,55 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.videos.0.liveAnalytics.peakViewers', 2)
             ->assertJsonPath('data.videos.0.liveComments', 3);
+    }
+
+    public function test_live_analytics_broadcasts_likes_new_connections_and_new_followers_in_realtime(): void
+    {
+        Event::fake([LiveAnalyticsUpdated::class]);
+
+        $category = Category::create(['name' => 'Realtime Metrics', 'slug' => 'realtime-metrics']);
+        $creator = User::factory()->create();
+        $viewer = User::factory()->create();
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Realtime Metrics Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now()->subMinute(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'metrics-one',
+            'role' => 'audience',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.newConnectedUsers', 1)
+            ->assertJsonPath('data.analytics.liveLikes', 0)
+            ->assertJsonPath('data.analytics.newFollowers', 0);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/presence', [
+            'sessionKey' => 'metrics-reload',
+            'role' => 'audience',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.analytics.newConnectedUsers', 1);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/like')
+            ->assertOk();
+
+        $this->postJson('/api/creators/'.$creator->id.'/subscribe')
+            ->assertOk();
+
+        Event::assertDispatched(LiveAnalyticsUpdated::class, function (LiveAnalyticsUpdated $event) use ($video): bool {
+            return $event->videoId === $video->id
+                && ($event->analytics['liveLikes'] ?? null) === 1
+                && ($event->analytics['newConnectedUsers'] ?? null) === 1
+                && ($event->analytics['newFollowers'] ?? null) === 1;
+        });
     }
 
     public function test_live_fan_tips_are_recorded_broadcast_and_counted_in_live_engagement_analytics(): void

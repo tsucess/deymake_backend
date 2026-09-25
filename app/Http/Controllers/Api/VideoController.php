@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\LiveAudienceUpdated;
+use App\Events\LiveAnalyticsUpdated;
+use App\Events\LiveEnded;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
 use App\Http\Controllers\Controller;
@@ -641,6 +643,7 @@ class VideoController extends Controller
         $analytics = $this->buildLivePresenceAnalytics($video, $currentViewers);
 
         LivePresenceUpdated::dispatch($video->id, $analytics);
+        LiveAnalyticsUpdated::dispatch($video->id, $analytics);
         LiveAudienceUpdated::dispatch($video->id, $this->buildLiveAudiencePayload($video), $analytics);
 
         return response()->json([
@@ -671,6 +674,7 @@ class VideoController extends Controller
         $analytics = $this->buildLivePresenceAnalytics($video);
 
         LivePresenceUpdated::dispatch($video->id, $analytics);
+        LiveAnalyticsUpdated::dispatch($video->id, $analytics);
         LiveAudienceUpdated::dispatch($video->id, $this->buildLiveAudiencePayload($video), $analytics);
 
         return response()->json([
@@ -936,6 +940,8 @@ class VideoController extends Controller
             'live_ended_at' => now(),
             'live_notified_at' => null,
         ])->save();
+
+        LiveEnded::dispatch($video->id, $video->live_ended_at->toISOString());
     }
 
     private function ensureVideoIsLive(Video $video): void
@@ -1481,10 +1487,26 @@ class VideoController extends Controller
     private function buildLivePresenceAnalytics(Video $video, ?int $currentViewers = null): array
     {
         $resolvedCurrentViewers = $currentViewers ?? $this->activePresenceCount($video);
+        [$startedAt, $endedAt] = $this->resolveLiveAnalyticsWindow($video);
+        $liveLikes = $this->liveLikeEventsQuery($video)->count();
+        $newConnectedUsers = LivePresenceSession::query()
+            ->where('video_id', $video->id)
+            ->where('role', 'audience')
+            ->whereNotNull('user_id')
+            ->whereBetween('joined_at', [$startedAt, $endedAt])
+            ->distinct('user_id')
+            ->count('user_id');
+        $newFollowers = DB::table('subscriptions')
+            ->where('creator_id', $video->user_id)
+            ->whereBetween('created_at', [$startedAt, $endedAt])
+            ->count();
 
         return [
             'currentViewers' => $resolvedCurrentViewers,
             'peakViewers' => max($resolvedCurrentViewers, (int) $video->fresh()->live_peak_viewers_count),
+            'liveLikes' => $liveLikes,
+            'newConnectedUsers' => $newConnectedUsers,
+            'newFollowers' => $newFollowers,
         ];
     }
 

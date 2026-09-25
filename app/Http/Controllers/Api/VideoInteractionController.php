@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEngagementCreated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\LiveLikeEvent;
+use App\Models\LivePresenceSession;
 use App\Models\User;
 use App\Models\Video;
 use App\Support\UserNotifier;
@@ -68,6 +70,7 @@ class VideoInteractionController extends Controller
             'liveLikes' => (int) ($video->live_like_events_count ?? 0),
             'liveComments' => (int) ($video->live_comments_count ?? 0),
         ]);
+        LiveAnalyticsUpdated::dispatch($video->id, $this->liveAnalytics($video));
 
         return response()->json([
             'message' => __('messages.videos.liked'),
@@ -145,6 +148,15 @@ class VideoInteractionController extends Controller
         );
 
         $creator->loadCount('subscribers');
+
+        Video::query()
+            ->where('user_id', $creator->id)
+            ->where('is_live', true)
+            ->get()
+            ->each(fn (Video $liveVideo) => LiveAnalyticsUpdated::dispatch(
+                $liveVideo->id,
+                $this->liveAnalytics($liveVideo),
+            ));
 
         return response()->json([
             'message' => __('messages.subscriptions.created'),
@@ -247,6 +259,30 @@ class VideoInteractionController extends Controller
                 'video' => new VideoResource($video),
             ],
         ]);
+    }
+
+    private function liveAnalytics(Video $video): array
+    {
+        $startedAt = $video->live_started_at ?? now();
+        $endedAt = $video->live_ended_at ?? now();
+
+        return [
+            'liveLikes' => (int) LiveLikeEvent::query()
+                ->where('video_id', $video->id)
+                ->whereBetween('created_at', [$startedAt, $endedAt])
+                ->count(),
+            'newConnectedUsers' => (int) LivePresenceSession::query()
+                ->where('video_id', $video->id)
+                ->where('role', 'audience')
+                ->whereNotNull('user_id')
+                ->whereBetween('joined_at', [$startedAt, $endedAt])
+                ->distinct('user_id')
+                ->count('user_id'),
+            'newFollowers' => (int) DB::table('subscriptions')
+                ->where('creator_id', $video->user_id)
+                ->whereBetween('created_at', [$startedAt, $endedAt])
+                ->count(),
+        ];
     }
 
     private function interactionMessageKey(string $type, bool $active): string
