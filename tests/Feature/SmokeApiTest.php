@@ -105,7 +105,7 @@ class SmokeApiTest extends TestCase
             ->assertJsonPath('data.strategy', 'client-direct-upload')
             ->assertJsonPath('data.provider', 'cloudinary')
             ->assertJsonPath('data.method', 'POST')
-            ->assertJsonPath('data.endpoint', 'https://api.cloudinary.com_1/demo/video/upload')
+            ->assertJsonPath('data.endpoint', 'https://api.cloudinary.com/demo/video/upload')
             ->assertJsonPath('data.resourceType', 'video')
             ->assertJsonPath('data.fields.api_key', 'test-key')
             ->assertJsonPath('data.fields.folder', 'deymake/uploads/videos/user-1')
