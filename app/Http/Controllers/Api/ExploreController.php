@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class ExploreController extends Controller
 {
-    protected const TOP_VIDEO_LIMIT = 12;
+    protected const TOP_VIDEO_LIMIT = 6;
 
     protected const TRENDING_HASHTAG_LIMIT = 10;
 
