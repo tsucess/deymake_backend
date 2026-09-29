@@ -42,7 +42,6 @@ class StoryController extends Controller
             ->withViewerData($viewer)
             ->whereIn('user_id', $visibleAuthorIds)
             ->orderByDesc('created_at')
-            ->limit(50)
             ->get();
 
         return response()->json([
@@ -67,6 +66,15 @@ class StoryController extends Controller
         $type = $validated['type'] ?? 'image';
         abort_if($type !== 'text' && blank($validated['mediaUrl'] ?? null), 422, 'Media is required for image and video stories.');
 
+        $upload = null;
+        if (isset($validated['uploadId'])) {
+            $upload = Upload::query()
+                ->whereKey($validated['uploadId'])
+                ->where('user_id', $request->user()->id)
+                ->firstOrFail();
+        }
+        $uploadedAt = $upload?->created_at ?? now();
+
         $story = Story::query()->create([
             'user_id' => $request->user()->id,
             'upload_id' => $validated['uploadId'] ?? null,
@@ -75,7 +83,7 @@ class StoryController extends Controller
             'thumbnail_url' => $validated['thumbnailUrl'] ?? null,
             'caption' => $validated['caption'] ?? null,
             'background_color' => $validated['backgroundColor'] ?? null,
-            'expires_at' => now()->addHours(24),
+            'expires_at' => $uploadedAt->copy()->addHours(24),
         ]);
 
         $story = Story::query()->withViewerData($request->user())->findOrFail($story->id);

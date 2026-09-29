@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Events\StoryPublished;
 use App\Models\Category;
 use App\Models\Story;
+use App\Models\Upload;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -126,6 +128,29 @@ class ConnectionsApiTest extends TestCase
         $this->assertContains('/b.jpg', $urls);
     }
 
+    public function test_stories_feed_does_not_hide_unexpired_stories_after_the_first_fifty(): void
+    {
+        $viewer = User::factory()->create();
+        $creator = User::factory()->create();
+        $viewer->subscribedCreators()->attach($creator->id);
+
+        for ($index = 0; $index < 55; $index++) {
+            Story::create([
+                'user_id' => $creator->id,
+                'type' => 'image',
+                'media_url' => '/story-'.$index.'.jpg',
+                'expires_at' => now()->addHours(24)->subMinutes($index),
+                'created_at' => now()->subMinutes($index),
+            ]);
+        }
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson('/api/stories/feed')
+            ->assertOk()
+            ->assertJsonCount(55, 'data.stories');
+    }
+
     public function test_publishing_a_story_broadcasts_to_the_author_and_followers(): void
     {
         Event::fake([StoryPublished::class]);
@@ -152,6 +177,35 @@ class ConnectionsApiTest extends TestCase
         );
         Event::assertNotDispatched(StoryPublished::class, fn (StoryPublished $event): bool =>
             $event->recipientId === $stranger->id
+        );
+    }
+
+    public function test_media_story_expires_24_hours_after_its_upload_time(): void
+    {
+        $author = User::factory()->create();
+        $upload = Upload::create([
+            'user_id' => $author->id,
+            'type' => 'image',
+            'disk' => 'public',
+            'path' => 'stories/uploaded.jpg',
+            'original_name' => 'uploaded.jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 1024,
+        ]);
+        $uploadedAt = now()->subHours(23)->startOfSecond();
+        $upload->forceFill(['created_at' => $uploadedAt])->saveQuietly();
+
+        Sanctum::actingAs($author);
+
+        $response = $this->postJson('/api/stories', [
+            'type' => 'image',
+            'mediaUrl' => '/stories/uploaded.jpg',
+            'uploadId' => $upload->id,
+        ])->assertCreated();
+
+        $this->assertTrue(
+            Carbon::parse($response->json('data.story.expiresAt'))
+                ->equalTo($uploadedAt->copy()->addHours(24)),
         );
     }
 
