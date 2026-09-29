@@ -1715,11 +1715,19 @@ class ContentAndProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.views', 11);
 
+        $this->travel(3)->minutes();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
+            ->postJson('/api/videos/'.$video->id.'/view')
+            ->assertOk()
+            ->assertJsonPath('data.views', 12);
+
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.24'])
             ->withHeaders(['User-Agent' => 'Second Engagement Agent'])
             ->postJson('/api/videos/'.$video->id.'/view')
             ->assertOk()
-            ->assertJsonPath('data.views', 12);
+            ->assertJsonPath('data.views', 13);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
             ->withHeaders(['User-Agent' => 'Engagement Test Agent'])
@@ -1742,9 +1750,33 @@ class ContentAndProfileApiTest extends TestCase
 
         $this->assertDatabaseHas('videos', [
             'id' => $video->id,
-            'views_count' => 12,
+            'views_count' => 13,
             'shares_count' => 2,
         ]);
+    }
+
+    public function test_authenticated_view_sessions_are_deduplicated_per_user_and_can_repeat_after_ttl(): void
+    {
+        $creator = User::factory()->create();
+        $viewer = User::factory()->create();
+        $secondViewer = User::factory()->create();
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Session view test',
+            'is_draft' => false,
+            'views_count' => 0,
+        ]);
+
+        Sanctum::actingAs($viewer);
+        $this->postJson('/api/videos/'.$video->id.'/view')->assertJsonPath('data.views', 1);
+        $this->postJson('/api/videos/'.$video->id.'/view')->assertJsonPath('data.views', 1);
+
+        $this->travel(3)->minutes();
+        $this->postJson('/api/videos/'.$video->id.'/view')->assertJsonPath('data.views', 2);
+
+        Sanctum::actingAs($secondViewer);
+        $this->postJson('/api/videos/'.$video->id.'/view')->assertJsonPath('data.views', 3);
     }
 
     public function test_at_mentions_in_comments_and_videos_create_mention_notifications(): void

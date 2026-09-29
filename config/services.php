@@ -33,6 +33,10 @@ return [
         'folder' => env('CLOUDINARY_UPLOAD_FOLDER', 'deymake/uploads'),
     ],
 
+    'video_views' => [
+        'dedup_minutes' => (int) env('VIDEO_VIEW_DEDUP_MINUTES', 2),
+    ],
+
     'agora' => [
         'app_id' => env('AGORA_APP_ID'),
         'app_certificate' => env('AGORA_APP_CERTIFICATE'),

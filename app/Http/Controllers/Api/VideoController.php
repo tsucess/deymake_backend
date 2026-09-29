@@ -54,8 +54,6 @@ use TaylanUnutmaz\AgoraTokenBuilder\RtcTokenBuilder;
  */
 class VideoController extends Controller
 {
-    private const VIEW_DEDUP_MINUTES = 1440;
-
     private const SHARE_DEDUP_MINUTES = 60;
 
     private const LIVE_PRESENCE_TTL_SECONDS = 30;
@@ -255,7 +253,7 @@ class VideoController extends Controller
 
     public function recordView(Request $request, Video $video): JsonResponse
     {
-        if ($this->shouldRecordEngagement($request, $video, 'view', self::VIEW_DEDUP_MINUTES)) {
+        if ($this->shouldRecordEngagement($request, $video, 'view', (int) config('services.video_views.dedup_minutes', 2))) {
             $video->increment('views_count');
         }
 
