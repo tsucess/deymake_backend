@@ -114,9 +114,25 @@ class ConnectionsApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.stories.feed_retrieved'))
             ->assertJsonCount(2, 'data.stories');
 
+        $this->assertSame(
+            ['active', 'active'],
+            collect($response->json('data.stories'))->pluck('status')->all(),
+        );
+
         $urls = collect($response->json('data.stories'))->pluck('mediaUrl')->all();
         $this->assertContains('/a.jpg', $urls);
         $this->assertContains('/b.jpg', $urls);
+    }
+
+    public function test_expired_scope_identifies_stories_outside_the_active_24_hour_period(): void
+    {
+        $author = User::factory()->create();
+        $active = Story::create(['user_id' => $author->id, 'type' => 'image', 'media_url' => '/active.jpg', 'expires_at' => now()->addHour()]);
+        $expired = Story::create(['user_id' => $author->id, 'type' => 'image', 'media_url' => '/expired.jpg', 'expires_at' => now()->subMinute()]);
+
+        $this->assertTrue(Story::query()->active()->whereKey($active->id)->exists());
+        $this->assertTrue(Story::query()->expired()->whereKey($expired->id)->exists());
+        $this->assertSame('expired', (new \App\Http\Resources\StoryResource($expired))->toArray(request())['status']);
     }
 
     public function test_story_view_records_view_and_increments_counter(): void

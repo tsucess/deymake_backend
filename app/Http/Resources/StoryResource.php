@@ -20,6 +20,7 @@ class StoryResource extends JsonResource
             'backgroundColor' => $this->background_color,
             'views' => (int) $this->views_count,
             'expiresAt' => $this->expires_at?->toISOString(),
+            'status' => $this->expires_at?->isPast() ? 'expired' : 'active',
             'createdAt' => $this->created_at?->toISOString(),
             'author' => new ProfileResource($this->whenLoaded('user')),
             'isOwner' => (bool) ($viewer && $viewer->id === $this->user_id),

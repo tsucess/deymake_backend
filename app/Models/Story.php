@@ -51,6 +51,11 @@ class Story extends Model
         return $query->where('expires_at', '>', now());
     }
 
+    public function scopeExpired(Builder $query): Builder
+    {
+        return $query->where('expires_at', '<=', now());
+    }
+
     public function scopeWithViewerData(Builder $query, ?User $viewer = null): Builder
     {
         return $query
