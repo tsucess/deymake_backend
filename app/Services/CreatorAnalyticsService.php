@@ -70,6 +70,7 @@ class CreatorAnalyticsService
             'overview' => $overview,
             'trends' => $this->buildDashboardTrends($creator, $startsAt, $endsAt),
             'topVideos' => $this->buildTopVideos($creator, $limit),
+            'recentVideos' => $this->buildRecentVideos($creator, $limit),
             'audience' => $this->buildAudienceInsights($creator, $activeMemberships),
             'live' => $this->buildLiveInsights($creator),
         ];
@@ -278,6 +279,43 @@ class CreatorAnalyticsService
             ->sortByDesc('performanceScore')
             ->take(max(1, min(10, $limit)))
             ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildRecentVideos(User $creator, int $limit): array
+    {
+        return Video::query()
+            ->where('user_id', $creator->id)
+            ->where(fn ($query) => $query
+                ->where('is_draft', false)
+                ->orWhereNotNull('live_started_at'))
+            ->with('upload')
+            ->withCount(['likes', 'saves', 'comments', 'liveLikeEvents'])
+            ->latest()
+            ->limit(max(1, min(10, $limit)))
+            ->get()
+            ->map(fn (Video $video): array => [
+                'id' => $video->id,
+                'publicId' => $video->public_id,
+                'title' => $video->title,
+                'caption' => $video->caption,
+                'thumbnailUrl' => $video->thumbnail_url,
+                'mediaUrl' => $video->upload?->processed_url ?: $video->media_url,
+                'isLive' => (bool) $video->is_live,
+                'isLiveSession' => $video->live_started_at !== null,
+                'liveStartedAt' => $video->live_started_at?->toISOString(),
+                'liveEndedAt' => $video->live_ended_at?->toISOString(),
+                'isDraft' => (bool) $video->is_draft,
+                'views' => (int) $video->views_count,
+                'shares' => (int) $video->shares_count,
+                'likes' => (int) $video->likes_count + (int) $video->live_like_events_count,
+                'saves' => (int) $video->saves_count,
+                'comments' => (int) $video->comments_count,
+                'createdAt' => $video->created_at?->toISOString(),
+            ])
             ->all();
     }
 

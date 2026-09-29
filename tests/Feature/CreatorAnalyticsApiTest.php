@@ -171,6 +171,58 @@ class CreatorAnalyticsApiTest extends TestCase
             ->assertJsonPath('data.live.bestVideo.id', $liveVideo->id);
     }
 
+    public function test_dashboard_recent_videos_include_ended_live_sessions_and_exclude_regular_drafts(): void
+    {
+        $creator = User::factory()->create();
+        $olderVideo = Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Older published video',
+            'is_draft' => false,
+            'views_count' => 8,
+        ]);
+        $newerVideo = Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Newer published video',
+            'is_draft' => false,
+            'views_count' => 15,
+        ]);
+        $endedLiveSession = Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Ended creator live',
+            'is_draft' => true,
+            'is_live' => false,
+            'live_started_at' => now()->subHours(2),
+            'live_ended_at' => now()->subHour(),
+            'views_count' => 35,
+            'live_peak_viewers_count' => 12,
+        ]);
+        Video::create([
+            'user_id' => $creator->id,
+            'type' => 'video',
+            'title' => 'Newest draft',
+            'is_draft' => true,
+        ]);
+        $olderVideo->forceFill(['created_at' => now()->subDay()])->saveQuietly();
+        $newerVideo->forceFill(['created_at' => now()->subHour()])->saveQuietly();
+        $endedLiveSession->forceFill(['created_at' => now()->subMinutes(30)])->saveQuietly();
+
+        Sanctum::actingAs($creator);
+
+        $response = $this->getJson('/api/me/analytics?period=30d&limit=5')
+            ->assertOk()
+            ->assertJsonCount(3, 'data.recentVideos');
+
+        $this->assertSame(
+            [$endedLiveSession->id, $newerVideo->id, $olderVideo->id],
+            collect($response->json('data.recentVideos'))->pluck('id')->all(),
+        );
+        $this->assertTrue($response->json('data.recentVideos.0.isLiveSession'));
+        $this->assertFalse($response->json('data.recentVideos.0.isLive'));
+    }
+
     public function test_creator_can_fetch_owned_video_analytics_detail(): void
     {
         $category = Category::create(['name' => 'Comedy', 'slug' => 'comedy']);
