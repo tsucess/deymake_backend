@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Events\StoryPublished;
 use App\Models\Category;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -122,6 +124,35 @@ class ConnectionsApiTest extends TestCase
         $urls = collect($response->json('data.stories'))->pluck('mediaUrl')->all();
         $this->assertContains('/a.jpg', $urls);
         $this->assertContains('/b.jpg', $urls);
+    }
+
+    public function test_publishing_a_story_broadcasts_to_the_author_and_followers(): void
+    {
+        Event::fake([StoryPublished::class]);
+
+        $author = User::factory()->create();
+        $follower = User::factory()->create();
+        $stranger = User::factory()->create();
+        $follower->subscribedCreators()->attach($author->id);
+
+        Sanctum::actingAs($author);
+
+        $response = $this->postJson('/api/stories', [
+            'type' => 'text',
+            'caption' => 'Fresh status',
+            'backgroundColor' => '#123456',
+        ])->assertCreated();
+
+        $storyId = (int) $response->json('data.story.id');
+        Event::assertDispatchedTimes(StoryPublished::class, 2);
+        Event::assertDispatched(StoryPublished::class, fn (StoryPublished $event): bool =>
+            $event->storyId === $storyId
+            && $event->authorId === $author->id
+            && in_array($event->recipientId, [$author->id, $follower->id], true)
+        );
+        Event::assertNotDispatched(StoryPublished::class, fn (StoryPublished $event): bool =>
+            $event->recipientId === $stranger->id
+        );
     }
 
     public function test_expired_scope_identifies_stories_outside_the_active_24_hour_period(): void

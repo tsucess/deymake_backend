@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Events\StoryPublished;
 use App\Http\Resources\ProfileResource;
 use App\Http\Resources\StoryResource;
 use App\Models\Story;
@@ -78,6 +79,12 @@ class StoryController extends Controller
         ]);
 
         $story = Story::query()->withViewerData($request->user())->findOrFail($story->id);
+
+        $recipientIds = $request->user()->subscribers()->pluck('users.id')->all();
+        $recipientIds[] = $request->user()->id;
+        foreach (array_unique($recipientIds) as $recipientId) {
+            event(new StoryPublished((int) $recipientId, (int) $story->id, (int) $request->user()->id));
+        }
 
         return response()->json([
             'message' => __('messages.stories.created'),

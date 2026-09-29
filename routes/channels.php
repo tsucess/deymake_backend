@@ -42,6 +42,10 @@ Broadcast::channel('users.{targetUserId}', function (User $user, int $targetUser
     return $user->id === $targetUserId;
 });
 
+Broadcast::channel('story-feed.{userId}', function (User $user, int $userId): bool {
+    return $user->id === $userId;
+});
+
 Broadcast::channel('live.videos.{videoId}.users.{targetUserId}', function (User $user, int $videoId, int $targetUserId): bool {
     if ($user->id !== $targetUserId) {
         return false;
