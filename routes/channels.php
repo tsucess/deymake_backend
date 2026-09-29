@@ -42,6 +42,10 @@ Broadcast::channel('users.{targetUserId}', function (User $user, int $targetUser
     return $user->id === $targetUserId;
 });
 
+Broadcast::channel('creators.{creatorId}', function (User $user, int $creatorId): bool {
+    return User::query()->whereKey($creatorId)->exists();
+});
+
 Broadcast::channel('story-feed.{userId}', function (User $user, int $userId): bool {
     return $user->id === $userId;
 });

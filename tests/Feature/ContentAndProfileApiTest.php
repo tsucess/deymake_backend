@@ -7,6 +7,7 @@ use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEngagementCreated;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
+use App\Events\CreatorSubscribersUpdated;
 use App\Events\UserNotificationChanged;
 use App\Models\Category;
 use App\Models\Comment;
@@ -698,11 +699,27 @@ class ContentAndProfileApiTest extends TestCase
             'preferences' => ['language' => 'fr'],
         ]);
 
+        Event::fake([CreatorSubscribersUpdated::class]);
         Sanctum::actingAs($subscriber);
 
         $this->postJson('/api/creators/'.$recipient->id.'/subscribe')
             ->assertOk()
-            ->assertJsonPath('message', trans('messages.subscriptions.created'));
+            ->assertJsonPath('message', trans('messages.subscriptions.created'))
+            ->assertJsonPath('data.creator.subscriberCount', 1)
+            ->assertJsonPath('data.creator.subscribed', true);
+
+        Event::assertDispatched(CreatorSubscribersUpdated::class, function (CreatorSubscribersUpdated $event) use ($recipient): bool {
+            return $event->creatorId === $recipient->id && $event->subscriberCount === 1;
+        });
+
+        $this->deleteJson('/api/creators/'.$recipient->id.'/subscribe')
+            ->assertOk()
+            ->assertJsonPath('data.creator.subscriberCount', 0)
+            ->assertJsonPath('data.creator.subscribed', false);
+
+        Event::assertDispatched(CreatorSubscribersUpdated::class, function (CreatorSubscribersUpdated $event) use ($recipient): bool {
+            return $event->creatorId === $recipient->id && $event->subscriberCount === 0;
+        });
 
         $this->assertDatabaseHas('user_notifications', [
             'user_id' => $recipient->id,

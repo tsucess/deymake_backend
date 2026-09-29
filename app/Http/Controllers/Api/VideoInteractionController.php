@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEngagementCreated;
+use App\Events\CreatorSubscribersUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\VideoResource;
 use App\Models\LiveLikeEvent;
@@ -147,6 +148,7 @@ class VideoInteractionController extends Controller
         );
 
         $creator->loadCount('subscribers');
+        CreatorSubscribersUpdated::dispatch($creator->id, (int) $creator->subscribers_count);
 
         Video::query()
             ->where('user_id', $creator->id)
@@ -177,6 +179,7 @@ class VideoInteractionController extends Controller
             ->delete();
 
         $creator->loadCount('subscribers');
+        CreatorSubscribersUpdated::dispatch($creator->id, (int) $creator->subscribers_count);
 
         return response()->json([
             'message' => __('messages.subscriptions.removed'),
