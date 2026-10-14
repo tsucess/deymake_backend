@@ -119,7 +119,7 @@ class StoryController extends Controller
 
             $story->increment('views_count');
             if ($story->user_id !== $request->user()->id) {
-                UserNotifier::send($story->user_id, $request->user()->id, 'story_view', 'Your story was viewed', $request->user()->name.' viewed your story.', ['storyId' => $story->id, 'viewerId' => $request->user()->id]);
+                UserNotifier::send($story->user_id, $request->user()->id, 'story_view', $request->user()->name.' viewed your story.', ['storyId' => $story->id, 'viewerId' => $request->user()->id]);
             }
         }
 
