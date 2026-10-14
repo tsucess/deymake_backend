@@ -99,7 +99,7 @@ class ConnectionsApiTest extends TestCase
         $this->assertNotContains($viewer->name, $names);
     }
 
-    public function test_stories_feed_returns_active_stories_from_self_and_subscribed(): void
+    public function test_subscribed_viewer_can_fetch_creator_stories_without_creator_authentication(): void
     {
         $viewer = User::factory()->create();
         $subbed = User::factory()->create();
