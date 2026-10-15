@@ -348,7 +348,7 @@ class ContentAndProfileApiTest extends TestCase
         $this->postJson('/api/videos/'.$liveVideoPublicId.'/share')
             ->assertOk()
             ->assertJsonPath('message', trans('messages.videos.share_recorded'))
-            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/live/'.$liveVideoPublicId);
+            ->assertJsonPath('data.shareUrl', rtrim((string) config('app.frontend_url'), '/').'/watch-live/'.$liveVideoPublicId);
 
         $this->postJson('/api/videos/'.$creatorVideo->id.'/like')
             ->assertOk()
@@ -1131,8 +1131,103 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.session.token', fn (string $token) => $token !== '');
     }
 
+    public function test_audience_join_requests_are_persisted_idempotently_and_broadcast_to_the_creator(): void
+    {
+        Event::fake([LiveSignalCreated::class]);
+
+        $category = Category::create(['name' => 'Live', 'slug' => 'live-join-request']);
+        $creator = User::factory()->create(['email' => 'join-request-owner@example.com']);
+        $viewer = User::factory()->create(['email' => 'join-request-viewer@example.com']);
+        $otherUser = User::factory()->create(['email' => 'join-request-other@example.com']);
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Join Request Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $otherUser->id,
+            'type' => 'join_request',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'join_request')
+            ->assertJsonPath('data.signal.senderId', $viewer->id)
+            ->assertJsonPath('data.signal.recipientId', $creator->id)
+            ->assertJsonPath('data.requestStatus', 'pending')
+            ->assertJsonPath('data.duplicate', false);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_request',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.signal.type', 'join_request')
+            ->assertJsonPath('data.requestStatus', 'pending')
+            ->assertJsonPath('data.duplicate', true);
+
+        $this->assertDatabaseCount('live_signals', 1);
+        Event::assertDispatchedTimes(LiveSignalCreated::class, 1);
+        Event::assertDispatched(LiveSignalCreated::class, function (LiveSignalCreated $event) use ($creator, $video): bool {
+            return $event->videoId === $video->id
+                && $event->recipientId === $creator->id
+                && ($event->signal['type'] ?? null) === 'join_request';
+        });
+    }
+
+    public function test_join_requests_require_an_authenticated_audience_member_and_an_active_live_video(): void
+    {
+        $category = Category::create(['name' => 'Live', 'slug' => 'live-join-request-validation']);
+        $creator = User::factory()->create(['email' => 'join-request-validation-owner@example.com']);
+        $viewer = User::factory()->create(['email' => 'join-request-validation-viewer@example.com']);
+        $liveVideo = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Active Join Request Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+        $endedVideo = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Ended Join Request Live',
+            'is_live' => false,
+            'is_draft' => true,
+        ]);
+
+        $this->postJson('/api/videos/'.$liveVideo->id.'/live/signals', ['type' => 'join_request'])
+            ->assertUnauthorized();
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/videos/999999/live/signals', ['type' => 'join_request'])
+            ->assertNotFound();
+
+        $this->postJson('/api/videos/'.$endedVideo->id.'/live/signals', ['type' => 'join_request'])
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_not_active'));
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/videos/'.$liveVideo->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', trans('messages.videos.live_signal_type_not_allowed'));
+    }
+
     public function test_live_stage_requests_and_invites_can_grant_and_revoke_cohost_access(): void
     {
+        Event::fake([LiveSignalCreated::class]);
+
         config()->set('services.agora.app_id', 'test-agora-app');
         config()->set('services.agora.app_certificate', 'test-agora-certificate');
         config()->set('services.agora.token_ttl', 900);
@@ -1198,6 +1293,15 @@ class ContentAndProfileApiTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('message', trans('messages.videos.live_stage_access_denied'));
 
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $viewer->id,
+            'session_key' => 'stage-viewer-returned',
+            'role' => 'audience',
+            'joined_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
         Sanctum::actingAs($creator);
 
         $this->postJson('/api/videos/'.$video->id.'/live/signals', [
@@ -1208,6 +1312,19 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.signal.type', 'join_invite')
             ->assertJsonPath('data.signal.recipient.fullName', $viewer->name);
 
+        $hostSignals = $this->getJson('/api/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->json('data.signals');
+        $inviteSignalId = collect($hostSignals)->firstWhere('type', 'join_invite')['id'];
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_invite',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.duplicate', true)
+            ->assertJsonPath('data.signal.id', $inviteSignalId);
+
         Sanctum::actingAs($viewer);
 
         $this->postJson('/api/videos/'.$video->id.'/live/signals', [
@@ -1216,6 +1333,12 @@ class ContentAndProfileApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.signal.type', 'join_invite_accepted')
             ->assertJsonPath('data.signal.recipientId', $creator->id);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_invite_rejected',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_invite_not_pending'));
 
         $this->getJson('/api/videos/'.$video->id.'/live/session?role=host')
             ->assertOk()
@@ -1242,6 +1365,124 @@ class ContentAndProfileApiTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', trans('messages.videos.live_signal_type_not_allowed'));
+
+        Event::assertDispatched(LiveSignalCreated::class, function (LiveSignalCreated $event) use ($creator, $video): bool {
+            return $event->videoId === $video->id
+                && $event->recipientId === $creator->id
+                && ($event->signal['type'] ?? null) === 'join_invite_accepted';
+        });
+    }
+
+    public function test_host_guest_decisions_require_a_pending_request_and_declined_requests_cannot_be_accepted_later(): void
+    {
+        Event::fake([LiveSignalCreated::class]);
+
+        $category = Category::create(['name' => 'Live', 'slug' => 'live-host-guest-decisions']);
+        $creator = User::factory()->create(['email' => 'guest-decisions-owner@example.com']);
+        $viewer = User::factory()->create(['email' => 'guest-decisions-viewer@example.com']);
+        $otherUser = User::factory()->create(['email' => 'guest-decisions-other@example.com']);
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Guest Decisions Live',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+        $endedVideo = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Ended Guest Decisions Live',
+            'is_live' => false,
+            'is_draft' => true,
+        ]);
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_invite',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', trans('messages.videos.live_invitee_not_eligible'));
+
+        $this->postJson('/api/videos/'.$endedVideo->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_invite',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_not_active'));
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_accepted',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_guest_request_not_pending'));
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $otherUser->id,
+            'type' => 'join_request',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.recipientId', $creator->id);
+
+        Sanctum::actingAs($otherUser);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_rejected',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', trans('messages.videos.live_signal_type_not_allowed'));
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_rejected',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.requestStatus', 'declined');
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_accepted',
+        ])
+            ->assertStatus(409)
+            ->assertJsonPath('message', trans('messages.videos.live_guest_request_not_pending'));
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'type' => 'join_request',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.requestStatus', 'pending');
+
+        Sanctum::actingAs($creator);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $viewer->id,
+            'type' => 'join_request_accepted',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.requestStatus', 'accepted');
+
+        Event::assertDispatched(LiveSignalCreated::class, function (LiveSignalCreated $event) use ($viewer, $video): bool {
+            return $event->videoId === $video->id
+                && $event->recipientId === $viewer->id
+                && ($event->signal['type'] ?? null) === 'join_request_rejected';
+        });
+        Event::assertDispatched(LiveSignalCreated::class, function (LiveSignalCreated $event) use ($viewer, $video): bool {
+            return $event->videoId === $video->id
+                && $event->recipientId === $viewer->id
+                && ($event->signal['type'] ?? null) === 'join_request_accepted';
+        });
     }
 
     public function test_live_likes_can_be_sent_multiple_times_by_host_and_audience_and_remain_visible_in_profile_feeds(): void

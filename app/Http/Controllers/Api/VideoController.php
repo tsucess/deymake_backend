@@ -708,25 +708,112 @@ class VideoController extends Controller
         abort_if(in_array($type, ['offer', 'answer'], true) && ! filled($validated['sdp'] ?? null), 422, __('messages.videos.live_signal_payload_required'));
         abort_if($type === 'candidate' && empty($validated['candidate']), 422, __('messages.videos.live_signal_payload_required'));
 
-        $signal = LiveSignal::query()->create([
-            'video_id' => $video->id,
-            'sender_id' => $viewer->id,
-            'recipient_id' => $recipientId,
-            'kind' => $type,
-            'payload' => array_filter([
+        $createSignal = function (Video $targetVideo, int $senderId, ?int $targetId, string $signalType, array $payload = []): LiveSignal {
+            return LiveSignal::query()->create([
+                'video_id' => $targetVideo->id,
+                'sender_id' => $senderId,
+                'recipient_id' => $targetId,
+                'kind' => $signalType,
+                'payload' => $payload,
+            ])->load(['sender', 'recipient']);
+        };
+
+        if ($type === 'join_request') {
+            [$signal, $created, $requestStatus] = DB::transaction(function () use ($video, $viewer, $createSignal): array {
+                $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
+                $this->ensureVideoIsLive($lockedVideo);
+                $latestSignal = $this->latestLiveStageSignal($lockedVideo, $viewer->id);
+
+                if (in_array($latestSignal?->kind, ['join_request', 'join_request_accepted'], true)) {
+                    return [
+                        $latestSignal->load(['sender', 'recipient']),
+                        false,
+                        $latestSignal->kind === 'join_request' ? 'pending' : 'accepted',
+                    ];
+                }
+
+                return [$createSignal($lockedVideo, $viewer->id, $lockedVideo->user_id, 'join_request'), true, 'pending'];
+            });
+        } elseif (in_array($type, ['join_invite', 'join_request_accepted', 'join_request_rejected'], true)) {
+            [$signal, $created, $requestStatus] = DB::transaction(function () use ($video, $viewer, $recipientId, $type, $createSignal): array {
+                $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
+                $this->ensureVideoIsLive($lockedVideo);
+                $target = User::query()->findOrFail($recipientId);
+                $latestSignal = $this->latestLiveStageSignal($lockedVideo, $target->id);
+
+                if ($type === 'join_invite') {
+                    abort_unless(
+                        $this->activeAudiencePresenceQuery($lockedVideo)->where('user_id', $target->id)->exists(),
+                        422,
+                        __('messages.videos.live_invitee_not_eligible')
+                    );
+                    abort_if(
+                        $latestSignal?->kind === 'join_request',
+                        409,
+                        __('messages.videos.live_guest_request_pending')
+                    );
+                    abort_if(
+                        in_array($latestSignal?->kind, ['join_request_accepted', 'join_invite_accepted'], true),
+                        409,
+                        __('messages.videos.live_guest_already_joined')
+                    );
+
+                    if ($latestSignal?->kind === 'join_invite') {
+                        return [$latestSignal->load(['sender', 'recipient']), false, 'pending'];
+                    }
+
+                    return [$createSignal($lockedVideo, $viewer->id, $target->id, $type), true, 'pending'];
+                }
+
+                abort_unless(
+                    $latestSignal?->kind === 'join_request',
+                    409,
+                    __('messages.videos.live_guest_request_not_pending')
+                );
+
+                return [
+                    $createSignal($lockedVideo, $viewer->id, $target->id, $type),
+                    true,
+                    $type === 'join_request_accepted' ? 'accepted' : 'declined',
+                ];
+            });
+        } elseif (in_array($type, ['join_invite_accepted', 'join_invite_rejected'], true)) {
+            [$signal, $created, $requestStatus] = DB::transaction(function () use ($video, $viewer, $createSignal, $type): array {
+                $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
+                $this->ensureVideoIsLive($lockedVideo);
+                $latestSignal = $this->latestLiveStageSignal($lockedVideo, $viewer->id);
+
+                abort_unless($latestSignal?->kind === 'join_invite', 409, __('messages.videos.live_invite_not_pending'));
+
+                return [
+                    $createSignal($lockedVideo, $viewer->id, $lockedVideo->user_id, $type),
+                    true,
+                    $type === 'join_invite_accepted' ? 'accepted' : 'declined',
+                ];
+            });
+        } else {
+            $signal = $createSignal($video, $viewer->id, $recipientId, $type, array_filter([
                 'sdp' => $validated['sdp'] ?? null,
                 'candidate' => $validated['candidate'] ?? null,
-            ], static fn ($value) => $value !== null),
-        ])->load(['sender', 'recipient']);
+            ], static fn ($value) => $value !== null));
+            $created = true;
+            $requestStatus = null;
+        }
 
-        LiveSignalCreated::dispatch($video->id, (int) $recipientId, $this->formatLiveSignal($signal));
+        if ($created) {
+            LiveSignalCreated::dispatch($video->id, (int) $recipientId, $this->formatLiveSignal($signal));
+        }
 
         return response()->json([
             'message' => __('messages.videos.live_signal_sent'),
             'data' => [
                 'signal' => $this->formatLiveSignal($signal),
+                ...(in_array($type, ['join_request', 'join_invite', 'join_request_accepted', 'join_request_rejected', 'join_invite_accepted', 'join_invite_rejected'], true) ? [
+                    'requestStatus' => $requestStatus,
+                    'duplicate' => ! $created,
+                ] : []),
             ],
-        ], 201);
+        ], $created ? 201 : 200);
     }
 
     public function getSignals(Request $request, Video $video): JsonResponse
@@ -810,7 +897,7 @@ class VideoController extends Controller
     private function buildFrontendVideoUrl(Video $video): string
     {
         $baseUrl = rtrim((string) config('app.frontend_url', 'http://localhost:5173'), '/');
-        $path = ($video->is_live ? '/live/' : '/video/').($video->public_id ?: $video->id);
+        $path = ($video->is_live ? '/watch-live/' : '/video/').($video->public_id ?: $video->id);
 
         return $baseUrl.$path;
     }
@@ -958,7 +1045,14 @@ class VideoController extends Controller
             return true;
         }
 
-        $latestStageSignal = LiveSignal::query()
+        $latestStageSignal = $this->latestLiveStageSignal($video, $viewer->id);
+
+        return in_array($latestStageSignal?->kind, ['join_request_accepted', 'join_invite_accepted'], true);
+    }
+
+    private function latestLiveStageSignal(Video $video, int $userId): ?LiveSignal
+    {
+        return LiveSignal::query()
             ->where('video_id', $video->id)
             ->whereIn('kind', [
                 'join_request',
@@ -969,23 +1063,21 @@ class VideoController extends Controller
                 'join_invite_rejected',
                 'cohost_left',
             ])
-            ->where(function ($query) use ($video, $viewer): void {
+            ->where(function ($query) use ($video, $userId): void {
                 $query
-                    ->where(function ($nestedQuery) use ($video, $viewer): void {
+                    ->where(function ($nestedQuery) use ($video, $userId): void {
                         $nestedQuery
-                            ->where('sender_id', $viewer->id)
+                            ->where('sender_id', $userId)
                             ->where('recipient_id', $video->user_id);
                     })
-                    ->orWhere(function ($nestedQuery) use ($video, $viewer): void {
+                    ->orWhere(function ($nestedQuery) use ($video, $userId): void {
                         $nestedQuery
                             ->where('sender_id', $video->user_id)
-                            ->where('recipient_id', $viewer->id);
+                            ->where('recipient_id', $userId);
                     });
             })
             ->latest('id')
             ->first();
-
-        return in_array($latestStageSignal?->kind, ['join_request_accepted', 'join_invite_accepted'], true);
     }
 
     private function activePresenceQuery(Video $video)
