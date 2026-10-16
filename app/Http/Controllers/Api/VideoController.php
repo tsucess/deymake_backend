@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\LiveAudienceUpdated;
 use App\Events\LiveAnalyticsUpdated;
-use App\Events\LiveEnded;
 use App\Events\LiveFeaturedGuestUpdated;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
@@ -22,6 +21,7 @@ use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoReport;
 use App\Services\CloudinaryUploadService;
+use App\Services\LiveSessionTerminationService;
 use App\Services\ContentModerationService;
 use App\Support\PaginatedJson;
 use App\Support\Username;
@@ -398,7 +398,7 @@ class VideoController extends Controller
         }
 
         if ($requestedLive === false && $video->is_live) {
-            $this->stopLiveSession($video);
+            app(LiveSessionTerminationService::class)->end($video);
         }
 
         $moderationService->scanVideo($video);
@@ -434,6 +434,9 @@ class VideoController extends Controller
         abort_if($video->user_id !== $request->user()->id, 403);
 
         $upload = $video->upload;
+        if ($video->is_live) {
+            app(LiveSessionTerminationService::class)->end($video);
+        }
         $video->delete();
         $this->deleteOrphanedUpload($upload);
 
@@ -479,7 +482,7 @@ class VideoController extends Controller
     {
         abort_if($video->user_id !== $request->user()->id, 403);
 
-        $this->stopLiveSession($video);
+        app(LiveSessionTerminationService::class)->end($video);
         $video = $this->loadVideoForResource($video->id, $request->user());
 
         return response()->json([
@@ -1120,23 +1123,6 @@ class VideoController extends Controller
             422,
             __('messages.videos.upload_must_finish_processing_for_live')
         );
-    }
-
-    private function stopLiveSession(Video $video): void
-    {
-        $video->liveSignals()->delete();
-        $video->livePresenceSessions()->update([
-            'left_at' => now(),
-        ]);
-
-        $video->forceFill([
-            'is_live' => false,
-            'is_draft' => true,
-            'live_ended_at' => now(),
-            'live_notified_at' => null,
-        ])->save();
-
-        LiveEnded::dispatch($video->id, $video->live_ended_at->toISOString());
     }
 
     private function ensureVideoIsLive(Video $video): void

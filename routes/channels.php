@@ -38,6 +38,10 @@ Broadcast::channel('admin.users', function (User $user): bool {
     return $user->isAdmin();
 });
 
+Broadcast::channel('admin.live', function (User $user): bool {
+    return $user->isAdmin();
+});
+
 Broadcast::channel('users.{targetUserId}', function (User $user, int $targetUserId): bool {
     return $user->id === $targetUserId;
 });

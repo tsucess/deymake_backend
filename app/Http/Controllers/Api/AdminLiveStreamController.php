@@ -8,6 +8,7 @@ use App\Http\Resources\VideoResource;
 use App\Models\LivePresenceSession;
 use App\Models\Video;
 use App\Models\VideoReport;
+use App\Services\LiveSessionTerminationService;
 use App\Support\AuditLogger;
 use App\Support\PaginatedJson;
 use App\Support\SupportedLocales;
@@ -110,8 +111,6 @@ class AdminLiveStreamController extends Controller
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        abort_if(! $video->is_live, 409, __('messages.videos.live_not_active'));
-
         $admin = $request->user();
         $disconnected = (int) $video->livePresenceSessions()->whereNull('left_at')->count();
         $peakViewers = (int) ($video->live_peak_viewers_count ?? 0);
@@ -119,37 +118,25 @@ class AdminLiveStreamController extends Controller
             ? max(0, $video->live_started_at->diffInSeconds(now()))
             : 0;
 
-        // Disconnect viewers safely and clear signalling; analytics counters
-        // (peak viewers, live comments/likes/tips) are intentionally preserved.
-        $video->liveSignals()->delete();
-        $video->livePresenceSessions()->whereNull('left_at')->update([
-            'left_at' => now(),
-            'last_seen_at' => now(),
-        ]);
+        $ended = app(LiveSessionTerminationService::class)->end($video);
+        if ($ended) {
+            UserNotifier::sendTranslated(
+                (int) $video->user_id,
+                (int) $admin->id,
+                'moderation',
+                'messages.notifications.live_stopped_title',
+                'messages.notifications.live_stopped_body',
+                ['title' => $video->title ?: __('messages.admin.uncategorized')],
+                ['videoId' => $video->id, 'reason' => $validated['reason'] ?? null],
+            );
 
-        $video->forceFill([
-            'is_live' => false,
-            'is_draft' => true,
-            'live_ended_at' => now(),
-            'live_notified_at' => null,
-        ])->save();
-
-        UserNotifier::sendTranslated(
-            (int) $video->user_id,
-            (int) $admin->id,
-            'moderation',
-            'messages.notifications.live_stopped_title',
-            'messages.notifications.live_stopped_body',
-            ['title' => $video->title ?: __('messages.admin.uncategorized')],
-            ['videoId' => $video->id, 'reason' => $validated['reason'] ?? null],
-        );
-
-        AuditLogger::record('admin.live_stream_stopped', $video, (int) $admin->id, [
-            'viewersDisconnected' => $disconnected,
-            'peakViewers' => $peakViewers,
-            'durationSeconds' => $durationSeconds,
-            'reason' => $validated['reason'] ?? null,
-        ], $request->ip());
+            AuditLogger::record('admin.live_stream_stopped', $video, (int) $admin->id, [
+                'viewersDisconnected' => $disconnected,
+                'peakViewers' => $peakViewers,
+                'durationSeconds' => $durationSeconds,
+                'reason' => $validated['reason'] ?? null,
+            ], $request->ip());
+        }
 
         $video = $this->liveQuery($admin)->whereKey($video->id)->firstOrFail();
 
@@ -158,6 +145,7 @@ class AdminLiveStreamController extends Controller
             'data' => [
                 'video' => new VideoResource($video),
                 'viewersDisconnected' => $disconnected,
+                'alreadyEnded' => ! $ended,
             ],
         ]);
     }
@@ -260,9 +248,7 @@ class AdminLiveStreamController extends Controller
 
         // End any live session the restricted creator still has running.
         if ($video->is_live) {
-            $video->liveSignals()->delete();
-            $video->livePresenceSessions()->whereNull('left_at')->update(['left_at' => now(), 'last_seen_at' => now()]);
-            $video->forceFill(['is_live' => false, 'is_draft' => true, 'live_ended_at' => now(), 'live_notified_at' => null])->save();
+            app(LiveSessionTerminationService::class)->end($video);
         }
 
         UserNotifier::send(

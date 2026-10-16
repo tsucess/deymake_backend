@@ -17,12 +17,16 @@ class LiveEnded implements ShouldBroadcastNow
     public function __construct(
         public int $videoId,
         public string $endedAt,
+        public string $liveStartedAt,
     ) {
     }
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('live.videos.'.$this->videoId)];
+        return [
+            new PrivateChannel('live.videos.'.$this->videoId),
+            new PrivateChannel('admin.live'),
+        ];
     }
 
     public function broadcastAs(): string
@@ -34,7 +38,9 @@ class LiveEnded implements ShouldBroadcastNow
     {
         return [
             'videoId' => $this->videoId,
+            'status' => 'ended',
             'endedAt' => $this->endedAt,
+            'liveStartedAt' => $this->liveStartedAt,
         ];
     }
 }

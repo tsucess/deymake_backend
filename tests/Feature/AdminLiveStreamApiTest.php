@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Events\LiveEnded;
 use App\Models\LivePresenceSession;
 use App\Models\LiveSignal;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -141,6 +143,7 @@ class AdminLiveStreamApiTest extends TestCase
 
     public function test_admin_stop_updates_state_preserves_analytics_notifies_and_audits(): void
     {
+        Event::fake([LiveEnded::class]);
         $admin = User::factory()->admin()->create();
         $creator = User::factory()->create();
         $live = $this->makeLiveVideo($creator, [
@@ -158,7 +161,13 @@ class AdminLiveStreamApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', trans('messages.admin.live_stream_stopped'))
             ->assertJsonPath('data.viewersDisconnected', 2)
-            ->assertJsonPath('data.video.isLive', false);
+            ->assertJsonPath('data.video.isLive', false)
+            ->assertJsonPath('data.alreadyEnded', false);
+
+        $this->postJson('/api/admin/live-streams/'.$live->public_id.'/stop', ['reason' => 'Repeated request'])
+            ->assertOk()
+            ->assertJsonPath('data.alreadyEnded', true)
+            ->assertJsonPath('data.viewersDisconnected', 0);
 
         $this->assertDatabaseHas('videos', [
             'id' => $live->id,
@@ -179,6 +188,12 @@ class AdminLiveStreamApiTest extends TestCase
             'type' => 'moderation',
             'title' => trans('messages.notifications.live_stopped_title'),
         ]);
+        Event::assertDispatchedTimes(LiveEnded::class, 1);
+        Event::assertDispatched(LiveEnded::class, function (LiveEnded $event) use ($live): bool {
+            return $event->videoId === $live->id
+                && $event->broadcastWith()['status'] === 'ended'
+                && $event->liveStartedAt !== '';
+        });
     }
 
     public function test_admin_can_remove_viewer_from_live_stream(): void
@@ -240,6 +255,7 @@ class AdminLiveStreamApiTest extends TestCase
 
     public function test_admin_can_restrict_creator_of_live_stream(): void
     {
+        Event::fake([LiveEnded::class]);
         $admin = User::factory()->admin()->create();
         $creator = User::factory()->create(['account_status' => 'active']);
         $live = $this->makeLiveVideo($creator);
@@ -266,6 +282,7 @@ class AdminLiveStreamApiTest extends TestCase
             'type' => 'moderation',
             'title' => trans('messages.notifications.account_restricted_title'),
         ]);
+        Event::assertDispatchedTimes(LiveEnded::class, 1);
     }
 
     public function test_admin_can_review_live_violations_and_apply_moderation(): void
