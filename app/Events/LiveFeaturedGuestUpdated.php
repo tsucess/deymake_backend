@@ -1,0 +1,44 @@
+<?php
+
+namespace App\Events;
+
+use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+
+class LiveFeaturedGuestUpdated implements ShouldBroadcastNow
+{
+    use Dispatchable;
+    use InteractsWithSockets;
+    use SerializesModels;
+
+    public function __construct(
+        public int $videoId,
+        public int $signalId,
+        public ?int $featuredUserId,
+        public int $updatedBy,
+    ) {
+    }
+
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel('live.videos.'.$this->videoId)];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'live.featured.guest.updated';
+    }
+
+    public function broadcastWith(): array
+    {
+        return [
+            'videoId' => $this->videoId,
+            'signalId' => $this->signalId,
+            'featuredUserId' => $this->featuredUserId,
+            'updatedBy' => $this->updatedBy,
+        ];
+    }
+}

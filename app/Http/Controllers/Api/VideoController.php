@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Events\LiveAudienceUpdated;
 use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEnded;
+use App\Events\LiveFeaturedGuestUpdated;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
 use App\Http\Controllers\Controller;
@@ -690,7 +691,7 @@ class VideoController extends Controller
 
         $validated = $request->validate([
             'recipientId' => ['nullable', 'integer', 'exists:users,id'],
-            'type' => ['required', 'in:offer,answer,candidate,join_request,join_request_accepted,join_request_rejected,join_invite,join_invite_accepted,join_invite_rejected,cohost_left'],
+            'type' => ['required', 'in:offer,answer,candidate,join_request,join_request_accepted,join_request_rejected,join_invite,join_invite_accepted,join_invite_rejected,cohost_left,featured_guest,featured_guest_cleared'],
             'sdp' => ['nullable', 'string'],
             'candidate' => ['nullable', 'array'],
         ]);
@@ -698,10 +699,14 @@ class VideoController extends Controller
         $isCreator = $viewer->id === $video->user_id;
         $recipientId = $isCreator ? ($validated['recipientId'] ?? null) : $video->user_id;
         $type = $validated['type'];
-        $creatorAllowedTypes = ['answer', 'candidate', 'join_invite', 'join_request_accepted', 'join_request_rejected', 'cohost_left'];
+        $creatorAllowedTypes = ['answer', 'candidate', 'join_invite', 'join_request_accepted', 'join_request_rejected', 'cohost_left', 'featured_guest', 'featured_guest_cleared'];
         $viewerAllowedTypes = ['offer', 'candidate', 'join_request', 'join_invite_accepted', 'join_invite_rejected', 'cohost_left'];
 
-        abort_if($isCreator && ! $recipientId, 422, __('messages.videos.live_signal_recipient_required'));
+        abort_if(
+            $isCreator && ! $recipientId && $type !== 'featured_guest_cleared',
+            422,
+            __('messages.videos.live_signal_recipient_required')
+        );
         abort_if($isCreator && ! in_array($type, $creatorAllowedTypes, true), 422, __('messages.videos.live_signal_type_not_allowed'));
         abort_if(! $isCreator && ! in_array($type, $viewerAllowedTypes, true), 422, __('messages.videos.live_signal_type_not_allowed'));
         abort_if($recipientId === $viewer->id, 422, __('messages.videos.live_signal_recipient_invalid'));
@@ -717,6 +722,7 @@ class VideoController extends Controller
                 'payload' => $payload,
             ])->load(['sender', 'recipient']);
         };
+        $autoClearFeatureSignal = null;
 
         if ($type === 'join_request') {
             [$signal, $created, $requestStatus] = DB::transaction(function () use ($video, $viewer, $createSignal): array {
@@ -791,6 +797,86 @@ class VideoController extends Controller
                     $type === 'join_invite_accepted' ? 'accepted' : 'declined',
                 ];
             });
+        } elseif ($type === 'cohost_left') {
+            [$signal, $created, $requestStatus, $autoClearFeatureSignal] = DB::transaction(function () use ($video, $viewer, $recipientId, $isCreator, $createSignal): array {
+                $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
+                $this->ensureVideoIsLive($lockedVideo);
+                $signal = $createSignal($lockedVideo, $viewer->id, $recipientId, 'cohost_left');
+                $clearSignal = null;
+
+                if (! $isCreator) {
+                    $latestFeatureSignal = LiveSignal::query()
+                        ->where('video_id', $lockedVideo->id)
+                        ->whereIn('kind', ['featured_guest', 'featured_guest_cleared'])
+                        ->latest('id')
+                        ->first();
+                    if (
+                        $latestFeatureSignal?->kind === 'featured_guest'
+                        && (int) $latestFeatureSignal->recipient_id === $viewer->id
+                    ) {
+                        $clearSignal = $createSignal($lockedVideo, $lockedVideo->user_id, null, 'featured_guest_cleared');
+                    }
+                }
+
+                return [$signal, true, null, $clearSignal];
+            });
+        } elseif (in_array($type, ['featured_guest', 'featured_guest_cleared'], true)) {
+            abort_unless($isCreator, 403, __('messages.videos.live_signal_type_not_allowed'));
+            if ($type === 'featured_guest') {
+                abort_if(! $recipientId, 422, __('messages.videos.live_signal_recipient_required'));
+            }
+
+            [$signal, $created] = DB::transaction(function () use ($video, $viewer, $recipientId, $type, $createSignal): array {
+                $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
+                $this->ensureVideoIsLive($lockedVideo);
+                $latestFeatureSignal = LiveSignal::query()
+                    ->where('video_id', $lockedVideo->id)
+                    ->whereIn('kind', ['featured_guest', 'featured_guest_cleared'])
+                    ->latest('id')
+                    ->first();
+
+                if ($latestFeatureSignal && (
+                    ($type === 'featured_guest_cleared'
+                        && ($latestFeatureSignal->kind === 'featured_guest_cleared'
+                            || ($recipientId
+                                && ($latestFeatureSignal->kind !== 'featured_guest'
+                                    || (int) $latestFeatureSignal->recipient_id !== (int) $recipientId))))
+                    || ($type === 'featured_guest'
+                        && $latestFeatureSignal->kind === 'featured_guest'
+                        && (int) $latestFeatureSignal->recipient_id === (int) $recipientId)
+                )) {
+                    return [$latestFeatureSignal->load(['sender', 'recipient']), false];
+                }
+
+                $payload = [];
+
+                if ($type === 'featured_guest') {
+                    $guestId = (int) $recipientId;
+                    $latestGuestSignal = $this->latestLiveStageSignal($lockedVideo, $guestId);
+                    abort_unless(
+                        in_array($latestGuestSignal?->kind, ['join_request_accepted', 'join_invite_accepted'], true)
+                            && $this->activePresenceQuery($lockedVideo)
+                                ->where('user_id', $guestId)
+                                ->where('role', 'host')
+                                ->exists(),
+                        422,
+                        __('messages.videos.live_stage_access_denied')
+                    );
+                    $payload['featuredUserId'] = $guestId;
+                }
+
+                return [
+                    $createSignal(
+                        $lockedVideo,
+                        $viewer->id,
+                        $type === 'featured_guest' ? (int) $recipientId : null,
+                        $type,
+                        $payload,
+                    ),
+                    true,
+                ];
+            });
+            $requestStatus = null;
         } else {
             $signal = $createSignal($video, $viewer->id, $recipientId, $type, array_filter([
                 'sdp' => $validated['sdp'] ?? null,
@@ -801,7 +887,24 @@ class VideoController extends Controller
         }
 
         if ($created) {
-            LiveSignalCreated::dispatch($video->id, (int) $recipientId, $this->formatLiveSignal($signal));
+            if (in_array($type, ['featured_guest', 'featured_guest_cleared'], true)) {
+                LiveFeaturedGuestUpdated::dispatch(
+                    $video->id,
+                    $signal->id,
+                    $signal->kind === 'featured_guest' ? (int) $signal->recipient_id : null,
+                    $viewer->id,
+                );
+            } else {
+                LiveSignalCreated::dispatch($video->id, (int) $recipientId, $this->formatLiveSignal($signal));
+                if ($autoClearFeatureSignal) {
+                    LiveFeaturedGuestUpdated::dispatch(
+                        $video->id,
+                        $autoClearFeatureSignal->id,
+                        null,
+                        $video->user_id,
+                    );
+                }
+            }
         }
 
         return response()->json([
@@ -830,7 +933,7 @@ class VideoController extends Controller
         $signals = LiveSignal::query()
             ->with(['sender', 'recipient'])
             ->where('video_id', $video->id)
-            ->where(function ($query) use ($viewer): void {
+            ->where(function ($query) use ($viewer, $video): void {
                 $query
                     ->where('recipient_id', $viewer->id)
                     ->orWhere(function ($stageQuery) use ($viewer): void {
@@ -844,7 +947,14 @@ class VideoController extends Controller
                                 'join_invite_accepted',
                                 'join_invite_rejected',
                                 'cohost_left',
+                                'featured_guest',
+                                'featured_guest_cleared',
                             ]);
+                    });
+                    $query->orWhere(function ($featuredQuery) use ($video): void {
+                        $featuredQuery
+                            ->where('sender_id', $video->user_id)
+                            ->whereIn('kind', ['featured_guest', 'featured_guest_cleared']);
                     });
             })
             ->where('id', '>', $after)

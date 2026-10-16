@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Events\LiveAudienceUpdated;
 use App\Events\LiveAnalyticsUpdated;
 use App\Events\LiveEngagementCreated;
+use App\Events\LiveFeaturedGuestUpdated;
 use App\Events\LivePresenceUpdated;
 use App\Events\LiveSignalCreated;
 use App\Events\CreatorSubscribersUpdated;
@@ -1370,6 +1371,96 @@ class ContentAndProfileApiTest extends TestCase
             return $event->videoId === $video->id
                 && $event->recipientId === $creator->id
                 && ($event->signal['type'] ?? null) === 'join_invite_accepted';
+        });
+    }
+
+    public function test_featured_guest_state_is_host_authorized_and_cleared_for_late_viewers_when_guest_disconnects(): void
+    {
+        Event::fake([LiveSignalCreated::class, LiveFeaturedGuestUpdated::class]);
+
+        $category = Category::create(['name' => 'Featured Live', 'slug' => 'featured-live']);
+        $creator = User::factory()->create(['email' => 'featured-owner@example.com']);
+        $guest = User::factory()->create(['email' => 'featured-guest@example.com']);
+        $viewer = User::factory()->create(['email' => 'featured-viewer@example.com']);
+        $video = Video::create([
+            'user_id' => $creator->id,
+            'category_id' => $category->id,
+            'type' => 'video',
+            'title' => 'Featured guest test',
+            'is_live' => true,
+            'is_draft' => false,
+            'live_started_at' => now(),
+        ]);
+
+        Sanctum::actingAs($guest);
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', ['type' => 'join_request'])->assertCreated();
+
+        Sanctum::actingAs($creator);
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $guest->id,
+            'type' => 'join_request_accepted',
+        ])->assertCreated();
+
+        LivePresenceSession::query()->create([
+            'video_id' => $video->id,
+            'user_id' => $guest->id,
+            'session_key' => 'featured-guest-stage',
+            'role' => 'host',
+            'joined_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $guest->id,
+            'type' => 'featured_guest',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.signal.type', 'featured_guest')
+            ->assertJsonPath('data.signal.recipientId', $guest->id);
+
+        $this->assertDatabaseHas('live_signals', [
+            'video_id' => $video->id,
+            'kind' => 'featured_guest',
+            'recipient_id' => $guest->id,
+        ]);
+
+        Sanctum::actingAs($guest);
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'type' => 'cohost_left',
+        ])->assertCreated();
+
+        Sanctum::actingAs($viewer);
+        $this->getJson('/api/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->assertJsonPath('data.signals.0.type', 'featured_guest')
+            ->assertJsonPath('data.signals.0.recipientId', $guest->id)
+            ->assertJsonPath('data.signals.1.type', 'featured_guest_cleared');
+
+        Sanctum::actingAs($creator);
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'type' => 'featured_guest_cleared',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.signal.type', 'featured_guest_cleared');
+
+        Sanctum::actingAs($viewer);
+        $this->getJson('/api/videos/'.$video->id.'/live/signals')
+            ->assertOk()
+            ->assertJsonPath('data.signals.1.type', 'featured_guest_cleared');
+
+        Sanctum::actingAs($guest);
+        $this->postJson('/api/videos/'.$video->id.'/live/signals', [
+            'recipientId' => $creator->id,
+            'type' => 'featured_guest',
+        ])->assertUnprocessable();
+
+        Event::assertDispatched(LiveFeaturedGuestUpdated::class, function (LiveFeaturedGuestUpdated $event) use ($video, $guest): bool {
+            return $event->videoId === $video->id
+                && $event->featuredUserId === $guest->id
+                && $event->updatedBy === $video->user_id;
+        });
+        Event::assertDispatched(LiveFeaturedGuestUpdated::class, function (LiveFeaturedGuestUpdated $event) use ($video): bool {
+            return $event->videoId === $video->id && $event->featuredUserId === null;
         });
     }
 
