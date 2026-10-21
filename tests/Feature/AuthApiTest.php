@@ -84,6 +84,42 @@ class AuthApiTest extends TestCase
         $response->assertJsonPath('data.user.username', $user->username);
     }
 
+    public function test_a_new_login_invalidates_the_previous_device_token(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'single-session@example.com',
+            'username' => 'single.session',
+            'password' => 'Password1',
+        ]);
+        $apiKey = $user->createToken('developer-api-key')->plainTextToken;
+
+        $firstLogin = $this->postJson('/api/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'Password1',
+        ])->assertOk();
+        $firstToken = $firstLogin->json('data.token');
+
+        $secondLogin = $this->postJson('/api/auth/login', [
+            'identifier' => $user->email,
+            'password' => 'Password1',
+        ])->assertOk();
+        $secondToken = $secondLogin->json('data.token');
+
+        $this->withHeader('Authorization', 'Bearer '.$firstToken)
+            ->getJson('/api/auth/me')
+            ->assertUnauthorized();
+
+        $this->withHeader('Authorization', 'Bearer '.$secondToken)
+            ->getJson('/api/auth/me')
+            ->assertOk();
+
+        $this->withHeader('Authorization', 'Bearer '.$apiKey)
+            ->getJson('/api/auth/me')
+            ->assertOk();
+
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+    }
+
     public function test_suspended_user_cannot_login(): void
     {
         $user = User::factory()->create([

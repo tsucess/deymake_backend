@@ -113,6 +113,7 @@ class VideoController extends Controller
             ->withApiResourceData($viewer)
             ->discoverable()
             ->where('is_live', true)
+            ->where('visibility', 'everyone')
             ->orderByDesc('live_started_at')
             ->latest(), $request);
 

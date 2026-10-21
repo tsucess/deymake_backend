@@ -64,7 +64,6 @@ class ContentAndProfileApiTest extends TestCase
             'is_draft' => false,
             'views_count' => 300,
         ]);
-
         $creator->subscribers()->attach($otherCreator->id);
         $mainVideo->likes()->attach($otherCreator->id, ['type' => 'like']);
 
@@ -92,6 +91,15 @@ class ContentAndProfileApiTest extends TestCase
             ->assertJsonPath('data.videos.0.id', $relatedVideo->id)
             ->assertJsonPath('meta.videos.lastPage', 2)
             ->assertJsonPath('meta.videos.currentPage', 2);
+
+        Video::create([
+            'user_id' => $otherCreator->id,
+            'type' => 'video',
+            'title' => 'Private Live Set',
+            'is_live' => true,
+            'is_draft' => false,
+            'visibility' => 'only_me',
+        ]);
 
         $this->getJson('/api/videos/live')
             ->assertOk()

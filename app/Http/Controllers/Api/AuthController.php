@@ -645,7 +645,7 @@ class AuthController extends Controller
                 return $this->oauthErrorResponse($request, $provider, __($user->isBanned() ? 'messages.auth.account_banned' : 'messages.auth.account_suspended'), 403, true, $returnTo);
             }
 
-            $authToken = $user->createToken('auth_token')->plainTextToken;
+            $authToken = $this->issueSingleSessionToken($user);
 
             return redirect()->away($this->buildFrontendCallbackUrl($provider, [
                 'token' => $authToken,
@@ -927,7 +927,7 @@ class AuthController extends Controller
 
     private function authenticatedResponse(User $user, string $message, int $status = 200): JsonResponse
     {
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $this->issueSingleSessionToken($user);
 
         return response()->json([
             'message' => $message,
@@ -937,6 +937,16 @@ class AuthController extends Controller
                 'tokenType' => 'Bearer',
             ],
         ], $status);
+    }
+
+    private function issueSingleSessionToken(User $user): string
+    {
+        return DB::transaction(function () use ($user): string {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $lockedUser->tokens()->where('name', 'auth_token')->delete();
+
+            return $lockedUser->createToken('auth_token')->plainTextToken;
+        });
     }
 
     private function verificationRequiredResponse(User $user, string $message, int $status = 202): JsonResponse
