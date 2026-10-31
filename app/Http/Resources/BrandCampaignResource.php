@@ -11,12 +11,17 @@ class BrandCampaignResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'businessName' => $this->business_name,
             'title' => $this->title,
             'objective' => $this->objective,
             'status' => $this->status,
             'summary' => $this->summary,
+            'description' => $this->summary,
+            'niche' => $this->niche,
             'budgetAmount' => (int) $this->budget_amount,
             'currency' => $this->currency,
+            'creatorsNeeded' => (int) $this->creators_needed,
+            'creatorRequirements' => $this->creator_requirements,
             'minSubscribers' => (int) $this->min_subscribers,
             'targetCategories' => $this->target_categories ?? [],
             'targetLocations' => $this->target_locations ?? [],

@@ -12,12 +12,16 @@ class BrandCampaign extends Model
 
     protected $fillable = [
         'owner_id',
+        'business_name',
         'title',
         'objective',
         'status',
         'summary',
+        'niche',
         'budget_amount',
         'currency',
+        'creators_needed',
+        'creator_requirements',
         'min_subscribers',
         'target_categories',
         'target_locations',

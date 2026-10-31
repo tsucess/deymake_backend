@@ -57,19 +57,38 @@ class BrandAndCommerceApiTest extends TestCase
         Sanctum::actingAs($brand);
 
         $campaignId = $this->postJson('/api/brand/campaigns', [
+            'businessName' => 'Dance Goods',
             'title' => 'Campus Dance Push',
             'objective' => 'awareness',
             'status' => 'active',
+            'description' => 'Promote a new campus collection.',
             'budgetAmount' => 50000,
             'currency' => 'NGN',
+            'creatorsNeeded' => 4,
+            'niche' => 'Dance',
+            'creatorRequirements' => 'At least 18 years old.',
             'minSubscribers' => 0,
             'targetCategories' => [$category->id],
-            'deliverables' => ['1 short video', '1 story repost'],
+            'deliverables' => "1 short video\n1 story repost",
         ])
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.brand_campaigns.created'))
             ->assertJsonPath('data.campaign.status', 'active')
+            ->assertJsonPath('data.campaign.businessName', 'Dance Goods')
+            ->assertJsonPath('data.campaign.description', 'Promote a new campus collection.')
+            ->assertJsonPath('data.campaign.creatorsNeeded', 4)
+            ->assertJsonPath('data.campaign.niche', 'Dance')
+            ->assertJsonPath('data.campaign.creatorRequirements', 'At least 18 years old.')
+            ->assertJsonPath('data.campaign.deliverables.0', '1 short video')
             ->json('data.campaign.id');
+
+        $this->patchJson('/api/brand/campaigns/'.$campaignId, [
+            'creatorsNeeded' => 6,
+            'creatorRequirements' => 'Must be based in Nigeria.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.campaign.creatorsNeeded', 6)
+            ->assertJsonPath('data.campaign.creatorRequirements', 'Must be based in Nigeria.');
 
         $this->getJson('/api/brand/campaigns/'.$campaignId.'/matches?verifiedOnly=1&hasActivePlans=1')
             ->assertOk()
@@ -114,15 +133,23 @@ class BrandAndCommerceApiTest extends TestCase
 
         $productId = $this->postJson('/api/merch/products', [
             'name' => 'DeyMake Hoodie',
+            'productCode' => 'DM-HOODIE-01',
+            'category' => 'Apparel',
+            'productType' => 'Hoodie',
             'description' => 'Premium creator hoodie.',
             'priceAmount' => 8000,
             'currency' => 'NGN',
             'inventoryCount' => 10,
+            'lowStockThreshold' => 3,
             'images' => ['https://cdn.example.com/hoodie.jpg'],
         ])
             ->assertCreated()
             ->assertJsonPath('message', trans('messages.merch.product_created'))
             ->assertJsonPath('data.product.name', 'DeyMake Hoodie')
+            ->assertJsonPath('data.product.productCode', 'DM-HOODIE-01')
+            ->assertJsonPath('data.product.category', 'Apparel')
+            ->assertJsonPath('data.product.productType', 'Hoodie')
+            ->assertJsonPath('data.product.lowStockThreshold', 3)
             ->json('data.product.id');
 
         $this->getJson('/api/users/'.$creator->id.'/merch')
@@ -130,7 +157,31 @@ class BrandAndCommerceApiTest extends TestCase
             ->assertJsonPath('message', trans('messages.merch.products_retrieved'))
             ->assertJsonPath('data.products.0.id', $productId);
 
+        $draftProductId = $this->postJson('/api/merch/products', [
+            'name' => 'Draft Cap',
+            'priceAmount' => 3000,
+            'status' => 'draft',
+        ])->assertCreated()->json('data.product.id');
+
+        $this->getJson('/api/users/'.$creator->id.'/merch')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.products')
+            ->assertJsonFragment(['id' => $draftProductId, 'status' => 'draft']);
+
+        $this->patchJson('/api/merch/products/'.$productId, [
+            'productType' => 'Zip hoodie',
+            'lowStockThreshold' => 4,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.product.productType', 'Zip hoodie')
+            ->assertJsonPath('data.product.lowStockThreshold', 4);
+
         Sanctum::actingAs($buyer);
+
+        $this->getJson('/api/users/'.$creator->id.'/merch')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.products')
+            ->assertJsonPath('data.products.0.id', $productId);
 
         $orderId = $this->postJson('/api/merch/products/'.$productId.'/orders', [
             'quantity' => 2,

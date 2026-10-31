@@ -32,9 +32,13 @@ class MerchController extends Controller
     {
         SupportedLocales::apply($request);
 
+        $viewer = $request->user('sanctum');
         $products = MerchProduct::query()
             ->where('creator_id', $user->id)
-            ->where('status', 'active')
+            ->when(
+                ! $viewer?->is($user),
+                fn ($query) => $query->where('status', 'active')
+            )
             ->with(['creator' => fn ($query) => $query->withProfileAggregates(auth('sanctum')->user() ?? $request->user())])
             ->latest()
             ->get();
@@ -56,11 +60,15 @@ class MerchController extends Controller
             'creator_id' => $request->user()->id,
             'name' => $validated['name'],
             'status' => $validated['status'] ?? 'active',
+            'product_code' => $validated['productCode'] ?? null,
+            'category' => $validated['category'] ?? null,
+            'product_type' => $validated['productType'] ?? null,
             'sku' => $validated['sku'] ?? null,
             'description' => $validated['description'] ?? null,
             'price_amount' => (int) $validated['priceAmount'],
             'currency' => strtoupper((string) ($validated['currency'] ?? 'NGN')),
             'inventory_count' => (int) ($validated['inventoryCount'] ?? 0),
+            'low_stock_threshold' => (int) ($validated['lowStockThreshold'] ?? 0),
             'images' => $validated['images'] ?? [],
         ]);
 
@@ -83,11 +91,15 @@ class MerchController extends Controller
         $merchProduct->fill([
             'name' => $validated['name'] ?? $merchProduct->name,
             'status' => $validated['status'] ?? $merchProduct->status,
+            'product_code' => array_key_exists('productCode', $validated) ? $validated['productCode'] : $merchProduct->product_code,
+            'category' => array_key_exists('category', $validated) ? $validated['category'] : $merchProduct->category,
+            'product_type' => array_key_exists('productType', $validated) ? $validated['productType'] : $merchProduct->product_type,
             'sku' => array_key_exists('sku', $validated) ? $validated['sku'] : $merchProduct->sku,
             'description' => array_key_exists('description', $validated) ? $validated['description'] : $merchProduct->description,
             'price_amount' => $validated['priceAmount'] ?? $merchProduct->price_amount,
             'currency' => isset($validated['currency']) ? strtoupper((string) $validated['currency']) : $merchProduct->currency,
             'inventory_count' => $validated['inventoryCount'] ?? $merchProduct->inventory_count,
+            'low_stock_threshold' => $validated['lowStockThreshold'] ?? $merchProduct->low_stock_threshold,
             'images' => $validated['images'] ?? $merchProduct->images,
         ])->save();
 
@@ -128,7 +140,7 @@ class MerchController extends Controller
                 ], 422);
             }
 
-            $discountValidation = (new DiscountController())->validateDiscountForOrder($request->user(), $discount, $merchProduct->id);
+            $discountValidation = (new DiscountController)->validateDiscountForOrder($request->user(), $discount, $merchProduct->id);
 
             if ($discountValidation !== true) {
                 return response()->json([
@@ -307,11 +319,15 @@ class MerchController extends Controller
         return $request->validate([
             'name' => [...$required, 'string', 'max:255'],
             'status' => ['sometimes', Rule::in(['draft', 'active', 'archived'])],
+            'productCode' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'productType' => ['sometimes', 'nullable', 'string', 'max:120'],
             'sku' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
             'priceAmount' => [$partial ? 'sometimes' : 'required', 'integer', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],
             'inventoryCount' => ['sometimes', 'integer', 'min:0'],
+            'lowStockThreshold' => ['sometimes', 'integer', 'min:0'],
             'images' => ['nullable', 'array'],
             'images.*' => ['string', 'max:2048'],
         ]);

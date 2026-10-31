@@ -96,6 +96,9 @@ class AdminMerchProductController extends Controller
         $data = $request->validate([
             'creatorId' => ['required', 'integer', 'exists:users,id'],
             'name' => ['required', 'string', 'max:180'],
+            'productCode' => ['nullable', 'string', 'max:120'],
+            'category' => ['nullable', 'string', 'max:120'],
+            'productType' => ['nullable', 'string', 'max:120'],
             'sku' => ['nullable', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:5000'],
             'status' => ['nullable', Rule::in(self::STATUSES)],
@@ -103,6 +106,7 @@ class AdminMerchProductController extends Controller
             'discountAmount' => ['nullable', 'integer', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'],
             'inventoryCount' => ['nullable', 'integer', 'min:0'],
+            'lowStockThreshold' => ['nullable', 'integer', 'min:0'],
             'images' => ['nullable', 'array', 'max:10'],
             'images.*' => ['string', 'max:2048'],
         ]);
@@ -115,6 +119,9 @@ class AdminMerchProductController extends Controller
         $product = MerchProduct::query()->create([
             'creator_id' => $data['creatorId'],
             'name' => $data['name'],
+            'product_code' => $data['productCode'] ?? null,
+            'category' => $data['category'] ?? null,
+            'product_type' => $data['productType'] ?? null,
             'sku' => $data['sku'] ?? null,
             'description' => $data['description'] ?? null,
             'status' => $data['status'] ?? 'draft',
@@ -122,6 +129,7 @@ class AdminMerchProductController extends Controller
             'discount_amount' => $data['discountAmount'] ?? 0,
             'currency' => strtoupper($data['currency'] ?? 'NGN'),
             'inventory_count' => $data['inventoryCount'] ?? 0,
+            'low_stock_threshold' => $data['lowStockThreshold'] ?? 0,
             'images' => $data['images'] ?? [],
         ]);
 
@@ -144,6 +152,9 @@ class AdminMerchProductController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:180'],
+            'productCode' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'productType' => ['sometimes', 'nullable', 'string', 'max:120'],
             'sku' => ['sometimes', 'nullable', 'string', 'max:120'],
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'status' => ['sometimes', Rule::in(self::STATUSES)],
@@ -151,6 +162,7 @@ class AdminMerchProductController extends Controller
             'discountAmount' => ['sometimes', 'integer', 'min:0'],
             'currency' => ['sometimes', 'string', 'size:3'],
             'inventoryCount' => ['sometimes', 'integer', 'min:0'],
+            'lowStockThreshold' => ['sometimes', 'integer', 'min:0'],
             'images' => ['sometimes', 'nullable', 'array', 'max:10'],
             'images.*' => ['string', 'max:2048'],
         ]);
@@ -161,6 +173,15 @@ class AdminMerchProductController extends Controller
 
         if (array_key_exists('name', $data)) {
             $merchProduct->name = $data['name'];
+        }
+        if (array_key_exists('productCode', $data)) {
+            $merchProduct->product_code = $data['productCode'];
+        }
+        if (array_key_exists('category', $data)) {
+            $merchProduct->category = $data['category'];
+        }
+        if (array_key_exists('productType', $data)) {
+            $merchProduct->product_type = $data['productType'];
         }
         if (array_key_exists('sku', $data)) {
             $merchProduct->sku = $data['sku'];
@@ -182,6 +203,9 @@ class AdminMerchProductController extends Controller
         }
         if (array_key_exists('inventoryCount', $data)) {
             $merchProduct->inventory_count = $data['inventoryCount'];
+        }
+        if (array_key_exists('lowStockThreshold', $data)) {
+            $merchProduct->low_stock_threshold = $data['lowStockThreshold'];
         }
         if (array_key_exists('images', $data)) {
             $merchProduct->images = $data['images'] ?? [];

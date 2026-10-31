@@ -17,12 +17,16 @@ class MerchProduct extends Model
         'name',
         'slug',
         'status',
+        'product_code',
+        'category',
+        'product_type',
         'sku',
         'description',
         'price_amount',
         'discount_amount',
         'currency',
         'inventory_count',
+        'low_stock_threshold',
         'images',
     ];
 
@@ -33,6 +37,7 @@ class MerchProduct extends Model
             'price_amount' => 'integer',
             'discount_amount' => 'integer',
             'inventory_count' => 'integer',
+            'low_stock_threshold' => 'integer',
         ];
     }
 

@@ -53,12 +53,16 @@ class BrandCampaignController extends Controller
         $validated = $this->validateCampaign($request);
         $campaign = BrandCampaign::query()->create([
             'owner_id' => $request->user()->id,
+            'business_name' => $validated['businessName'] ?? null,
             'title' => $validated['title'],
             'objective' => $validated['objective'] ?? 'awareness',
             'status' => $validated['status'] ?? 'draft',
-            'summary' => $validated['summary'] ?? null,
+            'summary' => $validated['summary'] ?? $validated['description'] ?? null,
+            'niche' => $validated['niche'] ?? null,
             'budget_amount' => (int) ($validated['budgetAmount'] ?? 0),
             'currency' => strtoupper((string) ($validated['currency'] ?? 'NGN')),
+            'creators_needed' => (int) ($validated['creatorsNeeded'] ?? 0),
+            'creator_requirements' => $validated['creatorRequirements'] ?? null,
             'min_subscribers' => (int) ($validated['minSubscribers'] ?? 0),
             'target_categories' => $validated['targetCategories'] ?? [],
             'target_locations' => $validated['targetLocations'] ?? [],
@@ -91,12 +95,24 @@ class BrandCampaignController extends Controller
 
         $validated = $this->validateCampaign($request, true);
         $brandCampaign->fill([
+            'business_name' => array_key_exists('businessName', $validated)
+                ? $validated['businessName']
+                : $brandCampaign->business_name,
             'title' => $validated['title'] ?? $brandCampaign->title,
             'objective' => $validated['objective'] ?? $brandCampaign->objective,
             'status' => $validated['status'] ?? $brandCampaign->status,
-            'summary' => array_key_exists('summary', $validated) ? $validated['summary'] : $brandCampaign->summary,
+            'summary' => array_key_exists('summary', $validated)
+                ? $validated['summary']
+                : (array_key_exists('description', $validated)
+                    ? $validated['description']
+                    : $brandCampaign->summary),
+            'niche' => array_key_exists('niche', $validated) ? $validated['niche'] : $brandCampaign->niche,
             'budget_amount' => $validated['budgetAmount'] ?? $brandCampaign->budget_amount,
             'currency' => isset($validated['currency']) ? strtoupper((string) $validated['currency']) : $brandCampaign->currency,
+            'creators_needed' => $validated['creatorsNeeded'] ?? $brandCampaign->creators_needed,
+            'creator_requirements' => array_key_exists('creatorRequirements', $validated)
+                ? $validated['creatorRequirements']
+                : $brandCampaign->creator_requirements,
             'min_subscribers' => $validated['minSubscribers'] ?? $brandCampaign->min_subscribers,
             'target_categories' => $validated['targetCategories'] ?? $brandCampaign->target_categories,
             'target_locations' => $validated['targetLocations'] ?? $brandCampaign->target_locations,
@@ -155,13 +171,28 @@ class BrandCampaignController extends Controller
     {
         $required = $partial ? ['sometimes'] : ['required'];
 
+        if (is_string($request->input('deliverables'))) {
+            $request->merge([
+                'deliverables' => collect(preg_split('/[\r\n,]+/', $request->input('deliverables')) ?: [])
+                    ->map(fn ($item) => trim($item))
+                    ->filter()
+                    ->values()
+                    ->all(),
+            ]);
+        }
+
         return $request->validate([
+            'businessName' => ['sometimes', 'nullable', 'string', 'max:255'],
             'title' => [...$required, 'string', 'max:255'],
             'objective' => ['sometimes', 'string', 'max:80'],
             'status' => ['sometimes', Rule::in(['draft', 'active', 'paused', 'closed'])],
             'summary' => ['nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'niche' => ['sometimes', 'nullable', 'string', 'max:120'],
             'budgetAmount' => ['sometimes', 'integer', 'min:0'],
             'currency' => ['sometimes', 'string', 'size:3'],
+            'creatorsNeeded' => ['sometimes', 'integer', 'min:0'],
+            'creatorRequirements' => ['sometimes', 'nullable', 'string'],
             'minSubscribers' => ['sometimes', 'integer', 'min:0'],
             'targetCategories' => ['nullable', 'array'],
             'targetCategories.*' => ['integer', 'exists:categories,id'],
