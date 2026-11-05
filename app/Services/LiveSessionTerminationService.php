@@ -4,16 +4,46 @@ namespace App\Services;
 
 use App\Events\LiveEnded;
 use App\Models\Video;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class LiveSessionTerminationService
 {
     public function end(Video $video): bool
     {
-        $endedSession = DB::transaction(function () use ($video): ?array {
+        return $this->terminate($video);
+    }
+
+    public function endIfHostInactive(Video $video, Carbon $presenceCutoff): bool
+    {
+        return $this->terminate($video, $presenceCutoff);
+    }
+
+    private function terminate(Video $video, ?Carbon $presenceCutoff = null): bool
+    {
+        $endedSession = DB::transaction(function () use ($video, $presenceCutoff): ?array {
             $lockedVideo = Video::query()->whereKey($video->id)->lockForUpdate()->firstOrFail();
             if (! $lockedVideo->is_live) {
                 return null;
+            }
+
+            if ($presenceCutoff !== null) {
+                $hostPresence = $lockedVideo->livePresenceSessions()
+                    ->where('user_id', $lockedVideo->user_id)
+                    ->where('role', 'host')
+                    ->where('joined_at', '>=', $lockedVideo->live_started_at)
+                    ->exists();
+                $activeHostPresence = $lockedVideo->livePresenceSessions()
+                    ->where('user_id', $lockedVideo->user_id)
+                    ->where('role', 'host')
+                    ->whereNull('left_at')
+                    ->where('joined_at', '>=', $lockedVideo->live_started_at)
+                    ->where('last_seen_at', '>=', $presenceCutoff)
+                    ->exists();
+
+                if (! $hostPresence || $activeHostPresence) {
+                    return null;
+                }
             }
 
             $endedAt = now();

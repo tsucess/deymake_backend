@@ -32,6 +32,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use TaylanUnutmaz\AgoraTokenBuilder\RtcTokenBuilder;
 
 /**
@@ -665,14 +666,23 @@ class VideoController extends Controller
 
         abort_if($video->type !== 'video', 422, __('messages.videos.only_video_can_go_live'));
 
-        LivePresenceSession::query()
+        $presence = LivePresenceSession::query()
             ->where('video_id', $video->id)
             ->where('session_key', $validated['sessionKey'])
             ->where('user_id', $request->user()->id)
-            ->update([
-                'left_at' => now(),
-                'last_seen_at' => now(),
-            ]);
+            ->first();
+
+        $presence?->forceFill([
+            'left_at' => now(),
+            'last_seen_at' => now(),
+        ])->save();
+
+        if (
+            $presence?->role === 'host'
+            && $request->user()->id === $video->user_id
+        ) {
+            app(LiveSessionTerminationService::class)->end($video);
+        }
 
         $analytics = $this->buildLivePresenceAnalytics($video);
 
@@ -1086,6 +1096,7 @@ class VideoController extends Controller
     {
         $wasLive = (bool) $video->is_live;
         $shouldNotify = ! $wasLive && $video->live_notified_at === null;
+        $liveStartedAt = $wasLive ? ($video->live_started_at ?? now()) : now();
 
         if (! $wasLive) {
             $video->liveSignals()->delete();
@@ -1098,9 +1109,17 @@ class VideoController extends Controller
         $video->forceFill([
             'is_live' => true,
             'is_draft' => false,
-            'live_started_at' => $wasLive ? ($video->live_started_at ?? now()) : now(),
+            'live_started_at' => $liveStartedAt,
             'live_ended_at' => null,
         ])->save();
+
+        $video->livePresenceSessions()->create([
+            'user_id' => $video->user_id,
+            'session_key' => 'host-server-'.Str::uuid(),
+            'role' => 'host',
+            'joined_at' => $liveStartedAt,
+            'last_seen_at' => now(),
+        ]);
 
         if (! $shouldNotify) {
             return;

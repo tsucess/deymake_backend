@@ -24,6 +24,8 @@ Schedule::command('explore:rebuild-hashtags')->hourly()->withoutOverlapping();
 
 Schedule::command('videos:backfill-hashtags')->dailyAt('03:15')->withoutOverlapping();
 
+Schedule::command('videos:end-stale-live-streams')->everyMinute()->withoutOverlapping();
+
 Artisan::command('uploads:backfill-video-processed-urls {--write : Persist changes instead of running in dry-run mode}', function () {
     $service = app(CloudinaryUploadService::class);
     $write = (bool) $this->option('write');
